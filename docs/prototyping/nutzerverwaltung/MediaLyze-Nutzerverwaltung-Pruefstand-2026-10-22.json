@@ -1,0 +1,27 @@
+{
+  "head": "cdc4f3994cfc807a67f77fb1d265dff7badfe65d",
+  "status": " M docs/README.md\n?? docs/prototyping/README.md\n?? docs/prototyping/notifications/MediaLyze-UI-Benachrichtigungen-Featurekonzept.md\n?? docs/prototyping/notifications/README.md\n?? docs/prototyping/notifications/variante-a-einzel-toast.html\n?? docs/prototyping/notifications/variante-b-toast-stapel.html\n?? docs/prototyping/notifications/variante-c-kontext.html\n?? docs/prototyping/nutzerverwaltung/MediaLyze-Nutzerverwaltung-Featurekonzept-2026-10-19.md\n?? docs/prototyping/nutzerverwaltung/README.md\n?? docs/prototyping/nutzerverwaltung/index.html\n?? docs/prototyping/nutzerverwaltung/variante-a-abschnitte.html\n?? docs/prototyping/nutzerverwaltung/variante-a-ein-panel.html\n?? docs/prototyping/nutzerverwaltung/variante-a-kompakt-dropdown.html\n?? docs/prototyping/nutzerverwaltung/variante-a-kompakt-kontenbereich.html\n?? docs/prototyping/nutzerverwaltung/variante-a-kompakt-kontenleiste.html\n?? docs/prototyping/nutzerverwaltung/variante-a-kompakt-kontenliste-expand.html\n?? docs/prototyping/nutzerverwaltung/variante-a-kompakt.html\n?? docs/prototyping/nutzerverwaltung/variante-a-kontenliste.html\n?? docs/prototyping/nutzerverwaltung/variante-b-tabelle.html\n?? docs/prototyping/nutzerverwaltung/variante-c-editor.html\n",
+  "note_sha256": "7d3d3743107cbea5d56fa28b9f099b501cac58630f4ac820885a06a381c6f136",
+  "validation": {
+    "explicit_decorators_all_covered": 187,
+    "matrix_rows": 217,
+    "duplicate_listener_method_paths": 0,
+    "required_policy_fields": "all present",
+    "original_note_sha256_unchanged": true,
+    "head_unchanged": true,
+    "git_status_unchanged": false,
+    "observed_parallel_status_additions": [
+      "?? \"docs/prototyping/nutzerverwaltung/Desktop-Prototypen-\\303\\234bersicht.md\""
+    ],
+    "observed_parallel_status_removals": [],
+    "write_scope": "Alle eigenen Schreibaufrufe ausschließlich /Users/frederikemmer/Desktop; keine App-/DB-/Lifespan-Ausführung",
+    "validation_scope": "Statische Quellen-/Artefaktabdeckung und isolierte FastAPI-Standardrouten, keine Securitytests",
+    "source_sha256": {
+      "backend/app/main.py": "3fbcacba5b99d7212e3fe1a10538760adf74723c2585d860f327b7d3c47c8fcd",
+      "backend/app/api/routes.py": "611494e0f8f4dd3469bd5126b580b37e4c1664140ae0a5590b0739df86b58a53",
+      "backend/app/api/federation_routes.py": "816983a43e703e7f4d24ad58b5343923e68267e0b667218cadc513cb0b990367",
+      "backend/app/api/federation_app.py": "eb1e746f2cabca8207f164c750c31b9b768bf9ee738ea8f868e6ba2356701ba7",
+      "backend/app/api/deps.py": "9f956757e96f166f9e8d82b67426c55698458f9f0de54175cc8af2649f074989"
+    }
+  }
+}

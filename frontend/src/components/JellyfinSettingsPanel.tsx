@@ -12,6 +12,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
+import { trackExplicitJobStart } from "../lib/notification-job-tracking";
 
 import { AsyncPanel } from "./AsyncPanel";
 import { TooltipTrigger } from "./TooltipTrigger";
@@ -283,6 +284,7 @@ export function JellyfinSettingsPanel({ onCatalogChanged }: { onCatalogChanged?:
     try {
       const result = await api.syncJellyfin();
       activeSyncJobIdRef.current = result.job_id;
+      if (result.accepted) trackExplicitJobStart({ kind: "jellyfin_sync", jobId: result.job_id });
       setStatus((current) => current ? {
         ...current,
         sync_job_id: result.job_id,
@@ -582,8 +584,8 @@ export function JellyfinSettingsPanel({ onCatalogChanged }: { onCatalogChanged?:
           {!users.length ? <div className="notice">{t("jellyfin.usersEmpty")}</div> : (
             <div className="jellyfin-user-selection" aria-busy={usersBusy}>
               <div className="jellyfin-user-selection-toolbar">
-                <label className="jellyfin-user-search">
-                  <Search aria-hidden="true" />
+                <label className="settings-navigation-search connector-user-search">
+                  <Search aria-hidden="true" className="nav-icon" />
                   <span className="sr-only">{t("jellyfin.userSearchLabel")}</span>
                   <input
                     type="search"

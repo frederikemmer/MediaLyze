@@ -6,7 +6,12 @@ from starlette.concurrency import run_in_threadpool
 import logging
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from backend.app.api.access_routes import router as access_router
+from backend.app.api.access_middleware import AccessMiddleware
+from backend.app.services.access import initialize_owner
+from backend.app.db.session import SessionLocal
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import Headers
@@ -68,6 +73,9 @@ class JsonGZipMiddleware:
 
 class ImmutableAssetStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
+        if Path(path).suffix.lower() not in {".js", ".css", ".svg", ".png", ".ico", ".woff", ".woff2"}:
+            from starlette.exceptions import HTTPException
+            raise HTTPException(404)
         # Resolve through StaticFiles first, retaining its traversal/symlink checks.
         response = await super().get_response(path, scope)
         if response.status_code in (200, 304) and path.endswith((".js", ".css")) and not Headers(scope=scope).get("range"):
@@ -105,6 +113,7 @@ def create_app(settings=None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         init_db()
+        initialize_owner(_app.state.auth_session_factory, active_settings)
         runtime = ScanRuntimeManager(active_settings)
         _app.state.scan_runtime = runtime
         logger.info("Application startup: starting runtime and history maintenance")
@@ -127,15 +136,16 @@ def create_app(settings=None) -> FastAPI:
         def performance_snapshot():
             return performance_metrics.snapshot()
 
+    app.state.auth_session_factory = SessionLocal
+    app.state.access_settings = active_settings
+    app.add_middleware(AccessMiddleware, settings=active_settings)
+
+    @app.exception_handler(RequestValidationError)
+    async def safe_validation_error(request, exc):
+        return JSONResponse({"detail": "Invalid request"}, status_code=422)
+
+    app.include_router(access_router, prefix=active_settings.api_prefix)
     app.add_middleware(JsonGZipMiddleware, minimum_size=1024, compresslevel=5)
-    if not active_settings.is_desktop:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=["*"],
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
     app.include_router(router, prefix=active_settings.api_prefix)
 
     frontend_dist = Path(active_settings.frontend_dist_path)
@@ -146,10 +156,16 @@ def create_app(settings=None) -> FastAPI:
 
         @app.get("/{path:path}")
         def serve_frontend(path: str) -> FileResponse:
-            candidate = frontend_dist / path
-            if path and candidate.exists() and candidate.is_file():
+            from fastapi import HTTPException
+            root = frontend_dist.resolve()
+            candidate = (root / path).resolve()
+            if not candidate.is_relative_to(root) or path.startswith(active_settings.api_prefix.lstrip("/") + "/"):
+                raise HTTPException(404, "Not found")
+            if path and candidate.is_file():
+                if candidate.suffix not in {".js", ".css", ".svg", ".png", ".ico", ".woff", ".woff2"}:
+                    raise HTTPException(404, "Not found")
                 return _frontend_file_response(candidate)
-            return _frontend_file_response(frontend_dist / "index.html")
+            return _frontend_file_response(root / "index.html")
 
     return app
 

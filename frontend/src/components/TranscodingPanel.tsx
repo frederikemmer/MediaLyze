@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { createPortal } from "react-dom";
+import { trackExplicitJobStart } from "../lib/notification-job-tracking";
 
 import {
   api,
@@ -1767,6 +1768,7 @@ export function TranscodingPanel({
     setStarting(true);
     try {
       const nextJob = await api.startFileTranscode(file.id, releasePlan(result.normalized_plan));
+      trackExplicitJobStart({ kind: "transcode", job: nextJob });
       setJob(nextJob);
       window.dispatchEvent(new Event("medialyze:transcode-started"));
       setValidation(result);

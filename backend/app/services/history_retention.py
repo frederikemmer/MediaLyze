@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from backend.app.core.config import Settings, get_settings
 from backend.app.models.entities import (
     JobStatus,
+    NotificationHistoryEntry,
     LibraryHistory,
     MediaFileHistory,
     ScanJob,
@@ -318,6 +319,18 @@ def apply_history_retention(db: Session, settings: Settings | None = None) -> Hi
             app_settings.history_retention.transcode_history.storage_limit_gb
         ),
     )
+
+    notification_days = app_settings.history_retention.notification_history_days
+    if notification_days:
+        while True:
+            ids = list(db.scalars(select(NotificationHistoryEntry.id).where(
+                NotificationHistoryEntry.created_at < utc_now() - timedelta(days=notification_days)
+            ).limit(HISTORY_RETENTION_BATCH_SIZE)))
+            if not ids:
+                break
+            db.execute(delete(NotificationHistoryEntry).where(NotificationHistoryEntry.id.in_(ids)))
+            db.commit()
+            deleted_entries += len(ids)
 
     result = HistoryRetentionResult(deleted_entries=deleted_entries)
     if deleted_entries <= 0:

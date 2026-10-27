@@ -1,3 +1,6 @@
+import { HistoryReconstructionControl } from "../components/HistoryReconstructionControl";
+import { preferenceStorage } from "../lib/preference-storage";
+import { useAuth } from "../lib/auth";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ChevronDown,
@@ -44,6 +47,7 @@ import { FolderInputIcon } from "../components/FolderInputIcon";
 import { GitCompareArrowsIcon } from "../components/GitCompareArrowsIcon";
 import { DistributionList, type DistributionListEntry } from "../components/DistributionList";
 import { historyQuery } from "../lib/history-query";
+import { trackExplicitJobStart } from "../lib/notification-job-tracking";
 import { LibraryHistoryPanel, readHistoryRangeSelection } from "../components/LibraryHistoryPanel";
 import { JellyfinIcon } from "../components/JellyfinIcon";
 import { LoaderPinwheelIcon } from "../components/LoaderPinwheelIcon";
@@ -1503,7 +1507,7 @@ function readDuplicatePanelCollapsedPreference(libraryId: string): boolean {
   if (typeof window === "undefined") {
     return true;
   }
-  const storedPreference = window.localStorage.getItem(buildDuplicatePanelCollapseStorageKey(libraryId));
+  const storedPreference = preferenceStorage.getItem(buildDuplicatePanelCollapseStorageKey(libraryId));
   if (storedPreference === null) {
     return true;
   }
@@ -1514,7 +1518,7 @@ function readHistoryPanelCollapsedPreference(libraryId: string): boolean {
   if (typeof window === "undefined") {
     return false;
   }
-  const storedPreference = window.localStorage.getItem(buildHistoryPanelCollapseStorageKey(libraryId));
+  const storedPreference = preferenceStorage.getItem(buildHistoryPanelCollapseStorageKey(libraryId));
   if (storedPreference === null) {
     return false;
   }
@@ -1525,7 +1529,7 @@ function readHistoryMetricPreference(): LibraryHistoryMetricId {
   if (typeof window === "undefined") {
     return DEFAULT_HISTORY_METRIC;
   }
-  const storedPreference = window.localStorage.getItem(HISTORY_SELECTED_METRIC_STORAGE_KEY);
+  const storedPreference = preferenceStorage.getItem(HISTORY_SELECTED_METRIC_STORAGE_KEY);
   if (isLibraryHistoryMetricId(storedPreference)) {
     return storedPreference;
   }
@@ -1565,6 +1569,8 @@ function buildDuplicateGroupKey(mode: string, signature: string): string {
 export function LibraryDetailPage() {
   const { t } = useTranslation();
   const { libraryId = "" } = useParams();
+  const auth = useAuth();
+  const canEditDuplicates = !auth.identity || auth.has("library.edit", Number(libraryId));
   const navigate = useNavigate();
   const { appSettings, libraries } = useAppData();
   const tableViewSettingsScope = useMemo(() => buildLibraryTableViewSettingsScope(libraryId), [libraryId]);
@@ -1753,6 +1759,7 @@ export function LibraryDetailPage() {
       ] as const);
       if (scanResult.status === "fulfilled") {
         trackJob(scanResult.value);
+        trackExplicitJobStart({ kind: "scan", job: scanResult.value });
       }
       const failures = [scanResult, jellyfinResult]
         .filter((result): result is PromiseRejectedResult => result.status === "rejected")
@@ -2409,6 +2416,7 @@ export function LibraryDetailPage() {
     signature: string,
     suppressed: boolean,
   ) => {
+    if (!canEditDuplicates) return;
     const pendingKey = buildDuplicateGroupKey(mode, signature);
     setDuplicateSuppressionPendingKey(pendingKey);
     try {
@@ -2777,21 +2785,21 @@ export function LibraryDetailPage() {
   }, [appliedSearchFilters, baseSearch, fieldValues, libraryId, selectedMetadataFields, sortDirection, sortKey]);
 
   useEffect(() => {
-    window.localStorage.setItem(
+    preferenceStorage.setItem(
       buildDuplicatePanelCollapseStorageKey(libraryId),
       isDuplicatesPanelCollapsed ? "true" : "false",
     );
   }, [isDuplicatesPanelCollapsed, libraryId]);
 
   useEffect(() => {
-    window.localStorage.setItem(
+    preferenceStorage.setItem(
       buildHistoryPanelCollapseStorageKey(libraryId),
       isHistoryPanelCollapsed ? "true" : "false",
     );
   }, [isHistoryPanelCollapsed, libraryId]);
 
   useEffect(() => {
-    window.localStorage.setItem(HISTORY_SELECTED_METRIC_STORAGE_KEY, selectedHistoryMetric);
+    preferenceStorage.setItem(HISTORY_SELECTED_METRIC_STORAGE_KEY, selectedHistoryMetric);
   }, [selectedHistoryMetric]);
 
   useEffect(() => {
@@ -3586,6 +3594,7 @@ export function LibraryDetailPage() {
                 )
               }
             />
+            {displayLibrary ? <HistoryReconstructionControl libraryId={displayLibrary.id} blocked={Boolean(activeJob)} /> : null}
             <button
               type="button"
               className="icon-button icon-button-borderless icon-button-animated statistic-layout-action-button library-quickscan-button"
@@ -4016,7 +4025,7 @@ export function LibraryDetailPage() {
                             >
                               <GitCompareArrowsIcon size={17} aria-hidden="true" className="duplicate-group-action-icon" />
                             </TooltipTrigger>
-                            {group.mode === "filename" || group.mode === "filehash" ? (
+                            {canEditDuplicates && (group.mode === "filename" || group.mode === "filehash") ? (
                               <TooltipTrigger
                                 content={
                                   group.suppressed

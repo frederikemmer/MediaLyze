@@ -6,7 +6,7 @@ import re
 import tomllib
 from enum import Enum
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Media extension groups by type
@@ -135,6 +135,10 @@ class Settings(BaseSettings):
     app_host: str | None = None
     app_port: int = 8080
     performance_metrics: bool = Field(default=False, validation_alias="MEDIALYZE_PERFORMANCE_METRICS")
+    owner_username: str | None = Field(default=None, validation_alias="MEDIALYZE_OWNER_USERNAME")
+    owner_password: SecretStr | None = Field(default=None, validation_alias="MEDIALYZE_OWNER_PASSWORD")
+    desktop_token: SecretStr | None = Field(default=None, validation_alias="MEDIALYZE_DESKTOP_TOKEN")
+    trusted_proxy_ips: str = Field(default="", validation_alias="MEDIALYZE_TRUSTED_PROXY_IPS")
     api_prefix: str = "/api"
     config_path: Path | None = None
     media_root: Path | None = None

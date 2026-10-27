@@ -434,6 +434,7 @@ def reconstruct_history_from_media_files(
     db: Session,
     *,
     progress_callback: ProgressCallback | None = None,
+    library_ids: tuple[int, ...] | None = None,
 ) -> HistoryReconstructionRead:
     now = utc_now()
     app_settings = get_app_settings(db)
@@ -453,7 +454,10 @@ def reconstruct_history_from_media_files(
     jellyfin_added_dates_used = 0
     jellyfin_added_date_fallbacks = 0
 
-    libraries = db.scalars(select(Library).order_by(Library.id.asc())).all()
+    statement = select(Library).order_by(Library.id.asc())
+    if library_ids is not None:
+        statement = statement.where(Library.id.in_(library_ids))
+    libraries = db.scalars(statement).all()
     libraries_with_media = 0
     libraries_total = len(libraries)
 

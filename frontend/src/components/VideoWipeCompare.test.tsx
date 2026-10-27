@@ -53,8 +53,8 @@ describe("VideoWipeCompare", () => {
     fireEvent.pointerDown(wipeHandle, { clientX: 510, pointerId: 1 });
     fireEvent.pointerMove(wipeHandle, { clientX: 730, pointerId: 1 });
     fireEvent.pointerUp(wipeHandle, { clientX: 730, pointerId: 1 });
-    expect(wipeHandle).toHaveAttribute("aria-valuenow", "72");
-    expect(container.querySelector(".video-wipe-second")).toHaveStyle({ clipPath: "inset(0 28% 0 0)" });
+    expect(wipeHandle).toHaveAttribute("aria-valuenow", "28");
+    expect(container.querySelector(".video-wipe-second")).toHaveStyle({ clipPath: "inset(0 0 0 72%)" });
     expect(screen.getByText(/different durations/i)).toBeInTheDocument();
   });
 

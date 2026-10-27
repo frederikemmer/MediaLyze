@@ -25,6 +25,7 @@ def create_engine_for_settings(settings: Settings) -> Engine:
         _sqlite_url(settings.database_path),
         connect_args={"check_same_thread": False, "timeout": settings.sqlite_busy_timeout_seconds},
         poolclass=NullPool,
+        hide_parameters=True,
         future=True,
     )
 
@@ -1645,7 +1646,7 @@ def _apply_sqlite_additive_migrations(engine: Engine) -> None:
 
 def init_db(engine: Engine | None = None) -> None:
     from backend.app.db.base import Base
-    from backend.app.models import entities  # noqa: F401
+    from backend.app.models import entities, access  # noqa: F401
     from backend.app.services.duplicates import backfill_filename_pattern_signatures
     from backend.app.services.app_settings import get_app_settings
     from backend.app.services.quality_profiles import migrate_legacy_library_quality_profiles

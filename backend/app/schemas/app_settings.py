@@ -93,14 +93,23 @@ class TranscodingSettingsUpdate(BaseModel):
 InterfaceLanguage = Literal["en", "de", "es", "uk"]
 
 
+class NotificationSettings(BaseModel):
+    palette: Literal["medialyze", "soft", "contrast"] = "medialyze"
+    style: Literal["outline", "rail", "tint"] = "outline"
+    duration_seconds: float = Field(default=2.5, ge=1, le=10, multiple_of=0.5)
+    grouping: Literal["off", "topic", "type", "both"] = "topic"
+
+
 class UiPreferencesRead(BaseModel):
     interface_language: InterfaceLanguage = "en"
     color_theme: Literal["system", "light", "dark"] = "system"
+    notifications: NotificationSettings = Field(default_factory=NotificationSettings)
 
 
 class UiPreferencesUpdate(BaseModel):
     interface_language: InterfaceLanguage | None = None
     color_theme: Literal["system", "light", "dark"] | None = None
+    notifications: NotificationSettings | None = None
 
 
 class TelemetrySettingsRead(BaseModel):
@@ -128,6 +137,7 @@ class HistoryRetentionBucketUpdate(BaseModel):
 
 
 class HistoryRetentionRead(BaseModel):
+    notification_history_days: int = Field(default=30, ge=0, le=36500)
     file_history: HistoryRetentionBucketRead = Field(default_factory=lambda: HistoryRetentionBucketRead(days=30))
     library_history: HistoryRetentionBucketRead = Field(default_factory=lambda: HistoryRetentionBucketRead(days=365))
     scan_history: HistoryRetentionBucketRead = Field(default_factory=lambda: HistoryRetentionBucketRead(days=30))
@@ -135,6 +145,7 @@ class HistoryRetentionRead(BaseModel):
 
 
 class HistoryRetentionUpdate(BaseModel):
+    notification_history_days: int | None = Field(default=None, ge=0, le=36500)
     file_history: HistoryRetentionBucketUpdate | None = None
     library_history: HistoryRetentionBucketUpdate | None = None
     scan_history: HistoryRetentionBucketUpdate | None = None

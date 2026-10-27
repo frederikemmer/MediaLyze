@@ -1,3 +1,4 @@
+import { preferenceStorage } from "./preference-storage";
 import changelogMarkdown from "../../../CHANGELOG.md?raw";
 
 import { APP_VERSION } from "./app-version";
@@ -43,8 +44,8 @@ function canUseLocalStorage(): boolean {
   }
   const probeKey = `${UPDATE_REMINDER_STORAGE_KEY}-probe`;
   try {
-    window.localStorage.setItem(probeKey, "1");
-    window.localStorage.removeItem(probeKey);
+    preferenceStorage.setItem(probeKey, "1");
+    preferenceStorage.removeItem(probeKey);
     return true;
   } catch {
     return false;
@@ -56,7 +57,7 @@ export function readBrowserUpdateReminder(now = Date.now()): BrowserUpdateRemind
     return { available: false, reminder: null };
   }
   try {
-    const stored = window.localStorage.getItem(UPDATE_REMINDER_STORAGE_KEY);
+    const stored = preferenceStorage.getItem(UPDATE_REMINDER_STORAGE_KEY);
     if (!stored) {
       return { available: true, reminder: null };
     }
@@ -68,7 +69,7 @@ export function readBrowserUpdateReminder(now = Date.now()): BrowserUpdateRemind
       || !Number.isFinite(remindedAtMs)
       || remindedAtMs > now
     ) {
-      window.localStorage.removeItem(UPDATE_REMINDER_STORAGE_KEY);
+      preferenceStorage.removeItem(UPDATE_REMINDER_STORAGE_KEY);
       return { available: true, reminder: null };
     }
     return {
@@ -77,7 +78,7 @@ export function readBrowserUpdateReminder(now = Date.now()): BrowserUpdateRemind
     };
   } catch {
     try {
-      window.localStorage.removeItem(UPDATE_REMINDER_STORAGE_KEY);
+      preferenceStorage.removeItem(UPDATE_REMINDER_STORAGE_KEY);
     } catch {
       return { available: false, reminder: null };
     }
@@ -98,7 +99,7 @@ export function markBrowserUpdateReminder(version: string, now = Date.now()): bo
     return false;
   }
   try {
-    window.localStorage.setItem(
+    preferenceStorage.setItem(
       UPDATE_REMINDER_STORAGE_KEY,
       JSON.stringify({
         version: normalizeReleaseVersion(version),
@@ -231,19 +232,19 @@ export function shouldShowReleaseNotes(version: string, releaseNotes: ReleaseNot
   if (!releaseNotes || typeof window === "undefined") {
     return false;
   }
-  return window.localStorage.getItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY) !== normalizeReleaseVersion(version);
+  return preferenceStorage.getItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY) !== normalizeReleaseVersion(version);
 }
 
 export function isFirstOpenAfterUpdate(version: string, releaseNotes: ReleaseNotes | null): boolean {
   if (!releaseNotes || typeof window === "undefined") {
     return false;
   }
-  const seenAppVersion = window.localStorage.getItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY);
+  const seenAppVersion = preferenceStorage.getItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY);
   if (seenAppVersion !== null) {
     return seenAppVersion !== normalizeReleaseVersion(version);
   }
   // Legacy installs stored only the displayed release section. Treat that as a prior visit once.
-  return window.localStorage.getItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY) !== null;
+  return preferenceStorage.getItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY) !== null;
 }
 
 export function getSeenReleaseVersion(version: string, releaseNotes: ReleaseNotes | null): string {
@@ -254,6 +255,6 @@ export function markReleaseNotesSeen(version: string, releaseNotes: ReleaseNotes
   if (typeof window === "undefined") {
     return;
   }
-  window.localStorage.setItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY, normalizeReleaseVersion(version));
-  window.localStorage.setItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY, getSeenReleaseVersion(version, releaseNotes));
+  preferenceStorage.setItem(RELEASE_NOTES_SEEN_APP_VERSION_STORAGE_KEY, normalizeReleaseVersion(version));
+  preferenceStorage.setItem(RELEASE_NOTES_SEEN_VERSION_STORAGE_KEY, getSeenReleaseVersion(version, releaseNotes));
 }

@@ -22,6 +22,7 @@ let backendProcess = null;
 let quitting = false;
 let backendPort = null;
 let activeInstallerDownload = null;
+const desktopCredential = crypto.randomBytes(48).toString("base64url");
 
 if (process.argv.includes("--version")) {
   console.log(app.getVersion());
@@ -96,6 +97,7 @@ function waitForHealth(port, timeoutMs = 30000) {
           host: "127.0.0.1",
           port,
           path: "/api/health",
+          headers: { "X-MediaLyze-Desktop": desktopCredential },
         },
         (response) => {
           response.resume();
@@ -136,6 +138,7 @@ function startBackend(port) {
   const backendEnv = {
     ...process.env,
     MEDIALYZE_RUNTIME: "desktop",
+    MEDIALYZE_DESKTOP_TOKEN: desktopCredential,
     ...(app.isPackaged ? { MEDIALYZE_APP_VERSION: app.getVersion() } : {}),
     APP_HOST: "127.0.0.1",
     APP_PORT: String(port),
@@ -180,11 +183,27 @@ function createMainWindow(port) {
     minHeight: 720,
     show: false,
     webPreferences: {
+      partition: `medialyze-${crypto.randomUUID()}`,
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
     },
+  });
+
+  const backendOrigin = `http://127.0.0.1:${port}`;
+  mainWindow.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
+    const headers = { ...details.requestHeaders };
+    for (const key of Object.keys(headers)) {
+      if (key.toLowerCase() === "x-medialyze-desktop") delete headers[key];
+    }
+    if (new URL(details.url).origin === backendOrigin && details.webContentsId === mainWindow?.webContents.id) {
+      headers["X-MediaLyze-Desktop"] = desktopCredential;
+    }
+    callback({ requestHeaders: headers });
+  });
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (new URL(url).origin !== backendOrigin) event.preventDefault();
   });
 
   mainWindow.once("ready-to-show", () => {
@@ -240,7 +259,7 @@ function getLocalUpdateStatus() {
       return;
     }
     const request = http.get(
-      { host: "127.0.0.1", port: backendPort, path: "/api/update-status" },
+      { host: "127.0.0.1", port: backendPort, path: "/api/update-status", headers: { "X-MediaLyze-Desktop": desktopCredential } },
       (response) => {
         if (response.statusCode !== 200) {
           response.resume();

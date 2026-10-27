@@ -86,4 +86,4 @@ RUN printf '%s\n' "${APP_VERSION}" > /app/.medialyze-version
 EXPOSE 8080 8091/tcp 43211/udp
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${APP_PORT} --ws websockets-sansio"]
+CMD ["sh", "-c", "python -m backend.app.launcher"]

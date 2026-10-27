@@ -1,3 +1,4 @@
+import { preferenceStorage } from "../lib/preference-storage";
 import {
   Clock3,
   Files,
@@ -150,7 +151,7 @@ function readDashboardHistoryPanelCollapsedPreference(): boolean {
   if (typeof window === "undefined") {
     return false;
   }
-  const storedPreference = window.localStorage.getItem(DASHBOARD_HISTORY_PANEL_COLLAPSE_STORAGE_KEY);
+  const storedPreference = preferenceStorage.getItem(DASHBOARD_HISTORY_PANEL_COLLAPSE_STORAGE_KEY);
   if (storedPreference === null) {
     return false;
   }
@@ -161,7 +162,7 @@ function readDashboardHistoryMetricPreference(): LibraryHistoryMetricId {
   if (typeof window === "undefined") {
     return DEFAULT_HISTORY_METRIC;
   }
-  const storedPreference = window.localStorage.getItem(DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY);
+  const storedPreference = preferenceStorage.getItem(DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY);
   if (isLibraryHistoryMetricId(storedPreference)) {
     return storedPreference;
   }
@@ -370,14 +371,14 @@ export function DashboardPage() {
   }, [layoutOptions]);
 
   useEffect(() => {
-    window.localStorage.setItem(
+    preferenceStorage.setItem(
       DASHBOARD_HISTORY_PANEL_COLLAPSE_STORAGE_KEY,
       isHistoryPanelCollapsed ? "true" : "false",
     );
   }, [isHistoryPanelCollapsed]);
 
   useEffect(() => {
-    window.localStorage.setItem(DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY, selectedHistoryMetric);
+    preferenceStorage.setItem(DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY, selectedHistoryMetric);
   }, [selectedHistoryMetric]);
 
   const syncComparisonPanels = useEffectEvent((force = false) => {

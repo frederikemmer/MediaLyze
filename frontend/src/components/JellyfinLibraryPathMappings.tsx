@@ -238,6 +238,7 @@ export function JellyfinLibraryPathMappings({
           <TooltipTrigger
             ariaLabel={t("libraries.sections.jellyfin.pathMappingDescriptionAria")}
             content={t("libraries.sections.jellyfin.pathMappingDescription")}
+            className="settings-heading-tooltip"
           >
             ?
           </TooltipTrigger>

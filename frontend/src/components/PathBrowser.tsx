@@ -5,6 +5,8 @@ import { ArrowUp, Plus, X } from "lucide-react";
 import { api, type BrowseResponse } from "../lib/api";
 
 type PathBrowserProps = {
+  context?: "create" | "edit";
+  libraryId?: number;
   value: string;
   selectedPaths: string[];
   onChange: (value: string) => void;
@@ -16,7 +18,7 @@ function isRootPath(path: string | null | undefined): boolean {
   return !path || path === ".";
 }
 
-export function PathBrowser({ value, selectedPaths, onChange, onAddPath, onRemovePath }: PathBrowserProps) {
+export function PathBrowser({ context = "create", libraryId, value, selectedPaths, onChange, onAddPath, onRemovePath }: PathBrowserProps) {
   const { t } = useTranslation();
   const [browser, setBrowser] = useState<BrowseResponse | null>(null);
   const [currentPath, setCurrentPath] = useState<string>(value || ".");
@@ -31,7 +33,7 @@ export function PathBrowser({ value, selectedPaths, onChange, onAddPath, onRemov
   useEffect(() => {
     let cancelled = false;
     api
-      .browse(currentPath)
+      .browse(currentPath, { context, libraryId })
       .then((payload) => {
         if (!cancelled) {
           setBrowser(payload);
@@ -47,7 +49,7 @@ export function PathBrowser({ value, selectedPaths, onChange, onAddPath, onRemov
     return () => {
       cancelled = true;
     };
-  }, [currentPath]);
+  }, [currentPath, context, libraryId]);
 
   return (
     <div className="stack">

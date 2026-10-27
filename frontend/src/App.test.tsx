@@ -58,6 +58,7 @@ function renderApp(path: string) {
 }
 
 beforeEach(() => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => new Response(JSON.stringify(String(url).endsWith("/auth/status") ? { setup_required: false, guest_enabled: false, csrf: "test", identity: { id: "desktop", kind: "desktop", username: "", owner: true, revision: 1, must_change_password: false, policy: { global: [], mode: "per_library", libraries: {}, shared: [], create: false } } } : {}), { status: 200, headers: { "Content-Type": "application/json" } }));
   appVersionMock.value = "dev";
   Object.defineProperty(window, "matchMedia", {
     writable: true,

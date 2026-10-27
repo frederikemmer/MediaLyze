@@ -1,3 +1,6 @@
+import type { NotificationHistoryWrite, NotificationHistoryPage, NotificationHistoryItem } from "./notification-history";
+import type { NotificationSettings } from "./notification-settings";
+import { sessionFetch } from "./access-session";
 export type DistributionItem = {
   label: string;
   value: number;
@@ -1821,6 +1824,7 @@ export type TranscodeFileSummary = {
 };
 
 export type TranscodeJob = {
+  origin?: { kind: string; id: string; name: string } | null;
   id: number;
   group_id: number;
   library_id: number;
@@ -2091,6 +2095,7 @@ export type AppSettings = {
   };
   transcoding?: TranscodingSettings;
   history_retention?: {
+    notification_history_days?: number;
     file_history: {
       days: number;
       storage_limit_gb: number;
@@ -2111,6 +2116,7 @@ export type AppSettings = {
   ui_preferences?: {
     interface_language: "en" | "de" | "es" | "uk";
     color_theme: "system" | "light" | "dark";
+    notifications?: NotificationSettings;
   };
   telemetry?: {
     mode: TelemetryMode;
@@ -2190,7 +2196,10 @@ export type HistoryReconstructionResult = {
 };
 
 export type HistoryReconstructionStatus = {
-  status: "idle" | "queued" | "running" | "completed" | "failed";
+  job_id?: string | null;
+  library_ids?: number[];
+  origin?: { kind: string; id: string; name: string } | null;
+  status: "idle" | "queued" | "running" | "completed" | "failed" | "canceled";
   phase:
     | "idle"
     | "loading_libraries"
@@ -2198,6 +2207,7 @@ export type HistoryReconstructionStatus = {
     | "reconstructing_file_history"
     | "reconstructing_library_history"
     | "completed"
+    | "canceled"
     | "failed";
   started_at: string | null;
   finished_at: string | null;
@@ -2216,6 +2226,7 @@ export type HistoryReconstructionStatus = {
 };
 
 export type ScanJob = {
+  origin?: { kind: string; id: string; name: string } | null;
   id: number;
   library_id: number;
   library_name: string | null;
@@ -2298,6 +2309,8 @@ export type ScanSummary = {
 };
 
 export type RecentScanJob = {
+  quality_progress?: ScanJob | null;
+  origin?: { kind: string; id: string; name: string } | null;
   id: number;
   library_id: number;
   library_name: string | null;
@@ -2432,7 +2445,7 @@ const LIBRARY_FILE_FILTER_QUERY_KEYS: Array<[LibraryFileSearchField, string]> = 
 ];
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_PREFIX}${path}`, {
+  const response = await sessionFetch(`${API_PREFIX}${path}`, {
     headers: {
       "Content-Type": "application/json",
       ...(init?.headers ?? {}),
@@ -2649,9 +2662,11 @@ export const api = {
     ),
   activeScanJobs: () => request<ScanJob[]>("/scan-jobs/active"),
   historyStorage: () => request<HistoryStorage>("/history-storage"),
-  historyReconstructionStatus: () => request<HistoryReconstructionStatus>("/history/reconstruct"),
-  reconstructHistory: () =>
-    request<HistoryReconstructionStatus>("/history/reconstruct", {
+  historyReconstructionStatus: (libraryId?: number) => request<HistoryReconstructionStatus>(
+    libraryId === undefined ? "/history/reconstruct" : `/libraries/${libraryId}/history/reconstruct`,
+  ),
+  reconstructHistory: (libraryId?: number) =>
+    request<HistoryReconstructionStatus>(libraryId === undefined ? "/history/reconstruct" : `/libraries/${libraryId}/history/reconstruct`, {
       method: "POST",
     }),
   recentScanJobs: (params?: {
@@ -2784,7 +2799,7 @@ export const api = {
     id: string | number,
     params?: Omit<LibraryFilesRequestParams, "offset" | "limit">,
   ): Promise<DownloadedCsv> => {
-    const response = await fetch(`${API_PREFIX}${buildLibraryFilesPath(id, params, "/files/export.csv")}`, {
+    const response = await sessionFetch(`${API_PREFIX}${buildLibraryFilesPath(id, params, "/files/export.csv")}`, {
       signal: params?.signal,
     });
 
@@ -2800,7 +2815,7 @@ export const api = {
     };
   },
   downloadFileChaptersCsv: async (id: string | number, signal?: AbortSignal): Promise<DownloadedCsv> => {
-    const response = await fetch(`${API_PREFIX}/files/${id}/chapters/export.csv`, { signal });
+    const response = await sessionFetch(`${API_PREFIX}/files/${id}/chapters/export.csv`, { signal });
     if (!response.ok) {
       const payload = await response.json().catch(() => null);
       const detail = payload?.detail ?? response.statusText;
@@ -2816,7 +2831,7 @@ export const api = {
     options: { download?: boolean; signal?: AbortSignal } = {},
   ): Promise<DownloadedCsv> => {
     const query = options.download ? "?download=1" : "";
-    const response = await fetch(`${API_PREFIX}/files/${id}/cover${query}`, { signal: options.signal });
+    const response = await sessionFetch(`${API_PREFIX}/files/${id}/cover${query}`, { signal: options.signal });
     if (!response.ok) {
       const payload = await response.json().catch(() => null);
       const detail = payload?.detail ?? response.statusText;
@@ -3035,7 +3050,7 @@ export const api = {
   deleteTranscodeJob: (id: string | number) => request<void>(`/transcode-jobs/${id}`, { method: "DELETE" }),
   cancelTranscodeJob: (id: string | number) =>
     request<TranscodeJob>(`/transcode-jobs/${id}/cancel`, { method: "POST" }),
-  browse: (path = ".") => request<BrowseResponse>(`/browse?path=${encodeURIComponent(path)}`),
+  browse: (path = ".", scope?: { context: "create" | "edit"; libraryId?: number }) => request<BrowseResponse>(`/browse?path=${encodeURIComponent(path)}${scope ? `&context=${scope.context}${scope.libraryId !== undefined ? `&library_id=${scope.libraryId}` : ""}` : ""}`),
   telemetryPreview: (mode: TelemetryPreviewMode = "minimal") =>
     request<TelemetryPreview>(`/telemetry/preview?mode=${encodeURIComponent(mode)}`),
   telemetrySendNow: () =>
@@ -3089,8 +3104,8 @@ export const api = {
       { method: "POST" },
     ),
   activeConnectorJobs: () => request<Array<{ connection: Pick<ConnectorConnection, "id" | "name" | "provider">; job: ConnectorSyncJob }>>("/connector-jobs/active"),
-  connectorSyncStatus: (id: number) =>
-    request<ConnectorSyncJob | null>(`/connectors/${id}/sync/status`),
+  connectorSyncStatus: (id: number, jobId?: number) =>
+    request<ConnectorSyncJob | null>(`/connectors/${id}/sync/status${jobId ? `?job_id=${jobId}` : ""}`),
   connectorUsers: (id: number) => request<ConnectorUser[]>(`/connectors/${id}/users`),
   updateConnectorUsers: (id: number, enabledUserIds: string[]) =>
     request<ConnectorUser[]>(`/connectors/${id}/users`, {
@@ -3165,7 +3180,9 @@ export const api = {
     request<{ job_id: number | null; status: string | null; cancellation_requested: boolean }>(`/jellyfin/sync/cancel${jobId ? `?job_id=${jobId}` : ""}`, {
       method: "POST",
     }),
-  jellyfinSyncStatus: () => request<JellyfinSyncStatus>("/jellyfin/sync/status"),
+  jellyfinSyncStatus: (jobId?: number) => request<JellyfinSyncStatus>(
+    `/jellyfin/sync/status${jobId ? `?job_id=${jobId}` : ""}`,
+  ),
   jellyfinUsers: () => request<JellyfinUser[]>("/jellyfin/users"),
   updateJellyfinUsers: (enabledUserIds: string[]) =>
     request<JellyfinUser[]>("/jellyfin/users", {
@@ -3236,6 +3253,8 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ linked_library_id: linkedLibraryId }),
     }),
+  notificationHistory: (q = "", beforeId?: number) => request<NotificationHistoryPage>(`/notification-history?${new URLSearchParams({ q, ...(beforeId ? { before_id: String(beforeId) } : {}) })}`),
+  recordNotification: (payload: NotificationHistoryWrite) => request<NotificationHistoryItem | void>("/notification-history", { method: "POST", body: JSON.stringify(payload) }),
   updateAppSettings: (payload: {
     ignore_patterns?: string[];
     user_ignore_patterns?: string[];
@@ -3269,6 +3288,7 @@ export const api = {
     };
     transcoding?: Partial<TranscodingSettings>;
     history_retention?: {
+      notification_history_days?: number;
       file_history?: {
         days?: number;
         storage_limit_gb?: number;
@@ -3289,6 +3309,7 @@ export const api = {
     ui_preferences?: {
       interface_language?: "en" | "de" | "es" | "uk";
       color_theme?: "system" | "light" | "dark";
+      notifications?: NotificationSettings;
     };
     telemetry?: {
       mode?: "off" | "minimal" | "enabled";

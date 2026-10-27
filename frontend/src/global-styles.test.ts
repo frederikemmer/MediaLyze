@@ -33,6 +33,12 @@ describe("global theme styles", () => {
     );
   });
 
+  it("keeps account-right help markers compact beside permission labels", () => {
+    expect(componentStyles).toMatch(
+      /\.access-permission-tooltip\.tooltip-trigger\s*\{[^}]*width:\s*18px[^}]*height:\s*18px[^}]*min-height:\s*18px/s,
+    );
+  });
+
   it("keeps disabled async-panel tooltip titles at the normal heading size", () => {
     expect(componentStyles).toMatch(
       /\.async-panel-title-tooltip-wrapper\.tooltip-trigger\s*\{[^}]*font:\s*inherit[^}]*line-height:\s*inherit/s,
@@ -174,6 +180,23 @@ describe("global theme styles", () => {
     expect(actionSurfaces.length).toBeGreaterThan(0);
     expect(actionSurfaces.every((value) => value === "transparent" || value === "none")).toBe(true);
     expect(componentStyles).toMatch(/\.statistic-layout-size-button\s*\{[^}]*background:\s*linear-gradient/s);
+  });
+
+  it("wraps statistic headers from available space instead of a viewport breakpoint", () => {
+    expect(componentStyles).toMatch(
+      /\.dashboard-statistic-title-row\s*\{[^}]*flex-wrap:\s*wrap/s,
+    );
+    expect(componentStyles).toMatch(
+      /\.library-statistic-title-row\s*\{[^}]*flex-wrap:\s*wrap/s,
+    );
+    expect(componentStyles).toMatch(
+      /\.dashboard-statistic-metrics,\s*\.library-statistic-metrics\s*\{[^}]*flex:\s*0 1 auto/s,
+    );
+    expect(componentStyles).toMatch(
+      /\.dashboard-statistic-title-row \.statistic-layout-controls,\s*\.library-statistic-title-row \.statistic-layout-controls\s*\{[^}]*flex:\s*0 0 auto/s,
+    );
+    expect(componentStyles).not.toContain("flex: 1 1 100%;\n    order: 2;");
+    expect(componentStyles).not.toContain("order: 3;\n    margin-left: 0;");
   });
 
   it("uses the compact control baseline and removes the legacy oversized baseline", () => {

@@ -1827,3 +1827,21 @@ class LibraryHistory(Base):
     snapshot: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
     library: Mapped[Library] = relationship(back_populates="library_history_entries")
+
+
+class NotificationHistoryEntry(Base):
+    __tablename__ = "notification_history"
+    __table_args__ = (
+        Index("ix_notification_history_owner_id", "owner_key", "id"),
+        Index("ix_notification_history_created_at", "created_at"),
+        UniqueConstraint("owner_key", "event_id", name="uq_notification_history_owner_event"),
+        {"sqlite_autoincrement": True},
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_key: Mapped[str] = mapped_column(String(96), nullable=False)
+    event_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, nullable=False)
+    notification_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    message: Mapped[dict | list | str] = mapped_column(JSON, nullable=False)
+    source: Mapped[dict] = mapped_column(JSON, nullable=False)
+    search_text: Mapped[str] = mapped_column(String(4608), nullable=False)

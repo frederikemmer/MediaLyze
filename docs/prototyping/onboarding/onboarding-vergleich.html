@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="de" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>MediaLyze · Onboarding-Prototyp</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
+    :root {
+      color-scheme: light;
+      --bg: #f3efe8;
+      --bg-alt: #e6dfd2;
+      --ink: #1f1c16;
+      --muted: #5f5b52;
+      --panel: rgba(255,255,255,.86);
+      --panel-strong: rgba(255,255,255,.95);
+      --nested: rgba(255,255,255,.38);
+      --border: rgba(31,28,22,.10);
+      --accent: #ff6b3d;
+      --teal: #1b998b;
+      --teal-soft: rgba(27,153,139,.10);
+      --shadow: 0 10px 28px rgba(31,28,22,.08);
+      --radius: 18px;
+      --small-radius: 10px;
+      --focus: 0 0 0 3px rgba(27,153,139,.28);
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #1a1815;
+      --bg-alt: #242118;
+      --ink: #f0ece4;
+      --muted: #aaa59a;
+      --panel: rgba(38,35,31,.90);
+      --panel-strong: rgba(45,41,36,.96);
+      --nested: rgba(255,255,255,.035);
+      --border: rgba(240,236,228,.12);
+      --accent: #ff8059;
+      --teal: #63c6b7;
+      --teal-soft: rgba(99,198,183,.11);
+      --shadow: 0 12px 30px rgba(0,0,0,.24);
+      --focus: 0 0 0 3px rgba(99,198,183,.32);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 0;
+      padding: 0;
+      color: var(--ink);
+      font: 15px/1.45 "Space Grotesk", system-ui, sans-serif;
+      background: transparent;
+      transition: color .2s ease;
+    }
+    .page-frame {
+      max-width: 1424px;
+      margin: 0 auto;
+      padding: 16px clamp(10px, 2.5vw, 28px) 36px;
+      border-radius: 18px;
+      background:
+        radial-gradient(circle at 8% 0%, rgba(255,247,232,.92), transparent 36rem),
+        radial-gradient(circle at 90% 12%, rgba(225,246,243,.82), transparent 34rem),
+        linear-gradient(120deg, var(--bg), var(--bg-alt));
+    }
+    html[data-theme="dark"] .page-frame {
+      background:
+        radial-gradient(circle at 8% 0%, rgba(115,65,43,.12), transparent 36rem),
+        radial-gradient(circle at 90% 12%, rgba(26,116,106,.13), transparent 34rem),
+        linear-gradient(120deg, var(--bg), var(--bg-alt));
+    }
+    button, input, select { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible { outline: none; box-shadow: var(--focus); }
+    .prototype-controls {
+      max-width: 1360px;
+      margin: 0 auto 12px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px 18px;
+      flex-wrap: wrap;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(31,28,22,.04);
+      backdrop-filter: blur(8px);
+    }
+    .control-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .control-label { color: var(--muted); font-size: 12px; font-weight: 600; margin-right: 4px; }
+    .choice-button, .text-button, .nav-link, .quiet-button {
+      border: 1px solid transparent;
+      background: transparent;
+      border-radius: 8px;
+      color: var(--muted);
+      padding: 7px 10px;
+      line-height: 1.15;
+      transition: background .16s ease, color .16s ease, border-color .16s ease;
+    }
+    .choice-button:hover, .text-button:hover, .quiet-button:hover { color: var(--ink); background: var(--nested); }
+    .choice-button[aria-pressed="true"] {
+      color: var(--ink);
+      background: var(--panel-strong);
+      border-color: var(--border);
+      box-shadow: 0 1px 4px rgba(31,28,22,.08);
+    }
+    .control-note { color: var(--muted); font-size: 12px; margin-left: auto; }
+    .app { max-width: 1360px; margin: 0 auto; }
+    .topbar, .page-heading, .panel {
+      background: var(--panel);
+      border: 1px solid rgba(31,28,22,.06);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(8px);
+    }
+    .topbar {
+      min-height: 64px;
+      padding: 10px 18px;
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 10px;
+    }
+    .brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+    .brand-name { font-size: 28px; line-height: 1; letter-spacing: -.065em; font-weight: 700; }
+    .version { color: var(--muted); font-size: 10px; font-weight: 600; background: var(--nested); border-radius: 999px; padding: 2px 7px; }
+    .topnav {
+      display: flex;
+      gap: 3px;
+      align-items: center;
+      padding: 4px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--panel-strong);
+    }
+    .nav-link { color: var(--muted); font-size: 12px; padding: 8px 11px; border-radius: 999px; white-space: nowrap; }
+    .nav-link[aria-current="page"] { color: var(--ink); background: var(--teal-soft); }
+    .page-heading {
+      padding: 15px 18px;
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 10px;
+    }
+    .page-heading h1 { margin: 0; font-size: 23px; letter-spacing: -.035em; }
+    .page-heading p { color: var(--muted); margin: 3px 0 0; font-size: 13px; }
+    .eyebrow { color: var(--muted); text-transform: uppercase; letter-spacing: .16em; font-size: 10px; font-weight: 600; }
+    .content-grid { display: grid; gap: 12px; }
+    .panel { border-radius: var(--radius); padding: clamp(17px, 2.2vw, 26px); min-width: 0; }
+    .section-heading { margin: 0 0 5px; font-size: 20px; letter-spacing: -.035em; }
+    .section-copy { margin: 0; color: var(--muted); max-width: 68ch; }
+    .small-copy { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+    .setup-note {
+      display: flex; justify-content: space-between; align-items: center; gap: 12px;
+      background: var(--teal-soft); border: 1px solid color-mix(in srgb, var(--teal) 23%, transparent);
+      border-radius: 10px; padding: 10px 13px; margin-bottom: 18px; font-size: 13px;
+    }
+    .setup-note strong { font-weight: 600; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 999px; background: var(--panel-strong); border: 1px solid var(--border); color: var(--muted); font-size: 11px; white-space: nowrap; }
+    .stepper { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin: 0 0 26px; }
+    .step-item { min-width: 0; position: relative; display: flex; flex-direction: column; align-items: center; gap: 7px; text-align: center; color: var(--muted); font-size: 12px; }
+    .step-item:not(:last-child)::after { content: ""; position: absolute; height: 1px; background: var(--border); width: calc(100% - 45px); top: 15px; left: calc(50% + 22px); }
+    .step-number { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--nested); border: 1px solid var(--border); font-size: 12px; font-weight: 600; z-index: 1; }
+    .step-item.is-active { color: var(--teal); font-weight: 600; }
+    .step-item.is-active .step-number, .step-item.is-done .step-number { color: #fff; background: var(--teal); border-color: var(--teal); }
+    html[data-theme="dark"] .step-item.is-active .step-number, html[data-theme="dark"] .step-item.is-done .step-number { color: #12201e; }
+    .step-panel[hidden], .variant[hidden] { display: none !important; }
+    .field-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; margin-top: 20px; }
+    .field { display: grid; gap: 6px; min-width: 0; }
+    .field.full { grid-column: 1 / -1; }
+    .field label, .field-label { font-weight: 600; font-size: 13px; }
+    .field input, .field select, .location-input {
+      width: 100%; min-height: 43px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-strong); padding: 9px 11px;
+    }
+    .field-hint { color: var(--muted); font-size: 11px; }
+    .actions { display: flex; align-items: center; justify-content: space-between; gap: 9px; margin-top: 22px; }
+    .actions-right { margin-left: auto; display: flex; gap: 8px; }
+    .primary-button, .secondary-button {
+      border-radius: 8px; padding: 10px 15px; min-height: 42px; font-weight: 600; border: 1px solid transparent;
+    }
+    .primary-button { color: #fff; background: var(--teal); }
+    html[data-theme="dark"] .primary-button { color: #14211f; }
+    .primary-button:hover { filter: brightness(.95); }
+    .secondary-button { color: var(--ink); background: var(--panel-strong); border-color: var(--border); }
+    .secondary-button:hover { background: var(--nested); }
+    .text-button { padding: 8px 9px; font-size: 12px; }
+    .location-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; align-items: end; margin-top: 16px; }
+    .path-display { min-height: 44px; padding: 10px 12px; border-radius: 8px; background: var(--panel-strong); border: 1px solid var(--border); overflow-wrap: anywhere; }
+    .folder-list { display: grid; gap: 3px; border: 1px solid var(--border); border-radius: 10px; padding: 7px; background: var(--nested); margin-top: 12px; }
+    .folder-option { width: 100%; display: grid; grid-template-columns: 20px minmax(0,1fr) auto; gap: 10px; text-align: left; align-items: center; border: 1px solid transparent; background: transparent; border-radius: 7px; padding: 9px 10px; color: var(--ink); }
+    .folder-option::before { content: ""; width: 15px; height: 11px; border: 1.7px solid var(--teal); border-radius: 2px; display: block; position: relative; }
+    .folder-option:hover, .folder-option[aria-pressed="true"] { background: var(--teal-soft); border-color: color-mix(in srgb, var(--teal) 24%, transparent); }
+    .folder-option .folder-name { font-weight: 500; }
+    .folder-option .folder-meta { color: var(--muted); font-size: 11px; }
+    .summary-list { margin: 18px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--border); }
+    .summary-list li { display: flex; justify-content: space-between; gap: 16px; padding: 11px 2px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .summary-list .key { color: var(--muted); }
+    .status-box { display: none; margin-top: 14px; padding: 13px 15px; border: 1px solid color-mix(in srgb, var(--teal) 32%, transparent); border-radius: 10px; background: var(--teal-soft); }
+    .status-box.is-visible { display: block; }
+    .status-box strong { display: block; }
+    .progress-track { height: 7px; background: var(--nested); border-radius: 99px; margin: 11px 0 6px; overflow: hidden; border: 1px solid var(--border); }
+    .progress-fill { height: 100%; width: 0%; border-radius: inherit; background: var(--teal); transition: width .35s ease; }
+    .empty-dashboard { text-align: left; }
+    .empty-dashboard h2 { font-size: clamp(25px, 3.2vw, 35px); margin: 6px 0 8px; letter-spacing: -.045em; }
+    .checklist { margin-top: 22px; display: grid; gap: 8px; }
+    .check-row { display: grid; grid-template-columns: 32px minmax(0,1fr) auto; gap: 12px; align-items: center; padding: 13px 14px; border-radius: 10px; background: var(--panel-strong); border: 1px solid var(--border); }
+    .check-row.is-current { border-color: color-mix(in srgb, var(--teal) 45%, var(--border)); background: var(--teal-soft); }
+    .check-index { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 50%; color: var(--muted); background: var(--panel); font-size: 12px; font-weight: 600; }
+    .is-done .check-index { background: var(--teal); color: #fff; border-color: var(--teal); }
+    .check-title { margin: 0; font-size: 15px; }
+    .check-copy { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+    .inline-form { display: none; padding: 14px; margin: 0 0 2px 44px; border-left: 2px solid var(--teal); }
+    .inline-form.is-visible { display: block; }
+    .inline-form .field-grid { margin-top: 0; }
+    .settings-layout { display: grid; grid-template-columns: 205px minmax(0,1fr); gap: 12px; align-items: stretch; }
+    .settings-menu { padding: 14px; }
+    .settings-menu h2 { text-transform: uppercase; font-size: 11px; color: var(--muted); letter-spacing: .12em; margin: 2px 7px 10px; }
+    .settings-item { display: block; padding: 9px 10px; margin-bottom: 3px; color: var(--muted); border-radius: 8px; font-size: 13px; }
+    .settings-item.is-active { background: var(--teal-soft); color: var(--ink); font-weight: 600; }
+    .one-page-form { display: grid; gap: 15px; margin-top: 18px; }
+    .form-section { border: 1px solid var(--border); border-radius: 11px; background: var(--nested); padding: 14px; }
+    .form-section h3 { margin: 0; font-size: 14px; }
+    .form-section > p { color: var(--muted); margin: 3px 0 12px; font-size: 12px; }
+    .form-section .folder-list { margin-top: 10px; }
+    .soft-divider { border: 0; border-top: 1px solid var(--border); margin: 0; }
+    .result-grid { display: none; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin-top: 12px; }
+    .result-grid.is-visible { display: grid; }
+    .result-card { background: var(--panel-strong); border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; }
+    .result-card span { display: block; color: var(--muted); text-transform: uppercase; font-size: 9px; letter-spacing: .12em; }
+    .result-card strong { display: block; font-size: 17px; margin-top: 4px; }
+    .dialog-backdrop { display: none; position: fixed; inset: 0; z-index: 5; padding: 18px; background: rgba(24,22,19,.42); align-items: center; justify-content: center; }
+    .dialog-backdrop.is-open { display: flex; }
+    .dialog { width: min(520px,100%); max-height: 620px; overflow: auto; padding: 20px; background: var(--panel-strong); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 24px 70px rgba(0,0,0,.2); }
+    .dialog-header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+    .dialog-header h2 { margin: 0; font-size: 19px; }
+    .dialog-header p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+    .close-button { border: 1px solid var(--border); background: var(--nested); border-radius: 8px; width: 34px; height: 34px; color: var(--ink); }
+    .dialog-path { margin: 14px 0 8px; padding: 9px 11px; border-radius: 8px; background: var(--nested); border: 1px solid var(--border); font-size: 12px; overflow-wrap: anywhere; }
+    .toast { position: fixed; z-index: 10; right: 22px; bottom: 20px; display: none; max-width: min(360px, calc(100vw - 28px)); padding: 11px 14px; border-radius: 9px; border: 1px solid var(--border); background: var(--panel-strong); box-shadow: var(--shadow); font-size: 13px; }
+    .toast.is-visible { display: block; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    @media (max-width: 800px) {
+      .settings-layout { grid-template-columns: 1fr; }
+      .settings-menu { display: flex; align-items: center; gap: 4px; overflow-x: auto; padding: 9px; }
+      .settings-menu h2 { margin: 0 6px; flex: 0 0 auto; }
+      .settings-item { flex: 0 0 auto; margin: 0; }
+      .page-heading { align-items: start; flex-direction: column; }
+    }
+    @media (max-width: 600px) {
+      .page-frame { padding: 8px 8px 26px; }
+      .prototype-controls { padding: 9px; gap: 8px; }
+      .control-note { display: none; }
+      .choice-button { padding: 7px 8px; font-size: 11px; }
+      .topbar { padding: 10px 12px; min-height: 57px; flex-wrap: wrap; row-gap: 9px; }
+      .brand-name { font-size: 23px; }
+      .topnav { gap: 0; max-width: none; width: 100%; flex: 0 0 100%; justify-content: flex-start; overflow-x: auto; }
+      .nav-link { padding: 7px 5px; font-size: 9px; }
+      .page-heading { padding: 13px; }
+      .page-heading h1 { font-size: 20px; }
+      .panel { padding: 15px; border-radius: 14px; }
+      .field-grid { grid-template-columns: 1fr; gap: 12px; }
+      .field.full { grid-column: auto; }
+      .location-row { grid-template-columns: 1fr; }
+      .location-row .secondary-button { width: 100%; }
+      .check-row { grid-template-columns: 28px minmax(0,1fr); padding: 11px; }
+      .check-row > .primary-button, .check-row > .secondary-button { grid-column: 2; justify-self: start; }
+      .check-row .check-copy { max-width: 42ch; }
+      .step-item { font-size: 10px; }
+      .step-item:not(:last-child)::after { width: calc(100% - 34px); left: calc(50% + 17px); }
+      .actions { align-items: stretch; }
+      .actions-right { width: 100%; }
+      .actions-right button { flex: 1; }
+      .result-grid { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-frame">
+  <div class="prototype-controls" aria-label="Prototyp-Steuerung">
+    <div class="control-group" role="group" aria-label="Onboarding-Variante">
+      <span class="control-label">Ablauf</span>
+      <button class="choice-button" type="button" data-variant-choice="wizard" aria-pressed="true">Geführt</button>
+      <button class="choice-button" type="button" data-variant-choice="dashboard" aria-pressed="false">Dashboard</button>
+      <button class="choice-button" type="button" data-variant-choice="settings" aria-pressed="false">Libraries</button>
+    </div>
+    <div class="control-group" role="group" aria-label="Betriebsart">
+      <span class="control-label">Betrieb</span>
+      <button class="choice-button" type="button" data-runtime-choice="server" aria-pressed="true">Server</button>
+      <button class="choice-button" type="button" data-runtime-choice="desktop" aria-pressed="false">Desktop</button>
+    </div>
+    <div class="control-group">
+      <button class="choice-button" id="themeToggle" type="button" aria-pressed="false">Dunkles Theme</button>
+      <button class="choice-button" id="resetDemo" type="button">Zurücksetzen</button>
+    </div>
+    <span class="control-note">HTML-Demo · ohne Backend</span>
+  </div>
+
+  <div class="app">
+    <header class="topbar">
+      <div class="brand"><span class="brand-name">MediaLyze</span><span class="version">Prototype</span></div>
+      <nav class="topnav" aria-label="Hauptnavigation">
+        <a class="nav-link" data-main-nav="dashboard" href="#dashboard">Dashboard</a>
+        <a class="nav-link" data-main-nav="libraries" href="#libraries">Libraries</a>
+        <a class="nav-link" href="#">Vergleich</a>
+        <a class="nav-link" href="#">Transcoding</a>
+        <a class="nav-link" href="#">Einstellungen</a>
+      </nav>
+    </header>
+
+    <section class="variant" data-variant="wizard" aria-label="Geführter Ablauf">
+      <header class="page-heading">
+        <div><div class="eyebrow">Erste Einrichtung</div><h1>Deine erste Library</h1><p>Wir richten gemeinsam den ersten Medienbereich ein.</p></div>
+        <span class="pill" data-runtime-label>Owner-Konto ist angelegt</span>
+      </header>
+      <main class="content-grid">
+        <section class="panel">
+          <div class="stepper" aria-label="Einrichtungsschritte">
+            <div class="step-item is-active" data-step-indicator="0"><span class="step-number">1</span><span>Library</span></div>
+            <div class="step-item" data-step-indicator="1"><span class="step-number">2</span><span>Medienordner</span></div>
+            <div class="step-item" data-step-indicator="2"><span class="step-number">3</span><span>Erster Scan</span></div>
+          </div>
+          <div class="setup-note"><span data-setup-copy>Dein Owner-Konto ist bereit. Jetzt legen wir deine erste Library an.</span><span class="pill">1 von 3</span></div>
+          <div class="step-panel" data-wizard-step="0">
+            <h2 class="section-heading">Wie soll deine Library heißen?</h2>
+            <p class="section-copy">Der Name hilft dir später, deine Medienbereiche auseinanderzuhalten.</p>
+            <div class="field-grid">
+              <div class="field"><label for="wizardName">Name</label><input id="wizardName" data-name-input value="Filme" autocomplete="off"><span class="field-hint">Du kannst den Namen später ändern.</span></div>
+              <div class="field"><label for="wizardType">Medientyp</label><select id="wizardType" data-type-input><option value="movies">Filme</option><option value="series">Serien</option><option value="music">Musik</option><option value="audiobooks">Hörbücher</option><option value="mixed">Gemischt</option><option value="other">Sonstiges</option></select><span class="field-hint">Der Typ bestimmt, welche Metadaten MediaLyze auswertet.</span></div>
+            </div>
+            <div class="actions"><span></span><div class="actions-right"><button class="primary-button" type="button" data-wizard-next="1">Weiter</button></div></div>
+          </div>
+          <div class="step-panel" data-wizard-step="1" hidden>
+            <h2 class="section-heading">Wo liegen deine Medien?</h2>
+            <p class="section-copy" data-location-copy>Wähle den Medienordner innerhalb des Server-Medienbereichs aus.</p>
+            <div class="location-row"><div class="field"><label for="wizardPath">Ausgewählter Ordner</label><div class="path-display" id="wizardPath" data-path-display>Kein Ordner ausgewählt</div></div><button class="secondary-button" type="button" data-open-folder>Ordner wählen</button></div>
+            <p class="small-copy">Der Prototyp simuliert die Ordnerauswahl. Im echten Serverbetrieb bleibt sie auf MEDIA_ROOT beschränkt.</p>
+            <div class="actions"><button class="text-button" type="button" data-wizard-next="0">Zurück</button><div class="actions-right"><button class="primary-button" type="button" data-wizard-next="2" data-requires-path disabled>Weiter</button></div></div>
+          </div>
+          <div class="step-panel" data-wizard-step="2" hidden>
+            <h2 class="section-heading">Bereit für den ersten Scan</h2>
+            <p class="section-copy">MediaLyze legt die Library an und analysiert anschließend die Dateien im ausgewählten Ordner.</p>
+            <ul class="summary-list"><li><span class="key">Library</span><strong data-summary-name>Filme</strong></li><li><span class="key">Medientyp</span><strong data-summary-type>Filme</strong></li><li><span class="key">Medienordner</span><strong data-summary-path>Noch nicht ausgewählt</strong></li><li><span class="key">Scan</span><strong>Erster vollständiger Scan</strong></li></ul>
+            <div class="status-box" data-scan-status role="status" aria-live="polite"><strong data-scan-title>Scan wird vorbereitet …</strong><div class="progress-track"><div class="progress-fill" data-progress></div></div><span class="small-copy" data-scan-copy>Das ist eine simulierte Demo.</span></div>
+            <div class="actions"><button class="text-button" type="button" data-wizard-next="1">Zurück</button><div class="actions-right"><button class="primary-button" type="button" data-start-scan>Library erstellen und Scan starten</button></div></div>
+            <div class="result-grid" data-results><div class="result-card"><span>Library</span><strong data-result-name>Filme</strong></div><div class="result-card"><span>Beispiel-Dateien</span><strong>128</strong></div><div class="result-card"><span>Status</span><strong>Bereit</strong></div></div>
+            <div class="actions" data-finish-row hidden><span class="small-copy">Beispielwerte in diesem Prototyp sind simuliert.</span><div class="actions-right"><button class="secondary-button" type="button" data-show-dashboard>Dashboard ansehen</button></div></div>
+          </div>
+        </section>
+      </main>
+    </section>
+
+    <section class="variant" data-variant="dashboard" aria-label="Dashboard-Checkliste" hidden>
+      <header class="page-heading"><div><div class="eyebrow">Übersicht</div><h1>Dashboard</h1><p>Deine Statistiken erscheinen hier, sobald MediaLyze Medien analysiert hat.</p></div><span class="pill" data-runtime-label>Owner-Konto ist angelegt</span></header>
+      <main class="content-grid">
+        <section class="panel empty-dashboard">
+          <div class="eyebrow">Willkommen bei MediaLyze</div>
+          <h2>Fangen wir mit deiner Sammlung an.</h2>
+          <p class="section-copy">Lege eine Library an, wähle den Medienordner aus und starte den ersten Scan. Danach füllt sich dein Dashboard mit Ergebnissen.</p>
+          <div class="checklist">
+            <div class="check-row is-current" data-check-row="0"><span class="check-index">1</span><div><h3 class="check-title">Erste Library anlegen</h3><p class="check-copy">Gib deiner Sammlung einen Namen und wähle den passenden Medientyp.</p></div><button class="primary-button" type="button" data-dashboard-open-form>Library anlegen</button></div>
+            <div class="inline-form" data-dashboard-form><div class="field-grid"><div class="field"><label for="dashName">Name</label><input id="dashName" data-name-input value="Filme"></div><div class="field"><label for="dashType">Medientyp</label><select id="dashType" data-type-input><option value="movies">Filme</option><option value="series">Serien</option><option value="music">Musik</option><option value="audiobooks">Hörbücher</option><option value="mixed">Gemischt</option><option value="other">Sonstiges</option></select></div></div><div class="actions"><span></span><div class="actions-right"><button class="primary-button" type="button" data-dashboard-save-library>Library speichern</button></div></div></div>
+            <div class="check-row" data-check-row="1"><span class="check-index">2</span><div><h3 class="check-title">Medienordner auswählen</h3><p class="check-copy" data-dash-path-copy>Noch kein Ordner ausgewählt.</p></div><button class="secondary-button" type="button" data-open-folder>Ordner wählen</button></div>
+            <div class="check-row" data-check-row="2"><span class="check-index">3</span><div><h3 class="check-title">Ersten Scan starten</h3><p class="check-copy">MediaLyze analysiert die Dateien im Hintergrund.</p></div><button class="secondary-button" type="button" data-start-scan disabled>Scan starten</button></div>
+          </div>
+          <div class="status-box" data-scan-status role="status" aria-live="polite"><strong data-scan-title>Scan wird vorbereitet …</strong><div class="progress-track"><div class="progress-fill" data-progress></div></div><span class="small-copy" data-scan-copy>Das ist eine simulierte Demo.</span></div>
+          <div class="result-grid" data-results><div class="result-card"><span>Library</span><strong data-result-name>Filme</strong></div><div class="result-card"><span>Beispiel-Dateien</span><strong>128</strong></div><div class="result-card"><span>Status</span><strong>Bereit</strong></div></div>
+        </section>
+      </main>
+    </section>
+
+    <section class="variant" data-variant="settings" aria-label="Libraries-Formular" hidden>
+      <header class="page-heading"><div><div class="eyebrow">Einstellungen</div><h1>Libraries</h1><p>Library und ersten Scan gemeinsam einrichten.</p></div><span class="pill" data-runtime-label>Owner-Konto ist angelegt</span></header>
+      <main class="settings-layout">
+        <aside class="panel settings-menu" aria-label="Einstellungsnavigation"><h2>Einstellungen</h2><div class="settings-item is-active">Libraries</div><div class="settings-item">Medienquellen</div><div class="settings-item">Metadaten</div><div class="settings-item">Analyse</div><div class="settings-item">Allgemein</div></aside>
+        <section class="panel">
+          <div class="setup-note"><span><strong>Ersteinrichtung</strong><br><span data-setup-copy>Lege deine erste Library an und starte den Scan, um Ergebnisse zu sehen.</span></span><span class="pill">Noch 3 Schritte</span></div>
+          <h2 class="section-heading">Erste Library einrichten</h2>
+          <p class="section-copy">Name, Medientyp und Ordner werden in einem Formular gesammelt. Erweiterte Scan-Optionen findest du später in den Library-Einstellungen.</p>
+          <div class="one-page-form">
+            <section class="form-section"><h3>Library</h3><p>Wähle einen Namen und den Medientyp deiner Sammlung.</p><div class="field-grid"><div class="field"><label for="settingsName">Name</label><input id="settingsName" data-name-input value="Filme"></div><div class="field"><label for="settingsType">Medientyp</label><select id="settingsType" data-type-input><option value="movies">Filme</option><option value="series">Serien</option><option value="music">Musik</option><option value="audiobooks">Hörbücher</option><option value="mixed">Gemischt</option><option value="other">Sonstiges</option></select></div></div></section>
+            <section class="form-section"><h3>Medienordner</h3><p data-location-copy>Wähle den Medienordner innerhalb des Server-Medienbereichs aus.</p><div class="location-row"><div class="field"><label for="settingsPath">Ausgewählter Ordner</label><div class="path-display" id="settingsPath" data-path-display>Kein Ordner ausgewählt</div></div><button class="secondary-button" type="button" data-open-folder>Ordner wählen</button></div><div class="folder-list" data-inline-folders></div></section>
+            <hr class="soft-divider">
+            <div class="actions" style="margin-top:0"><span class="small-copy">Library wird angelegt; der erste vollständige Scan startet danach.</span><div class="actions-right"><button class="primary-button" type="button" data-start-scan data-requires-path disabled>Library erstellen und Scan starten</button></div></div>
+          </div>
+          <div class="status-box" data-scan-status role="status" aria-live="polite"><strong data-scan-title>Scan wird vorbereitet …</strong><div class="progress-track"><div class="progress-fill" data-progress></div></div><span class="small-copy" data-scan-copy>Das ist eine simulierte Demo.</span></div>
+          <div class="result-grid" data-results><div class="result-card"><span>Library</span><strong data-result-name>Filme</strong></div><div class="result-card"><span>Beispiel-Dateien</span><strong>128</strong></div><div class="result-card"><span>Status</span><strong>Bereit</strong></div></div>
+        </section>
+      </main>
+    </section>
+  </div>
+  </div>
+
+  <div class="dialog-backdrop" id="folderDialog" role="presentation">
+    <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="folderDialogTitle" aria-describedby="folderDialogHelp">
+      <div class="dialog-header"><div><h2 id="folderDialogTitle">Medienordner auswählen</h2><p id="folderDialogHelp" data-dialog-help>Wähle einen Ordner unterhalb von MEDIA_ROOT.</p></div><button class="close-button" type="button" id="closeDialog" aria-label="Dialog schließen">×</button></div>
+      <div class="dialog-path" data-dialog-path>/media</div>
+      <div class="folder-list" id="dialogFolders"></div>
+      <div class="actions"><button class="text-button" type="button" id="cancelDialog">Abbrechen</button><div class="actions-right"><button class="primary-button" type="button" id="confirmFolder" disabled>Ordner übernehmen</button></div></div>
+    </section>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="sr-only" id="liveRegion" aria-live="polite"></div>
+
+  <script>
+    const state = { variant: "wizard", runtime: "server", wizardStep: 0, name: "Filme", type: "movies", path: "", libraryCreated: false, scanRunning: false, scanDone: false, selectedFolder: "" };
+    let dialogOpener = null;
+    const typeLabels = { movies: "Filme", series: "Serien", music: "Musik", audiobooks: "Hörbücher", mixed: "Gemischt", other: "Sonstiges" };
+    const folders = ["Filme", "Serien", "Musik", "Hörbücher"];
+    const rootFor = () => state.runtime === "desktop" ? "/Users/name/Movies" : "/media";
+    const fullPathFor = (folder) => state.runtime === "desktop" ? "/Users/name/" + folder : "/media/" + folder;
+    const getAll = (selector) => Array.from(document.querySelectorAll(selector));
+    const setTextAll = (selector, value) => getAll(selector).forEach((node) => { node.textContent = value; });
+    const showToast = (message) => { const toast = document.getElementById("toast"); toast.textContent = message; toast.classList.add("is-visible"); window.clearTimeout(showToast.timer); showToast.timer = window.setTimeout(() => toast.classList.remove("is-visible"), 2800); };
+    function setVariant(name) {
+      state.variant = name;
+      getAll(".variant").forEach((node) => { node.hidden = node.dataset.variant !== name; });
+      getAll("[data-variant-choice]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.variantChoice === name)));
+      getAll("[data-main-nav]").forEach((link) => link.setAttribute("aria-current", (name === "dashboard" && link.dataset.mainNav === "dashboard") || (name === "settings" && link.dataset.mainNav === "libraries") ? "page" : "false"));
+      renderState();
+    }
+    function setRuntime(runtime) {
+      if (state.runtime !== runtime) {
+        Object.assign(state, { wizardStep: 0, name: "Filme", type: "movies", path: "", libraryCreated: false, scanRunning: false, scanDone: false, selectedFolder: "" });
+      }
+      state.runtime = runtime;
+      getAll("[data-runtime-choice]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.runtimeChoice === runtime)));
+      setTextAll("[data-runtime-label]", runtime === "server" ? "Owner-Konto ist angelegt" : "Desktop · ohne Benutzerkonto");
+      setTextAll("[data-setup-copy]", runtime === "server" ? "Dein Owner-Konto ist bereit. Jetzt legen wir deine erste Library an." : "Desktop benötigt kein Benutzerkonto. Wir starten direkt mit deiner ersten Library.");
+      setTextAll("[data-location-copy]", runtime === "server" ? "Wähle den Medienordner innerhalb des Server-Medienbereichs aus." : "Wähle einen lokalen Ordner auf diesem Computer aus.");
+      document.getElementById("folderDialogHelp").textContent = runtime === "server" ? "Der Server zeigt nur zulässige Ordner unter MEDIA_ROOT." : "Im echten Desktop öffnet sich hier der native Ordner-Picker.";
+      document.querySelector("[data-dialog-path]").textContent = runtime === "server" ? "/media" : "/Users/name";
+      renderState();
+    }
+    function renderState() {
+      getAll("[data-name-input]").forEach((input) => { if (document.activeElement !== input && input.value !== state.name) input.value = state.name; });
+      getAll("[data-type-input]").forEach((input) => { input.value = state.type; });
+      setTextAll("[data-path-display]", state.path || "Kein Ordner ausgewählt");
+      setTextAll("[data-dash-path-copy]", state.path || "Noch kein Ordner ausgewählt.");
+      setTextAll("[data-summary-name]", state.name || "Ohne Namen");
+      setTextAll("[data-summary-type]", typeLabels[state.type] || "Nicht ausgewählt");
+      setTextAll("[data-summary-path]", state.path || "Noch nicht ausgewählt");
+      setTextAll("[data-result-name]", state.name || "Library");
+      getAll("[data-requires-path]").forEach((button) => { button.disabled = !state.path || state.scanRunning; });
+      const dashForm = document.querySelector("[data-dashboard-form]");
+      if (dashForm) dashForm.classList.toggle("is-visible", state.variant === "dashboard" && !state.libraryCreated);
+      getAll("[data-check-row]").forEach((row) => {
+        const index = Number(row.dataset.checkRow);
+        const done = (index === 0 && state.libraryCreated) || (index === 1 && Boolean(state.path)) || (index === 2 && state.scanDone);
+        row.classList.toggle("is-done", done);
+        row.classList.toggle("is-current", !done && ((index === 0 && !state.libraryCreated) || (index === 1 && state.libraryCreated && !state.path) || (index === 2 && Boolean(state.path) && !state.scanDone)));
+        const number = row.querySelector(".check-index");
+        if (number) number.textContent = done ? "✓" : String(index + 1);
+      });
+      getAll("[data-scan-status]").forEach((box) => box.classList.toggle("is-visible", state.scanRunning || state.scanDone));
+      setTextAll("[data-scan-title]", state.scanDone ? "Erster Scan abgeschlossen" : "Erster Scan läuft");
+      setTextAll("[data-scan-copy]", state.scanDone ? "Beispielstatus: MediaLyze hat Dateien analysiert. Die Werte im Prototyp sind simuliert." : "Die Library wird erstellt und der Scan läuft im Hintergrund.");
+      getAll("[data-progress]").forEach((bar) => { bar.style.width = state.scanDone ? "100%" : (state.scanRunning ? "62%" : "0%"); });
+      getAll("[data-results]").forEach((box) => box.classList.toggle("is-visible", state.scanDone));
+      getAll("[data-finish-row]").forEach((row) => { row.hidden = !state.scanDone; });
+      getAll("[data-start-scan]").forEach((button) => { if (state.scanRunning) button.textContent = "Scan läuft …"; else if (state.scanDone) button.textContent = "Scan abgeschlossen"; else button.textContent = state.variant === "dashboard" ? "Scan starten" : "Library erstellen und Scan starten"; });
+      getAll("[data-start-scan]").forEach((button) => { button.disabled = !state.path || state.scanRunning || state.scanDone; });
+      getAll("[data-wizard-step]").forEach((node) => { node.hidden = Number(node.dataset.wizardStep) !== state.wizardStep; });
+      getAll("[data-step-indicator]").forEach((node) => {
+        const index = Number(node.dataset.stepIndicator);
+        node.classList.toggle("is-active", index === state.wizardStep);
+        node.classList.toggle("is-done", index < state.wizardStep || (index === 2 && state.scanDone));
+        const badge = node.querySelector(".step-number");
+        if (badge && index < state.wizardStep) badge.textContent = "✓";
+        else if (badge) badge.textContent = String(index + 1);
+      });
+      getAll("[data-inline-folders]").forEach((list) => renderInlineFolders(list));
+    }
+    function renderInlineFolders(list) {
+      list.replaceChildren();
+      folders.forEach((name) => {
+        const path = fullPathFor(name);
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "folder-option";
+        button.setAttribute("aria-pressed", String(state.path === path));
+        button.innerHTML = '<span class="folder-name"></span><span class="folder-meta"></span>';
+        button.querySelector(".folder-name").textContent = name;
+        button.querySelector(".folder-meta").textContent = path;
+        button.addEventListener("click", () => { state.path = path; renderState(); showToast("Ordner ausgewählt."); });
+        list.append(button);
+      });
+    }
+    function openFolderDialog(event) {
+      dialogOpener = event.currentTarget;
+      const dialog = document.getElementById("folderDialog");
+      const list = document.getElementById("dialogFolders");
+      list.replaceChildren();
+      folders.forEach((name) => {
+        const path = fullPathFor(name);
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "folder-option";
+        button.setAttribute("aria-pressed", String(state.selectedFolder === path));
+        button.innerHTML = '<span class="folder-name"></span><span class="folder-meta"></span>';
+        button.querySelector(".folder-name").textContent = name;
+        button.querySelector(".folder-meta").textContent = path;
+        button.addEventListener("click", () => {
+          state.selectedFolder = path;
+          getAll("#dialogFolders .folder-option").forEach((item) => item.setAttribute("aria-pressed", String(item.querySelector(".folder-meta").textContent === path)));
+          document.getElementById("confirmFolder").disabled = false;
+        });
+        list.append(button);
+      });
+      dialog.classList.add("is-open");
+      document.getElementById("confirmFolder").disabled = !state.selectedFolder;
+      document.getElementById("closeDialog").focus();
+    }
+    function closeFolderDialog() {
+      document.getElementById("folderDialog").classList.remove("is-open");
+      if (dialogOpener && document.contains(dialogOpener)) dialogOpener.focus();
+      dialogOpener = null;
+    }
+    function startScan() {
+      if (!state.path || state.scanRunning || state.scanDone) return;
+      state.libraryCreated = true;
+      state.scanRunning = true;
+      renderState();
+      window.setTimeout(() => {
+        state.scanRunning = false;
+        state.scanDone = true;
+        renderState();
+        showToast("Der erste Scan wurde in dieser Demo abgeschlossen.");
+      }, 1500);
+    }
+    function resetDemo() {
+      Object.assign(state, { wizardStep: 0, name: "Filme", type: "movies", path: "", libraryCreated: false, scanRunning: false, scanDone: false, selectedFolder: "" });
+      renderState();
+      showToast("Demo zurückgesetzt.");
+    }
+    getAll("[data-variant-choice]").forEach((button) => button.addEventListener("click", () => setVariant(button.dataset.variantChoice)));
+    getAll("[data-runtime-choice]").forEach((button) => button.addEventListener("click", () => setRuntime(button.dataset.runtimeChoice)));
+    getAll("[data-name-input]").forEach((input) => input.addEventListener("input", () => { state.name = input.value; renderState(); }));
+    getAll("[data-type-input]").forEach((input) => input.addEventListener("change", () => { state.type = input.value; renderState(); }));
+    getAll("[data-wizard-next]").forEach((button) => button.addEventListener("click", () => {
+      if (button.dataset.wizardNext === "1") state.name = document.querySelector('[data-variant="wizard"] [data-name-input]').value;
+      if (button.dataset.wizardNext === "2") state.path = state.path || "";
+      state.wizardStep = Number(button.dataset.wizardNext);
+      renderState();
+    }));
+    getAll("[data-open-folder]").forEach((button) => button.addEventListener("click", openFolderDialog));
+    document.getElementById("closeDialog").addEventListener("click", closeFolderDialog);
+    document.getElementById("cancelDialog").addEventListener("click", closeFolderDialog);
+    document.getElementById("folderDialog").addEventListener("click", (event) => { if (event.target.id === "folderDialog") closeFolderDialog(); });
+    document.addEventListener("keydown", (event) => { if (event.key === "Escape" && document.getElementById("folderDialog").classList.contains("is-open")) closeFolderDialog(); });
+    document.getElementById("confirmFolder").addEventListener("click", () => {
+      state.path = state.selectedFolder;
+      if (state.variant === "dashboard") state.libraryCreated = true;
+      renderState();
+      closeFolderDialog();
+      showToast("Medienordner ausgewählt.");
+    });
+    document.querySelector("[data-dashboard-open-form]").addEventListener("click", () => { document.getElementById("dashName").focus(); });
+    document.querySelector("[data-dashboard-save-library]").addEventListener("click", () => { state.libraryCreated = true; renderState(); showToast("Library in der Demo angelegt."); });
+    getAll("[data-start-scan]").forEach((button) => button.addEventListener("click", startScan));
+    getAll("[data-show-dashboard]").forEach((button) => button.addEventListener("click", () => setVariant("dashboard")));
+    document.getElementById("themeToggle").addEventListener("click", (event) => {
+      const dark = document.documentElement.dataset.theme !== "dark";
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+      event.currentTarget.setAttribute("aria-pressed", String(dark));
+      event.currentTarget.textContent = dark ? "Helles Theme" : "Dunkles Theme";
+    });
+    document.getElementById("resetDemo").addEventListener("click", resetDemo);
+    renderState();
+  </script>
+</body>
+</html>

@@ -1,3 +1,4 @@
+import { DEFAULT_NOTIFICATION_SETTINGS, normalizeNotificationSettings } from "./notification-settings";
 import {
   createContext,
   useEffect,
@@ -60,12 +61,14 @@ const DEFAULT_HISTORY_RETENTION = {
   library_history: { days: 365, storage_limit_gb: 0 },
   scan_history: { days: 30, storage_limit_gb: 0 },
   transcode_history: { days: 90, storage_limit_gb: 0 },
+  notification_history_days: 30,
 };
 
 const DEFAULT_PATTERN_RECOGNITION = defaultPatternRecognitionSettings();
 const DEFAULT_UI_PREFERENCES = {
   interface_language: "en" as const,
   color_theme: "system" as const,
+  notifications: DEFAULT_NOTIFICATION_SETTINGS,
 };
 const DEFAULT_TELEMETRY = {
   mode: "none" as const,
@@ -186,6 +189,7 @@ function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined):
         payload?.transcoding?.remove_partial_output ?? DEFAULT_TRANSCODING.remove_partial_output,
     },
     history_retention: {
+      notification_history_days: payload?.history_retention?.notification_history_days ?? 30,
       file_history: {
         days: payload?.history_retention?.file_history?.days ?? DEFAULT_HISTORY_RETENTION.file_history.days,
         storage_limit_gb:
@@ -214,6 +218,7 @@ function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined):
     ui_preferences: {
       interface_language: payload?.ui_preferences?.interface_language ?? DEFAULT_UI_PREFERENCES.interface_language,
       color_theme: payload?.ui_preferences?.color_theme ?? DEFAULT_UI_PREFERENCES.color_theme,
+      notifications: normalizeNotificationSettings(payload?.ui_preferences?.notifications),
     },
     telemetry: {
       mode: payload?.telemetry?.mode ?? DEFAULT_TELEMETRY.mode,

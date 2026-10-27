@@ -40,7 +40,7 @@ def public_connector_payload(value: Any, *, secrets: tuple[str, ...] = ()) -> An
         for secret in secrets:
             if secret:
                 result = result.replace(secret, "***")
-        return result
+        return redact_connector_error(result, limit=max(len(result), 1))
     return value
 
 

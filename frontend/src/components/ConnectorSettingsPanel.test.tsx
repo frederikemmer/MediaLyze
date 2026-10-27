@@ -163,7 +163,7 @@ describe("ConnectorSettingsPanel", () => {
     const update = vi.spyOn(api, "updateConnector").mockResolvedValue({ ...CONNECTION, path_mapping_mode: "manual" });
     render(<ConnectorSettingsPanel />);
 
-    const pathToggle = await screen.findByRole("button", { name: /^Path mappings Map connector locations/ });
+    const pathToggle = await screen.findByRole("button", { name: "Path mappings" });
     expect(pathToggle).toHaveAttribute("aria-expanded", "false");
     const pathMode = screen.getByRole("group", { name: "Path mapping mode" });
     expect(pathMode.closest(".connector-mapping-section-header")).toContainElement(pathToggle);
@@ -178,7 +178,7 @@ describe("ConnectorSettingsPanel", () => {
     expect(overview).not.toHaveBeenCalled();
     fireEvent.click(pathToggle);
     expect(await screen.findByText("Verified")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /^Library assignments Assign connector libraries/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Library assignments" }));
     expect(await screen.findByText("75% path coverage")).toBeInTheDocument();
     expect(document.querySelector(".connector-mapping-summary-card .connector-mapping-coverage-track span")).toHaveStyle({ width: "75%" });
     const assignmentRow = document.querySelector(".connector-library-assignment-row");

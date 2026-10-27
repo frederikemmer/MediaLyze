@@ -1,4 +1,4 @@
-import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEventHandler, ReactNode } from "react";
+import type { AriaRole, CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEventHandler, ReactNode } from "react";
 import {
   useEffect,
   useEffectEvent,
@@ -29,12 +29,18 @@ type TooltipTriggerProps = {
   disabled?: boolean;
   pinOnClick?: boolean;
   ariaPressed?: boolean;
-  ariaExpanded?: boolean;
+  ariaExpanded?: boolean | null;
   ariaControls?: string;
   ariaDisabled?: boolean;
+  ariaSelected?: boolean;
   title?: string;
   as?: "button" | "span";
+  id?: string;
+  role?: AriaRole;
+  tabIndex?: number;
+  dataSettingsSearchTarget?: string;
   dataToggleKey?: string;
+  onKeyDown?: (event: ReactKeyboardEvent<HTMLElement>) => void;
   children?: ReactNode;
 };
 
@@ -64,9 +70,15 @@ export function TooltipTrigger({
   ariaExpanded,
   ariaControls,
   ariaDisabled,
+  ariaSelected,
   title,
   as = "button",
+  id,
+  role,
+  tabIndex,
+  dataSettingsSearchTarget,
   dataToggleKey,
+  onKeyDown: onTriggerKeyDown,
   children = "?",
 }: TooltipTriggerProps) {
   const tooltipId = useId();
@@ -329,10 +341,13 @@ export function TooltipTrigger({
       event.preventDefault();
       closeTooltip();
       triggerRef.current?.blur();
+      return;
     }
+    onTriggerKeyDown?.(event);
   };
 
   const triggerClassName = ["tooltip-trigger", className ?? ""].filter(Boolean).join(" ");
+  const triggerExpanded = ariaExpanded === null ? undefined : ariaExpanded ?? isOpen;
   const assignTriggerRef = (node: HTMLElement | null) => {
     triggerRef.current = node;
   };
@@ -342,15 +357,18 @@ export function TooltipTrigger({
       {as === "span" ? (
         <span
           ref={triggerRef}
-          role="group"
-          tabIndex={0}
+          id={id}
+          role={role ?? "group"}
+          tabIndex={tabIndex ?? 0}
           aria-label={ariaLabel}
           aria-describedby={isOpen ? tooltipId : undefined}
-          aria-expanded={ariaExpanded ?? isOpen}
+          aria-expanded={triggerExpanded}
           aria-controls={ariaControls}
           aria-disabled={ariaDisabled ?? (disabled || undefined)}
           aria-pressed={ariaPressed}
+          aria-selected={ariaSelected}
           title={title}
+          data-settings-search-target={dataSettingsSearchTarget}
           data-toggle-key={dataToggleKey}
           className={triggerClassName}
           style={style}
@@ -378,13 +396,18 @@ export function TooltipTrigger({
         <button
           ref={assignTriggerRef}
           type="button"
+          id={id}
+          role={role}
+          tabIndex={tabIndex}
           aria-label={ariaLabel}
           aria-describedby={isOpen ? tooltipId : undefined}
-          aria-expanded={ariaExpanded ?? isOpen}
+          aria-expanded={triggerExpanded}
           aria-controls={ariaControls}
           aria-disabled={ariaDisabled}
           aria-pressed={ariaPressed}
+          aria-selected={ariaSelected}
           title={title}
+          data-settings-search-target={dataSettingsSearchTarget}
           data-toggle-key={dataToggleKey}
           disabled={disabled}
           className={triggerClassName}

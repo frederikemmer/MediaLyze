@@ -85,10 +85,10 @@ def _build_test_app(db: Session, scan_runtime=None) -> TestClient:
         def cancel_active_jobs(self) -> list:
             return []
 
-        def get_history_reconstruction_status(self) -> HistoryReconstructionStatusRead:
+        def get_history_reconstruction_status(self, **kwargs) -> HistoryReconstructionStatusRead:
             return self.history_reconstruction_status
 
-        def request_history_reconstruction(self) -> HistoryReconstructionStatusRead:
+        def request_history_reconstruction(self, **kwargs) -> HistoryReconstructionStatusRead:
             self.history_reconstruction_status = HistoryReconstructionStatusRead(
                 status=HistoryReconstructionJobStatus.running,
                 phase=HistoryReconstructionPhase.loading_libraries,

@@ -11,6 +11,7 @@ class ScanRequest(BaseModel):
 
 
 class ScanJobRead(BaseModel):
+    origin: dict[str, str] | None = None
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -111,6 +112,8 @@ class ScanSummaryRead(BaseModel):
 
 
 class RecentScanJobRead(BaseModel):
+    origin: dict[str, str] | None = None
+    quality_progress: ScanJobRead | None = None
     model_config = ConfigDict(from_attributes=True)
 
     id: int

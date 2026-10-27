@@ -600,6 +600,8 @@ export function buildPyInstallerArgs(pythonInvocation, platform = process.platfo
     `${path.join(repoRoot, "backend", "app", "profile_catalog")}${addDataSeparator}backend/app/profile_catalog`,
     "--add-data",
     `${path.join(repoRoot, "backend", "app", "services", "language_registry.json")}${addDataSeparator}backend/app/services`,
+    "--add-data",
+    `${path.join(repoRoot, "backend", "app", "api", "access_inventory.json")}${addDataSeparator}backend/app/api`,
   ];
 
   if (platform === "win32") {

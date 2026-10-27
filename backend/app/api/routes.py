@@ -1,4 +1,6 @@
+from backend.app.api.notification_routes import router as notification_history_router
 import io
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -53,7 +55,7 @@ from backend.app.schemas.duplicates import (
     DuplicateSuppressionCreate,
     DuplicateSuppressionRead,
 )
-from backend.app.schemas.history import HistoryReconstructionStatusRead, HistoryStorageRead
+from backend.app.schemas.history import HistoryReconstructionStatusRead, HistoryStorageRead, HistoryReconstructionRequest
 from backend.app.schemas.library import LibraryCreate, LibraryStatistics, LibrarySummary, LibraryUpdate
 from backend.app.schemas.jellyfin import (
     JellyfinConnectionRead,
@@ -169,6 +171,7 @@ from backend.app.models.entities import (
     JellyfinUserItemData,
     JobStatus,
     Library,
+    LibraryRoot,
     LibraryType,
     MediaFile,
     ScanJob,
@@ -335,6 +338,7 @@ from backend.app.services.update_status import (
 )
 
 router = APIRouter()
+router.include_router(notification_history_router)
 router.include_router(federation_router)
 router.include_router(federation_protocol_router)
 
@@ -580,18 +584,55 @@ def history_storage(
 @router.get("/history/reconstruct", response_model=HistoryReconstructionStatusRead)
 def history_reconstruct_status(
     runtime: ScanRuntimeManager = Depends(get_scan_runtime),
+    db: Session = Depends(get_db_session),
 ) -> HistoryReconstructionStatusRead:
-    return runtime.get_history_reconstruction_status()
+    scope = db.info.get("access_scope")
+    return runtime.get_history_reconstruction_status(visible_library_ids=scope[0] if scope else None)
+
+
+def _start_history_reconstruction(db, runtime, requested=None):
+    from backend.app.services.access_jobs import history_target_ids
+    targets = history_target_ids(db, requested)
+    if db.scalar(select(ScanJob.id).where(
+        ScanJob.library_id.in_(targets), ScanJob.status.in_([JobStatus.queued, JobStatus.running]),
+    ).limit(1)) is not None:
+        raise HTTPException(status_code=409, detail="Wait until selected library scans finish")
+    try:
+        return runtime.request_history_reconstruction(library_ids=targets)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail="A history reconstruction is already active") from exc
 
 
 @router.post("/history/reconstruct", response_model=HistoryReconstructionStatusRead)
 def history_reconstruct(
+    payload: HistoryReconstructionRequest | None = None,
     runtime: ScanRuntimeManager = Depends(get_scan_runtime),
     db: Session = Depends(get_db_session),
 ) -> HistoryReconstructionStatusRead:
-    if has_active_scan_jobs(db):
-        raise HTTPException(status_code=409, detail="Wait until active scans finish before reconstructing history")
-    return runtime.request_history_reconstruction()
+    return _start_history_reconstruction(db, runtime, payload.library_ids if payload else None)
+
+
+@router.get("/libraries/{library_id}/history/reconstruct", response_model=HistoryReconstructionStatusRead)
+def library_history_reconstruct_status(
+    library_id: int, runtime: ScanRuntimeManager = Depends(get_scan_runtime),
+    db: Session = Depends(get_db_session),
+) -> HistoryReconstructionStatusRead:
+    if db.get(Library, library_id) is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    scope = db.info.get("access_scope")
+    return runtime.get_history_reconstruction_status(
+        visible_library_ids=scope[0] if scope else None, library_id=library_id,
+    )
+
+
+@router.post("/libraries/{library_id}/history/reconstruct", response_model=HistoryReconstructionStatusRead)
+def library_history_reconstruct(
+    library_id: int, payload: HistoryReconstructionRequest | None = None,
+    runtime: ScanRuntimeManager = Depends(get_scan_runtime), db: Session = Depends(get_db_session),
+) -> HistoryReconstructionStatusRead:
+    if payload is not None and payload.library_ids is not None and set(payload.library_ids) != {library_id}:
+        raise HTTPException(status_code=422, detail="Use the requested library scope")
+    return _start_history_reconstruction(db, runtime, (library_id,))
 
 
 @router.get("/scan-jobs/{job_id}", response_model=ScanJobDetailRead)
@@ -607,7 +648,21 @@ def app_settings(
     db: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
 ) -> AppSettingsRead:
-    return load_app_settings(db, settings)
+    result = load_app_settings(db, settings)
+    from backend.app.services.access_context import principal_context
+    from backend.app.models.access import LocalAccount
+    current = principal_context.get()
+    if current is not None:
+        own = db.get(LocalAccount, current.id) if current.kind == "account" else None
+        if current.kind != "desktop":
+            result.ui_preferences = type(result.ui_preferences).model_validate((own.preferences if own else {}).get("ui_preferences", {}))
+        if not current.has("settings.app.view"):
+            result.telemetry.last_user_visible_payload = None
+            result.telemetry.installation_id = None
+        if not current.has("settings.app.view"):
+            result = AppSettingsRead(resolution_categories=result.resolution_categories,
+                                     feature_flags=result.feature_flags, ui_preferences=result.ui_preferences)
+    return result
 
 
 @router.get("/update-status", response_model=UpdateStatusRead)
@@ -675,7 +730,7 @@ def telemetry_send_now(
     ):
         raise HTTPException(status_code=409, detail="Telemetry is not enabled.")
     send_current_telemetry_snapshot(db, settings, force=True)
-    return load_app_settings(db, settings)
+    return app_settings(db, settings)
 
 
 @router.patch("/app-settings", response_model=AppSettingsRead)
@@ -685,6 +740,14 @@ def app_settings_update(
     settings: Settings = Depends(get_app_settings),
     runtime: ScanRuntimeManager = Depends(get_scan_runtime),
 ) -> AppSettingsRead:
+    from backend.app.services.access_context import principal_context
+    from backend.app.models.access import LocalAccount
+    current = principal_context.get()
+    if current is not None and current.kind == "account" and payload.ui_preferences is not None:
+        own = db.get(LocalAccount, current.id)
+        own.preferences = {**own.preferences, "ui_preferences": {**own.preferences.get("ui_preferences", {}), **payload.ui_preferences.model_dump(exclude_unset=True)}}
+        db.commit()
+        payload = payload.model_copy(update={"ui_preferences": None})
     current_settings = load_app_settings(db, settings)
     try:
         updated_settings, recompute_library_ids = update_app_settings(db, payload, settings, include_effects=True)
@@ -703,7 +766,7 @@ def app_settings_update(
         runtime.cancel_pending_telemetry_send()
     for library_id in recompute_library_ids:
         runtime.request_quality_recompute(library_id)
-    return updated_settings
+    return app_settings(db, settings)
 
 
 @router.get("/quality-profiles", response_model=list[QualityProfileRead])
@@ -780,7 +843,15 @@ def cancel_active_scan_jobs(
     runtime: ScanRuntimeManager = Depends(get_scan_runtime),
 ) -> ScanCancelResponse:
     try:
-        canceled_ids = runtime.cancel_active_jobs()
+        from backend.app.services.access_context import principal_context
+        current = principal_context.get()
+        if current is not None and not current.owner:
+            from backend.app.db.session import SessionLocal
+            with SessionLocal() as scope_db:
+                allowed = [i for i in scope_db.scalars(select(Library.id)) if current.has("library.scan", i)]
+            canceled_ids = [job_id for i in allowed for job_id in runtime.cancel_library_jobs(i)]
+        else:
+            canceled_ids = runtime.cancel_active_jobs()
     except ScanCancelPersistenceError as exc:
         raise HTTPException(
             status_code=503,
@@ -1047,11 +1118,19 @@ def _legacy_connector_sync_job(legacy_job: JellyfinSyncJob, connection_id: int) 
 @router.get("/connectors/{connection_id}/sync/status", response_model=ConnectorSyncJobRead | None)
 def connector_sync_status(
     connection_id: int,
+    job_id: int | None = Query(default=None, ge=1),
     db: Session = Depends(get_db_session),
 ) -> ConnectorSyncJob | ConnectorSyncJobRead | None:
     connection = db.get(ConnectorConnection, connection_id)
     if connection is None:
         raise HTTPException(status_code=404, detail="Connector connection not found")
+    if job_id is not None:
+        return db.scalar(
+            select(ConnectorSyncJob).where(
+                ConnectorSyncJob.id == job_id,
+                ConnectorSyncJob.connection_id == connection_id,
+            )
+        )
     if is_legacy_default_connection(connection):
         generic_job = db.scalar(
             select(ConnectorSyncJob)
@@ -1356,15 +1435,17 @@ def connector_items(
 ) -> ConnectorItemPageRead:
     if db.get(ConnectorConnection, connection_id) is None:
         raise HTTPException(status_code=404, detail="Connector connection not found")
+    from backend.app.services.access_context import catalog_match_status
+    visible_status = catalog_match_status(db, ConnectorItem)
     filters = [ConnectorItem.connection_id == connection_id]
     if status:
-        filters.append(ConnectorItem.match_status == status)
+        filters.append(visible_status == status)
     elif attention_only:
-        filters.append(ConnectorItem.match_status != "matched")
+        filters.append(visible_status != "matched")
     total = db.scalar(select(func.count()).select_from(ConnectorItem).where(*filters)) or 0
     items = list(
-        db.scalars(
-            select(ConnectorItem)
+        db.execute(
+            select(ConnectorItem, visible_status)
             .where(*filters)
             .order_by(ConnectorItem.id)
             .offset(offset)
@@ -1375,7 +1456,10 @@ def connector_items(
         total=total,
         offset=offset,
         limit=limit,
-        items=[ConnectorItemRead.model_validate(item) for item in items],
+        items=[ConnectorItemRead.model_validate(item).model_copy(update={
+            "match_status": item_status,
+            "mismatch_reason": item.mismatch_reason if "access_scope" not in db.info else None,
+        }) for item, item_status in items],
     )
 
 
@@ -1386,12 +1470,14 @@ def connector_item_status_summary(
 ) -> dict[str, int]:
     if db.get(ConnectorConnection, connection_id) is None:
         raise HTTPException(status_code=404, detail="Connector connection not found")
+    from backend.app.services.access_context import catalog_match_status
+    visible_status = catalog_match_status(db, ConnectorItem)
     return {
         status: int(count)
         for status, count in db.execute(
-            select(ConnectorItem.match_status, func.count())
+            select(visible_status, func.count())
             .where(ConnectorItem.connection_id == connection_id)
-            .group_by(ConnectorItem.match_status)
+            .group_by(visible_status)
         )
     }
 
@@ -1405,11 +1491,18 @@ def connector_item_provider_payload(
     item = db.get(ConnectorItem, item_id)
     if item is None or item.connection_id != connection_id:
         raise HTTPException(status_code=404, detail="Connector item not found")
+    from backend.app.services.access_context import catalog_match_status
+    core = ConnectorItemRead.model_validate(item).model_dump(mode="json")
+    if "access_scope" in db.info:
+        core["match_status"] = db.scalar(select(catalog_match_status(db, ConnectorItem)).where(ConnectorItem.id == item.id))
+        core["mismatch_reason"] = None
     return {
         "connection_id": connection_id,
         "connector_item_id": item.id,
         "remote_id": item.remote_id,
-        "core_payload": public_connector_payload(item.core_payload or {}),
+        "core_payload": public_connector_payload(
+            core
+        ),
         "provider_payload": public_connector_payload(item.provider_payload or {}),
     }
 
@@ -1443,7 +1536,14 @@ def _jellyfin_connection_read(
     )
 
 
-def _jellyfin_item_read(item: JellyfinItem) -> JellyfinItemRead:
+def _jellyfin_item_read(item: JellyfinItem, *, scoped_status: str | None = None) -> JellyfinItemRead:
+    from sqlalchemy.orm import object_session
+    from backend.app.services.access_context import catalog_match_status
+    db = object_session(item)
+    visible_status = scoped_status if scoped_status is not None else item.match_status
+    restricted = db is not None and "access_scope" in db.info
+    if restricted and scoped_status is None:
+        visible_status = db.scalar(select(catalog_match_status(db, JellyfinItem)).where(JellyfinItem.id == item.id))
     return JellyfinItemRead(
         id=item.id,
         jellyfin_item_id=item.jellyfin_item_id,
@@ -1462,8 +1562,8 @@ def _jellyfin_item_read(item: JellyfinItem) -> JellyfinItemRead:
         provider_ids=item.provider_ids or {},
         image_tags=item.image_tags or {},
         backdrop_image_tags=item.backdrop_image_tags or [],
-        match_status=item.match_status,
-        mismatch_reason=item.mismatch_reason,
+        match_status=visible_status,
+        mismatch_reason=None if restricted else item.mismatch_reason,
     )
 
 
@@ -1594,13 +1694,18 @@ def jellyfin_sync_cancel(
 
 @router.get("/jellyfin/sync/status", response_model=JellyfinSyncStatusRead)
 def jellyfin_sync_status(
+    job_id: int | None = Query(default=None, ge=1),
     db: Session = Depends(get_db_session),
     runtime: ScanRuntimeManager = Depends(get_scan_runtime),
     settings: Settings = Depends(get_app_settings),
 ) -> JellyfinSyncStatusRead:
     connection = _jellyfin_connection_read(db.get(JellyfinConnection, 1), runtime, settings)
     progress = get_jellyfin_progress()
-    job = get_active_jellyfin_sync_job(db) or get_latest_jellyfin_sync_job(db)
+    job = (
+        db.get(JellyfinSyncJob, job_id)
+        if job_id is not None
+        else get_active_jellyfin_sync_job(db) or get_latest_jellyfin_sync_job(db)
+    )
     job_active = bool(job and job.active_lock == 1 and job.status in {JobStatus.queued, JobStatus.running})
     persisted_progress = bool(job and job.progress_phase is not None)
     return JellyfinSyncStatusRead(
@@ -1702,7 +1807,39 @@ def jellyfin_users_update(
 
 @router.get("/jellyfin/path-mappings", response_model=list[JellyfinPathMappingRead])
 def jellyfin_path_mappings(db: Session = Depends(get_db_session)) -> list[JellyfinPathMapping]:
-    return list(db.scalars(select(JellyfinPathMapping).order_by(JellyfinPathMapping.id.asc())))
+    mappings = list(db.scalars(select(JellyfinPathMapping).order_by(JellyfinPathMapping.id.asc())))
+    scope = db.info.get("access_scope")
+    if scope is None:
+        return mappings
+    visible_libraries = set(scope[0])
+    all_libraries = list(db.connection().execute(select(Library.id, Library.path)).all())
+    all_roots = list(db.connection().execute(select(LibraryRoot.library_id, LibraryRoot.path)).all())
+
+    def canonical(path: str) -> str | None:
+        value = os.path.normcase(os.path.realpath(os.path.abspath(path)))
+        return value if value and os.path.isabs(value) else None
+
+    roots = [(library_id, canonical(path)) for library_id, path in [*all_libraries, *all_roots]]
+    roots = [(library_id, root) for library_id, root in roots if root]
+    result = []
+    for mapping in mappings:
+        target = canonical(mapping.medialyze_path_prefix)
+        if target is None:
+            continue
+        overlaps = []
+        contained_by_visible_root = False
+        for library_id, root in roots:
+            try:
+                common = os.path.commonpath((target, root))
+            except ValueError:  # Different drives / path formats fail closed.
+                continue
+            if common in {target, root}:
+                overlaps.append(library_id)
+                if library_id in visible_libraries and common == root:
+                    contained_by_visible_root = True
+        if contained_by_visible_root and overlaps and set(overlaps) <= visible_libraries:
+            result.append(mapping)
+    return result
 
 
 def _require_manual_legacy_path_mapping(db: Session) -> ConnectorConnection:
@@ -2025,17 +2162,19 @@ def jellyfin_unmatched(
     limit: int = Query(default=200, ge=1, le=1000),
     db: Session = Depends(get_db_session),
 ) -> list[JellyfinUnmatchedRead]:
+    from backend.app.services.access_context import catalog_match_status
+    visible_status = catalog_match_status(db, JellyfinItem)
     items = list(
-        db.scalars(
-            select(JellyfinItem)
-            .where(JellyfinItem.match_status != "matched")
+        db.execute(
+            select(JellyfinItem, visible_status)
+            .where(visible_status != "matched")
             .order_by(JellyfinItem.title.asc())
             .limit(limit)
         )
     )
     return [
-        JellyfinUnmatchedRead(item=_jellyfin_item_read(item))
-        for item in items
+        JellyfinUnmatchedRead(item=_jellyfin_item_read(item, scoped_status=item_status))
+        for item, item_status in items
     ]
 
 

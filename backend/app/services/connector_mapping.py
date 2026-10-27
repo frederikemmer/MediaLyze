@@ -610,12 +610,14 @@ def get_connector_mapping_overview(
         if link.link_method == "derived":
             required_by_library[link.connector_library_id].add(link.library_id)
 
+    from backend.app.services.access_context import catalog_match_status
+    visible_status = catalog_match_status(db, ConnectorItem)
     counts = {
         str(status): int(count)
         for status, count in db.execute(
-            select(ConnectorItem.match_status, func.count())
+            select(visible_status, func.count())
             .where(ConnectorItem.connection_id == connection_id)
-            .group_by(ConnectorItem.match_status)
+            .group_by(visible_status)
         )
     }
     total = sum(counts.values())
@@ -625,7 +627,7 @@ def get_connector_mapping_overview(
         library_locations = locations_by_library.get(library.id, [])
         linked_ids = sorted(linked_by_library.get(library.id, set()))
         recommendation = None
-        if not linked_ids:
+        if not linked_ids and "access_scope" not in db.info:
             recommendation = ConnectorMappingRecommendationRead(
                 suggested_name=library.name,
                 suggested_type=_suggested_library_type(library.media_type),

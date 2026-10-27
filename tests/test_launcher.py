@@ -47,7 +47,7 @@ def test_launcher_serves_http_and_websocket_frames(monkeypatch) -> None:
 
         monkeypatch.setattr(launcher, "app", app)
         monkeypatch.setattr(launcher, "get_settings", lambda: SimpleNamespace(
-            app_host="127.0.0.1", app_port=port,
+            app_host="127.0.0.1", app_port=port, trusted_proxy_ips="",
         ))
         monkeypatch.setattr(launcher.uvicorn, "run", run)
         thread = Thread(target=launcher.main, daemon=True)
@@ -57,6 +57,7 @@ def test_launcher_serves_http_and_websocket_frames(monkeypatch) -> None:
             while not (servers and servers[0].started) and thread.is_alive() and time.monotonic() < deadline:
                 time.sleep(0.01)
             assert servers and servers[0].started
+            assert servers[0].config.proxy_headers is False
             response = httpx.get(f"http://127.0.0.1:{port}/health", timeout=5, trust_env=False)
             assert response.status_code == 200
             assert response.json() == {"ok": True}

@@ -1,3 +1,4 @@
+import { useAuth, hasLibraryPermission } from "../lib/auth";
 import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
@@ -8,6 +9,7 @@ import { AnimatePresence, motion, useAnimation, type Transition } from "motion/r
 import { AnimatedSearchIcon } from "./AnimatedSearchIcon";
 import { BanIcon } from "./BanIcon";
 import { ConnectorProviderIcon } from "./ConnectorProviderIcon";
+import { HeaderAccountMenu } from "./HeaderAccountMenu";
 import { FolderInputIcon } from "./FolderInputIcon";
 import { FolderOutputIcon } from "./FolderOutputIcon";
 import { GithubIcon } from "./GithubIcon";
@@ -133,14 +135,16 @@ type ScanMetric = {
   value: number;
 };
 
-function ScanJobCard({
+export function ScanJobCard({
   job,
   onStop,
   stopping,
+  canStop = true,
 }: {
   job: ScanJob;
   onStop: () => void;
   stopping: boolean;
+  canStop?: boolean;
 }) {
   const { t } = useTranslation();
   const [isMobile, setIsMobile] = useState(() => {
@@ -217,17 +221,21 @@ function ScanJobCard({
               : <FolderOutputIcon size={16} aria-hidden="true" />
             }
           </button>
-          <span className="scan-job-action-sep" aria-hidden="true" />
-          <button
-            type="button"
-            className="secondary icon-only-button scan-banner-stop"
-            aria-label={t("scanBanner.metrics.stopJob")}
-            title={t("scanBanner.metrics.stopJob")}
-            disabled={stopping}
-            onClick={onStop}
-          >
-            <BanIcon size={16} aria-hidden="true" />
-          </button>
+          {canStop ? (
+            <>
+              <span className="scan-job-action-sep" aria-hidden="true" />
+              <button
+                type="button"
+                className="secondary icon-only-button scan-banner-stop"
+                aria-label={t("scanBanner.metrics.stopJob")}
+                title={t("scanBanner.metrics.stopJob")}
+                disabled={stopping}
+                onClick={onStop}
+              >
+                <BanIcon size={16} aria-hidden="true" />
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
     </div>
@@ -373,6 +381,7 @@ function ConnectorSyncJobCard({
 
 
 export function AppShell() {
+  const auth = useAuth();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -699,7 +708,7 @@ export function AppShell() {
           </div>
           <nav className="media-nav-panel" aria-label="Primary">
             <div className="media-nav-icons">
-              <NavLink
+              {(!auth.identity || auth.has("overview.dashboard")) && <NavLink
                 to="/"
                 end
                 aria-label={t("nav.homeAria")}
@@ -720,7 +729,7 @@ export function AppShell() {
                     </span>
                   </>
                 )}
-              </NavLink>
+              </NavLink>}
               <div
                 ref={librariesMenuRef}
                 className="media-nav-library-menu"
@@ -769,7 +778,7 @@ export function AppShell() {
                   </div>
                 ) : null}
               </div>
-              <NavLink
+              {(!auth.identity || auth.has("overview.compare")) && <NavLink
                 to="/files/compare"
                 end
                 aria-label={t("nav.compareAria")}
@@ -790,8 +799,8 @@ export function AppShell() {
                     </span>
                   </>
                 )}
-              </NavLink>
-              <NavLink
+              </NavLink>}
+              {(!auth.identity || auth.has("overview.storage")) && <NavLink
                 to="/storage-map"
                 end
                 aria-label={t("nav.storageMapAria")}
@@ -812,8 +821,8 @@ export function AppShell() {
                     </span>
                   </>
                 )}
-              </NavLink>
-              <NavLink
+              </NavLink>}
+              {(!auth.identity || hasLibraryPermission(auth.identity, "transcode.view")) && <NavLink
                 to="/transcoding"
                 end
                 aria-label={t("nav.transcodingAria")}
@@ -834,7 +843,7 @@ export function AppShell() {
                     </span>
                   </>
                 )}
-              </NavLink>
+              </NavLink>}
               <NavLink
                 to="/settings"
                 end
@@ -859,6 +868,14 @@ export function AppShell() {
                   </>
                 )}
               </NavLink>
+              {auth.identity && auth.identity.kind !== "desktop" ? (
+                <HeaderAccountMenu
+                  username={auth.identity.username}
+                  owner={auth.identity.owner}
+                  kind={auth.identity.kind}
+                  onSignOut={auth.logout}
+                />
+              ) : null}
             </div>
           </nav>
         </div>
@@ -880,6 +897,7 @@ export function AppShell() {
                   key={job.id}
                   job={job}
                   stopping={stoppingScans}
+                  canStop={!auth.identity || auth.has("library.scan", job.library_id)}
                   onStop={async () => {
                     setStoppingScans(true);
                     setScanCancelError(null);

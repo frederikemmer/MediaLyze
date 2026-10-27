@@ -724,6 +724,7 @@ class TranscodeVariantRead(BaseModel):
 
 
 class TranscodeJobRead(BaseModel):
+    origin: dict[str, str] | None = None
     model_config = ConfigDict(from_attributes=True)
 
     id: int

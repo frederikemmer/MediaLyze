@@ -218,7 +218,9 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
         progress_percent = _queue_progress_percent(files_total, files_scanned)
         progress_mode = "determinate" if files_total > 0 else "indeterminate"
 
+    from backend.app.services.access_jobs import origin_for
     return ScanJobRead(
+        origin=origin_for(scan_job, "scan"),
         id=scan_job.id,
         library_id=scan_job.library_id,
         library_name=scan_job.library.name if scan_job.library else None,
@@ -244,7 +246,12 @@ def serialize_scan_job(scan_job: ScanJob) -> ScanJobRead:
 
 def serialize_recent_scan_job(scan_job: ScanJob) -> RecentScanJobRead:
     summary = _normalize_scan_summary(scan_job.scan_summary)
+    from backend.app.services.access_jobs import origin_for
     return RecentScanJobRead(
+        quality_progress=(
+            serialize_scan_job(scan_job) if scan_job.job_type == "quality_recompute" else None
+        ),
+        origin=origin_for(scan_job, "scan"),
         id=scan_job.id,
         library_id=scan_job.library_id,
         library_name=scan_job.library.name if scan_job.library else None,
@@ -322,7 +329,7 @@ def list_recent_scan_jobs(
         select(ScanJob)
         .where(
             ScanJob.status.in_([JobStatus.completed, JobStatus.failed, JobStatus.canceled]),
-            ScanJob.job_type.in_(["incremental", "full"]),
+            ScanJob.job_type.in_(["incremental", "full", "quality_recompute"]),
         )
         .options(selectinload(ScanJob.library))
         .order_by(ScanJob.finished_at.desc(), ScanJob.id.desc())
@@ -354,7 +361,7 @@ def get_scan_job_detail(db: Session, job_id: int) -> ScanJobDetailRead | None:
         select(ScanJob)
         .where(
             ScanJob.id == job_id,
-            ScanJob.job_type.in_(["incremental", "full"]),
+            ScanJob.job_type.in_(["incremental", "full", "quality_recompute"]),
         )
         .options(selectinload(ScanJob.library))
     )

@@ -125,3 +125,7 @@ directory if an explicit `CONFIG_PATH` is not supplied.
 - Before changing `CONFIG_PATH`, `DATABASE_FILENAME`, or output mounts, stop
   only the MediaLyze service and verify the old paths are backed up and
   recoverable.
+
+## Local accounts and trusted proxies
+
+See [Users and access](user-access.md) for setup, upgrade, sessions and current restrictions. First-start environment bootstrap requires both `MEDIALYZE_OWNER_USERNAME` and `MEDIALYZE_OWNER_PASSWORD`. Existing owner fields reconcile separately on each restart; remove a variable and restart to unlock its UI field. `MEDIALYZE_TRUSTED_PROXY_IPS` defaults to empty (no forwarded-header trust); explicitly list the TLS reverse proxy IPs and preserve Host and scheme for cookie/Origin checks. `MEDIALYZE_DESKTOP_TOKEN` is an Electron-generated process credential, never a user-configured browser access key.

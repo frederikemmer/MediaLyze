@@ -1,4 +1,5 @@
 from __future__ import annotations
+from backend.app.services.access_jobs import record_job, admit_job
 
 import logging
 import os
@@ -9,6 +10,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from threading import BoundedSemaphore, Lock, Timer
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from uuid import uuid4
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import select, update
@@ -425,7 +427,10 @@ class ScanRuntimeManager:
                     trigger_details=trigger_details,
                 )
                 job_id = job.id
-                if created and library_id not in self.active_library_ids and job.id not in self.submitted_job_ids:
+                if created:
+                    from backend.app.services.access_jobs import record_job
+                    record_job(db, "scan", job.id, [["library.scan", library_id]])
+                if created and library_id not in self.active_library_ids and job.id not in self.submitted_job_ids and not self._history_blocks_library_locked(library_id):
                     self.active_library_ids.add(library_id)
                     self.submitted_job_ids.add(job.id)
                     should_submit = True
@@ -450,7 +455,7 @@ class ScanRuntimeManager:
             try:
                 job, created = queue_quality_recompute_job(db, library_id)
                 job_id = job.id
-                if created and library_id not in self.active_library_ids and job.id not in self.submitted_job_ids:
+                if created and library_id not in self.active_library_ids and job.id not in self.submitted_job_ids and not self._history_blocks_library_locked(library_id):
                     self.active_library_ids.add(library_id)
                     self.submitted_job_ids.add(job.id)
                     should_submit = True
@@ -496,6 +501,11 @@ class ScanRuntimeManager:
                     }
                 )
                 job, validation = queue_transcode_job(db, self.settings, media_file, local_plan)
+            from backend.app.services.access_jobs import record_job
+            requirements = [["library.read", media_file.library_id], ["transcode.view", media_file.library_id], ["transcode.run", media_file.library_id]]
+            if job.output_mode == "replace_original":
+                requirements.append(["transcode.replace", media_file.library_id])
+            job._access_origin = record_job(db, "transcode", job.id, requirements)
         finally:
             db.close()
         try:
@@ -834,6 +844,12 @@ class ScanRuntimeManager:
         db = SessionLocal()
         try:
             run = create_transcode_automation_run(db, scope, trigger=trigger)
+            # Manual inventory is intentionally restricted to Owner until partial
+            # rule/run projections are available. Preserve its account origin.
+            requirements = [["settings.app.edit", None]]
+            for library_id in db.scalars(select(Library.id)):
+                requirements.extend([["transcode.run", library_id], ["transcode.view", library_id], ["library.read", library_id], ["transcode.replace", library_id]])
+            record_job(db, "automation", run.id, requirements)
         finally:
             db.close()
         with self.lock:
@@ -860,7 +876,17 @@ class ScanRuntimeManager:
         return run
 
     def _run_transcode_automation(self, run_id: int) -> None:
+        from backend.app.models.access import JobAuthority
+        from backend.app.services.access import Principal
+        from backend.app.services.access_context import principal_context
+        origin_token = None
         try:
+            with SessionLocal() as authorization_db:
+                if not admit_job(authorization_db, "automation", run_id):
+                    return
+                authority = authorization_db.get(JobAuthority, f"automation:{run_id}")
+                if authority is not None and authority.actor_kind != "system":
+                    origin_token = principal_context.set(Principal(authority.actor_kind, authority.actor_id, authority.actor_name, False, {}))
             process_transcode_automation_run(
                 self.settings,
                 run_id,
@@ -868,6 +894,8 @@ class ScanRuntimeManager:
                 is_cancel_requested=self.is_transcode_automation_cancel_requested,
             )
         finally:
+            if origin_token is not None:
+                principal_context.reset(origin_token)
             with self.lock:
                 self.submitted_automation_run_ids.discard(run_id)
                 self.cancel_requested_automation_run_ids.discard(run_id)
@@ -900,6 +928,9 @@ class ScanRuntimeManager:
             try:
                 queued_job = db.get(TranscodeJob, job_id)
                 if queued_job is None:
+                    return
+                from backend.app.services.access_jobs import admit_job
+                if not admit_job(db, "transcode", job_id):
                     return
                 library_id = queued_job.library_id
                 remote = bool(
@@ -972,6 +1003,9 @@ class ScanRuntimeManager:
                         return
                     time.sleep(0.25)
             while True:
+                with SessionLocal() as authorization_db:
+                    if not admit_job(authorization_db, "transcode", job_id):
+                        return
                 if remote:
                     library_id = execute_remote_transcode_job(
                         job_id,
@@ -1068,28 +1102,76 @@ class ScanRuntimeManager:
         finally:
             db.close()
 
-    def get_history_reconstruction_status(self) -> HistoryReconstructionStatusRead:
-        with self.lock:
-            return self.history_reconstruction_status.model_copy(deep=True)
+    def _history_blocks_library_locked(self, library_id: int) -> bool:
+        return (
+            self.history_reconstruction_status.status in {
+                HistoryReconstructionJobStatus.queued, HistoryReconstructionJobStatus.running,
+            } and library_id in self.history_reconstruction_status.library_ids
+        )
 
-    def request_history_reconstruction(self) -> HistoryReconstructionStatusRead:
-        should_submit = False
+    def get_history_reconstruction_status(
+        self, *, visible_library_ids: tuple[int, ...] | None = None, library_id: int | None = None,
+    ) -> HistoryReconstructionStatusRead:
+        with self.lock:
+            current = self.history_reconstruction_status
+            targets = set(current.library_ids)
+            if (library_id is not None and targets != {library_id}) or (
+                visible_library_ids is not None and (
+                    not targets or not targets <= set(visible_library_ids)
+                )
+            ):
+                return HistoryReconstructionStatusRead()
+            result = current.model_copy(deep=True)
+            if visible_library_ids is not None and result.status == HistoryReconstructionJobStatus.failed:
+                result.error = "History reconstruction failed"
+            return result
+
+    def request_history_reconstruction(self, *, library_ids: tuple[int, ...] | None = None) -> HistoryReconstructionStatusRead:
+        from backend.app.services.access_jobs import history_target_ids, job_allowed
+        from backend.app.models.access import JobAuthority
+        from backend.app.services.access import fail
+
+        with SessionLocal() as authority_db:
+            targets = history_target_ids(authority_db, library_ids)
         with self.lock:
             current = self.history_reconstruction_status
             if current.status in {
                 HistoryReconstructionJobStatus.queued,
                 HistoryReconstructionJobStatus.running,
             }:
-                return current.model_copy(deep=True)
+                if set(current.library_ids) == set(targets):
+                    return current.model_copy(deep=True)
+                raise ValueError("A history reconstruction is already active")
+            with SessionLocal() as scan_db:
+                if set(targets) & self.active_library_ids or scan_db.scalar(select(ScanJob.id).where(
+                    ScanJob.library_id.in_(targets), ScanJob.status.in_([JobStatus.queued, JobStatus.running]),
+                ).limit(1)) is not None:
+                    raise ValueError("Selected library scans are active")
+            key = uuid4().hex
+            with SessionLocal() as authority_db:
+                origin = record_job(authority_db, "history", key, [
+                    [right, library_id] for library_id in targets
+                    for right in ("library.read", "library.scan")
+                ])
+                authority = authority_db.get(JobAuthority, f"history:{key}")
+                if authority is None or not job_allowed(authority_db, authority):
+                    fail(403, "Forbidden")
             self.history_reconstruction_status = HistoryReconstructionStatusRead(
+                job_id=key,
                 status=HistoryReconstructionJobStatus.queued,
                 phase=HistoryReconstructionPhase.loading_libraries,
+                library_ids=list(targets), libraries_total=len(targets), origin=origin,
             )
-            should_submit = True
-
-        if should_submit:
-            self.executor.submit(self._run_history_reconstruction)
-        return self.get_history_reconstruction_status()
+            accepted = self.history_reconstruction_status.model_copy(deep=True)
+        try:
+            self.executor.submit(self._run_history_reconstruction, targets, key)
+        except RuntimeError:
+            self._update_history_reconstruction_status(
+                status=HistoryReconstructionJobStatus.failed, phase=HistoryReconstructionPhase.failed,
+                finished_at=utc_now(), error="History reconstruction could not be queued",
+            )
+            fail(503, "History reconstruction is unavailable")
+        return accepted
 
     def request_telemetry_send(self, *, force: bool = False) -> None:
         with self.lock:
@@ -1142,6 +1224,8 @@ class ScanRuntimeManager:
                     "The standard Jellyfin connector is already recomputing matches"
                 )
             job, accepted = create_or_get_jellyfin_sync_job(db, trigger_source)
+            if accepted:
+                record_job(db, "jellyfin", job.id, [["connector.manage", None]])
             result: dict[str, int | str | bool] = {
                 "job_id": job.id,
                 "status": job.status.value,
@@ -1194,6 +1278,8 @@ class ScanRuntimeManager:
             if not connection.base_url or not read_connector_secret(db, connection.id):
                 raise ValueError("Connector URL and secret are required before synchronization")
             job, accepted = create_or_get_connector_sync_job(db, connection_id, trigger_source)
+            if accepted:
+                record_job(db, "connector", job.id, [["connector.manage", None]], system=trigger_source == "library_roots_changed")
             result = {
                 "job_id": job.id,
                 "status": job.status.value,
@@ -1241,6 +1327,8 @@ class ScanRuntimeManager:
                 trigger_source,
                 job_type="recompute",
             )
+            if accepted:
+                record_job(db, "connector", job.id, [["connector.manage", None]], system=trigger_source == "library_roots_changed")
             result = {
                 "job_id": job.id,
                 "status": job.status.value,
@@ -1305,6 +1393,8 @@ class ScanRuntimeManager:
     def _run_connector_job(self, job_id: int) -> None:
         db = SessionLocal()
         try:
+            if not admit_job(db, "connector", job_id):
+                return
             job = claim_connector_sync_job(db, job_id)
             if job is None:
                 return
@@ -1475,6 +1565,8 @@ class ScanRuntimeManager:
     def _run_jellyfin_sync(self, job_id: int) -> None:
         db = SessionLocal()
         try:
+            if not admit_job(db, "jellyfin", job_id):
+                return
             job = mark_jellyfin_sync_job_running(db, job_id)
             if job is None:
                 return
@@ -1606,7 +1698,7 @@ class ScanRuntimeManager:
             db.close()
 
         with self.lock:
-            if library_id in self.active_library_ids or job_id in self.submitted_job_ids:
+            if library_id in self.active_library_ids or job_id in self.submitted_job_ids or self._history_blocks_library_locked(library_id):
                 return
             self.active_library_ids.add(library_id)
             self.submitted_job_ids.add(job_id)
@@ -1616,6 +1708,13 @@ class ScanRuntimeManager:
     def _run_job(self, job_id: int, library_id: int) -> None:
         before_db = SessionLocal()
         try:
+            from backend.app.services.access_jobs import admit_job
+            if not admit_job(before_db, "scan", job_id):
+                with self.lock:
+                    self.active_library_ids.discard(library_id)
+                    self.submitted_job_ids.discard(job_id)
+                self._submit_next_active_job(library_id)
+                return
             before_files = {
                 file_id: (root_id, relative_path)
                 for file_id, root_id, relative_path in before_db.execute(
@@ -1753,7 +1852,18 @@ class ScanRuntimeManager:
             if should_attempt_compaction:
                 self.run_pending_history_compaction()
 
-    def _run_history_reconstruction(self) -> None:
+    def _run_history_reconstruction(self, library_ids: tuple[int, ...], authority_key: str) -> None:
+        from backend.app.models.access import JobAuthority
+        from backend.app.services.access_jobs import job_allowed
+        with SessionLocal() as authority_db:
+            authority = authority_db.get(JobAuthority, f"history:{authority_key}")
+            if authority is None or not job_allowed(authority_db, authority):
+                self._update_history_reconstruction_status(status=HistoryReconstructionJobStatus.canceled,
+                    phase=HistoryReconstructionPhase.canceled, finished_at=utc_now(),
+                    error="Canceled because the initiating account no longer has permission")
+                for library_id in library_ids:
+                    self._submit_next_active_job(library_id)
+                return
         started_at = utc_now()
         self._update_history_reconstruction_status(
             status=HistoryReconstructionJobStatus.running,
@@ -1769,6 +1879,7 @@ class ScanRuntimeManager:
             result = reconstruct_history_from_media_files(
                 db,
                 progress_callback=self._update_history_reconstruction_status,
+                library_ids=library_ids,
             )
         except Exception as exc:
             self._update_history_reconstruction_status(
@@ -1800,6 +1911,8 @@ class ScanRuntimeManager:
         finally:
             db.close()
             self.request_history_storage_refresh()
+            for library_id in library_ids:
+                self._submit_next_active_job(library_id)
 
     def is_job_cancel_requested(self, job_id: int | None) -> bool:
         if job_id is None:

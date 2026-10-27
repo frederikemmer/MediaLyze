@@ -13,6 +13,7 @@ These references describe the current repository implementation on `dev`, review
 | Set up and scan a library | [Discovery and pattern rules](patterns.md) | [Supported metadata and scan behavior](supported_metadata.md) |
 | Understand statistics, quality, filters, and audio/book support | [Metadata support matrix](supported_metadata.md) | [Discovery rules](patterns.md), [architecture](architecture.md) |
 | Create a transcoded video variant | [Transcoding](transcoding.md) | [Environment/output mounts](environment.md), [hardware evidence](transcoding-hardware-matrix.md) |
+| Set up local accounts and access | [Users and access](user-access.md) | [Environment](environment.md), [remaining access decisions](user-access.md#still-restricted-and-awaiting-decisions) |
 | Connect Jellyfin | [Jellyfin setup and permissions](jellyfin.md) | [Connector mappings and troubleshooting](connectors.md) |
 | Assess playback compatibility | [Compatibility profiles](compatibility-profiles.md) | [JSON Schemas](#machine-readable-contracts-and-assets) |
 | Understand optional telemetry | [Telemetry](telemetry.md) | [Environment overrides](environment.md#telemetry) |
@@ -43,6 +44,8 @@ These references describe the current repository implementation on `dev`, review
 | [Desktop builds](build_desktop.md) | OS-specific local packaging and bundled FFmpeg/ffprobe verification. |
 | [GitHub Actions](github_actions.md) | Development/release publication, manual inputs, versions, artifacts, caches, and recovery. |
 | [Adding languages](adding-languages.md) | Translation keys, lazy language loading, persistence, selectors, and validation. |
+| [Logs](logs.md) | Unified settings entry for scan logs, transcoding history, personal notification history and retention. |
+| [UI notifications](notifications.md) | Notification settings, provider API, persistence and deliberately deferred product integrations. |
 | [Visual QA guide](design-qa.md) | Internal checklist for frontend changes: current pattern references and states to recheck; `/ui-elements` is the visual catalog. |
 | [Benchmarks](benchmarks.md) | Reproducible synthetic workloads, scripts, measurement limits, and reports. |
 
@@ -50,6 +53,7 @@ These references describe the current repository implementation on `dev`, review
 
 These documents have a different status from current user instructions:
 
+- [Prototyping and feature concepts](prototyping/README.md): early feature plans, design decisions, and prototypes; consult source and current product documentation for behavior that is already implemented.
 - [Connector UI roadmap](connector-ui-deferred.md): remaining diagnostics and provider work; distinguishes already restored assignment/mapping UI from backlog. Plex is still disabled.
 - [Unreleased transcoding Federation notes](internal/unreleased-transcoding.md): retained Federation implementation hidden by the frontend release switch. UI visibility does not disable its backend API; Federation also requires persisted opt-in and its process gate.
 - [Unreleased transcoding automation notes](internal/unreleased_transcoding_automation.md): retained rule and inventory implementation hidden by the frontend release switch. UI visibility does not disable its API or scan-triggered automation.

@@ -1,3 +1,11 @@
+import { NotificationHistoryPanel, NotificationRetentionControl } from "../components/NotificationHistoryPanel";
+import { LogsSection, SettingsSection } from "../components/LogsSection";
+import { NotificationSettingsPanel } from "../components/NotificationSettingsPanel";
+import { AccountsPanel } from "../components/AccountsPanel";
+import { useAuth, hasLibraryPermission } from "../lib/auth";
+import { preferenceStorage } from "../lib/preference-storage";
+import { trackExplicitJobStart } from "../lib/notification-job-tracking";
+import { useNotifications } from "../lib/notifications";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
@@ -14,7 +22,6 @@ import {
   History,
   Lock,
   Plus,
-  Proportions,
   Radio,
   RefreshCw,
   Save,
@@ -24,6 +31,7 @@ import {
   SlidersHorizontal,
   SquareArrowOutUpRight,
   Trash2,
+  User,
   X,
 } from "lucide-react";
 
@@ -38,6 +46,7 @@ import { DeleteIcon } from "../components/DeleteIcon";
 import { PanelLeftToggleIcon } from "../components/PanelLeftToggleIcon";
 import { PathBrowser } from "../components/PathBrowser";
 import { RemoveIcon } from "../components/RemoveIcon";
+import { SettingsInlineLabelInput } from "../components/SettingsInlineLabelInput";
 import { SquarePenIcon } from "../components/SquarePenIcon";
 import { TelemetryModeToggle } from "../components/TelemetryModeToggle";
 import { TranscodeHistorySettingsPanel } from "../components/TranscodeHistorySettingsPanel";
@@ -217,22 +226,27 @@ type PatternSectionKey =
   | "duplicate_filename_suffix_regexes"
   | "bonus_folder_patterns";
 
+type PatternRecognitionListSectionKey = Exclude<PatternSectionKey, "duplicate_filename_suffix_regexes">;
+type PatternRecognitionSectionToggleKey = PatternRecognitionListSectionKey | "duplicate_matching" | "show_season_settings";
+
 type PatternRecognitionSectionHeaderOptions = {
   titleAddon?: ReactNode;
   headerAction?: ReactNode;
+  showCount?: boolean;
 };
 
 type TelemetryPayloadView = "last" | "minimal" | "enabled";
 
-type PatternRecognitionSectionState = Record<PatternSectionKey, boolean>;
+type PatternRecognitionSectionState = Record<PatternRecognitionSectionToggleKey, boolean>;
 
 const PATTERN_RECOGNITION_SECTION_STORAGE_KEY = "medialyze-pattern-recognition-sections";
 
 const DEFAULT_PATTERN_RECOGNITION_SECTION_STATE: PatternRecognitionSectionState = {
   series_folder_regexes: true,
   season_folder_regexes: true,
-  duplicate_filename_suffix_regexes: true,
   bonus_folder_patterns: false,
+  duplicate_matching: true,
+  show_season_settings: true,
 };
 
 const PATTERN_DOCS_URL = "https://github.com/frederikemmer/MediaLyze/blob/dev/docs/patterns.md";
@@ -273,7 +287,7 @@ function normalizePatternRecognitionSectionState(value: unknown): PatternRecogni
   }
 
   const candidate = value as Partial<Record<PatternSectionKey, unknown> & Record<string, unknown>>;
-  for (const key of Object.keys(state) as PatternSectionKey[]) {
+  for (const key of Object.keys(state) as PatternRecognitionSectionToggleKey[]) {
     if (typeof candidate[key] === "boolean") {
       state[key] = candidate[key];
     }
@@ -293,7 +307,7 @@ function getPatternRecognitionSectionState(): PatternRecognitionSectionState {
     return DEFAULT_PATTERN_RECOGNITION_SECTION_STATE;
   }
 
-  const raw = window.localStorage.getItem(PATTERN_RECOGNITION_SECTION_STORAGE_KEY);
+  const raw = preferenceStorage.getItem(PATTERN_RECOGNITION_SECTION_STORAGE_KEY);
   if (!raw) {
     return DEFAULT_PATTERN_RECOGNITION_SECTION_STATE;
   }
@@ -308,7 +322,7 @@ function getPatternRecognitionSectionState(): PatternRecognitionSectionState {
 function savePatternRecognitionSectionState(state: PatternRecognitionSectionState): PatternRecognitionSectionState {
   const normalized = normalizePatternRecognitionSectionState(state);
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(PATTERN_RECOGNITION_SECTION_STORAGE_KEY, JSON.stringify(normalized));
+    preferenceStorage.setItem(PATTERN_RECOGNITION_SECTION_STORAGE_KEY, JSON.stringify(normalized));
   }
   return normalized;
 }
@@ -499,6 +513,26 @@ function activeQualityMetrics(profile: QualityProfile): string[] {
   ];
 }
 
+type QualityProfileTab = QualityProfileMediaType | "resolutionCategories";
+
+const QUALITY_PROFILE_MEDIA_TYPES: QualityProfileMediaType[] = ["video", "music", "audiobook"];
+
+function qualityProfileTabFromSearchParams(
+  section: string | null,
+  tab: string | null,
+  canViewQualityProfiles: boolean,
+  canViewResolutionCategories: boolean,
+): QualityProfileTab | null {
+  if (section === "resolution-categories" || section === "resolutionCategories" || tab === "resolution-categories") {
+    return canViewResolutionCategories ? "resolutionCategories" : null;
+  }
+  if (tab && QUALITY_PROFILE_MEDIA_TYPES.includes(tab as QualityProfileMediaType)) {
+    return canViewQualityProfiles ? (tab as QualityProfileMediaType) : null;
+  }
+  if (canViewQualityProfiles) return "video";
+  return canViewResolutionCategories ? "resolutionCategories" : null;
+}
+
 function setQualityMetricActive(profile: QualityProfile, metric: string, active: boolean): QualityProfile {
   const current = activeQualityMetrics(profile);
   const active_metrics = active
@@ -677,6 +711,7 @@ function formatScanJobType(
   t: (key: string, options?: Record<string, unknown>) => string,
   value: string,
 ) {
+  if (value === "quality_recompute") return t("scanLogs.jobTypeQuality");
   return value === "full" ? t("scanLogs.jobTypeFull") : t("scanLogs.jobTypeIncremental");
 }
 
@@ -801,7 +836,6 @@ const SETTINGS_NAV_GROUPS: SettingsNavigationGroup[] = [
     items: [
       { id: "qualityProfiles", labelKey: "libraries.qualityProfiles.title", icon: SlidersHorizontal },
       { id: "compatibilityProfiles", labelKey: "compatibilityProfiles.navigationTitle", icon: Cpu },
-      { id: "resolutionCategories", labelKey: "libraries.resolutionCategories.title", icon: Proportions },
       { id: "patternRecognition", labelKey: "libraries.settingsNavigationPatternRecognition", icon: FingerprintPattern },
     ],
   },
@@ -809,6 +843,7 @@ const SETTINGS_NAV_GROUPS: SettingsNavigationGroup[] = [
     id: "application",
     labelKey: "libraries.settingsGroups.application",
     items: [
+      { id: "accounts", labelKey: "access.title", icon: User },
       { id: "appSettings", labelKey: "libraries.appSettings", icon: Settings },
       { id: "transcoding", labelKey: "transcoding.settingsTitle", icon: Cpu },
       { id: "transcodingPresets", labelKey: "transcoding.presetsSettingsTitle", icon: Save },
@@ -818,8 +853,7 @@ const SETTINGS_NAV_GROUPS: SettingsNavigationGroup[] = [
     id: "maintenanceDiagnostics",
     labelKey: "libraries.settingsGroups.maintenanceDiagnostics",
     items: [
-      { id: "historyRetention", labelKey: "libraries.historyRetention.title", icon: History },
-      { id: "recentScanLogs", labelKey: "scanLogs.title", icon: Archive },
+      { id: "logs", labelKey: "logs.title", icon: Archive },
       { id: "telemetry", labelKey: "telemetry.panel.title", icon: Radio },
     ],
   },
@@ -887,10 +921,10 @@ const SETTINGS_SEARCH_TARGET_DEFINITIONS: SettingsSearchTargetDefinition[] = [
   },
   {
     id: "settings-panel-resolution-categories",
-    panel: "resolutionCategories",
+    panel: "qualityProfiles",
     labelKey: "libraries.resolutionCategories.title",
     aliases: ["resolution", "resolutions", "auflösung", "auflösungen"],
-    focus: "settings-panel-resolutionCategories",
+    focus: "quality-profile-media-tab-resolution-categories",
   },
   {
     id: "settings-panel-pattern-recognition",
@@ -898,6 +932,13 @@ const SETTINGS_SEARCH_TARGET_DEFINITIONS: SettingsSearchTargetDefinition[] = [
     labelKey: "libraries.settingsNavigationPatternRecognition",
     aliases: ["patterns", "ignore patterns", "folder patterns", "muster", "ausschlussmuster"],
     focus: "settings-panel-patternRecognition",
+  },
+  {
+    id: "notification-settings",
+    panel: "appSettings",
+    labelKey: "notifications.title",
+    aliases: ["notifications", "toasts", "benachrichtigungen", "meldungen"],
+    focus: "notification-settings",
   },
   {
     id: "settings-panel-app-settings",
@@ -970,15 +1011,36 @@ const SETTINGS_SEARCH_TARGET_DEFINITIONS: SettingsSearchTargetDefinition[] = [
     focus: "transcoding-federation",
   },
   {
+    id: "settings-panel-logs",
+    panel: "logs",
+    labelKey: "logs.title",
+    aliases: ["logs", "protokolle", "notifications", "notification history", "transcoding history"],
+    focus: "settings-panel-logs",
+  },
+  {
+    id: "settings-panel-notification-history",
+    panel: "logs",
+    labelKey: "logs.notifications",
+    aliases: ["notification history", "notifications", "benachrichtigungsverlauf", "meldungen"],
+    focus: "settings-panel-notificationHistory",
+  },
+  {
+    id: "settings-panel-transcode-history",
+    panel: "logs",
+    labelKey: "transcoding.globalHistory",
+    aliases: ["transcode history", "transcoding history", "transkodierungsverlauf"],
+    focus: "settings-panel-transcodeHistory",
+  },
+  {
     id: "settings-panel-history-retention",
-    panel: "historyRetention",
+    panel: "logs",
     labelKey: "libraries.historyRetention.title",
     aliases: ["history", "retention", "verlauf", "aufbewahrung"],
     focus: "settings-panel-historyRetention",
   },
   {
     id: "settings-panel-recent-scan-logs",
-    panel: "recentScanLogs",
+    panel: "logs",
     labelKey: "scanLogs.title",
     aliases: ["scan logs", "scans", "protokolle", "scanverlauf"],
     focus: "settings-panel-recentScanLogs",
@@ -1014,7 +1076,16 @@ const QUALITY_METRIC_DEFAULT_WEIGHTS: Record<string, number> = {
 };
 
 export function LibrariesPage() {
+  const auth = useAuth();
+  const { notify } = useNotifications();
+  const canViewQualityProfiles = !auth.identity || auth.has("settings.quality.view");
+  const canViewResolutionCategories = !auth.identity || auth.has("settings.app.view") || canViewQualityProfiles;
+  const canEditResolutionCategories = !auth.identity || (auth.has("settings.app.view") && auth.has("settings.app.edit"));
+  const canViewGlobalAppSettings = !auth.identity || auth.has("settings.app.view");
+  const canEditAppSettings = !auth.identity || auth.has("settings.app.edit");
   const [searchParams, setSearchParams] = useSearchParams();
+  const initialLogsSection = useRef(searchParams.get("section"));
+  const requestedScanJobId = Number(searchParams.get("scan-job"));
   const { t, i18n } = useTranslation();
   const desktopBridge = getDesktopBridge();
   const desktopApp = isDesktopApp();
@@ -1045,8 +1116,16 @@ export function LibrariesPage() {
   const [qualityProfiles, setQualityProfiles] = useState<QualityProfileDefinition[]>([]);
   const [qualityProfilesLoading, setQualityProfilesLoading] = useState(true);
   const [qualityProfilesError, setQualityProfilesError] = useState<string | null>(null);
+  const [activeQualityProfileTab, setActiveQualityProfileTab] = useState<QualityProfileTab>(() =>
+    qualityProfileTabFromSearchParams(
+      searchParams.get("section"),
+      searchParams.get("qualityTab"),
+      canViewQualityProfiles,
+      canViewResolutionCategories,
+    ) ?? "video",
+  );
   const [activeQualityProfileMediaType, setActiveQualityProfileMediaType] =
-    useState<QualityProfileMediaType>("video");
+    useState<QualityProfileMediaType>(() => activeQualityProfileTab === "resolutionCategories" ? "video" : activeQualityProfileTab);
   const [selectedQualityProfileId, setSelectedQualityProfileId] = useState<number | null>(null);
   const [qualityProfileDraft, setQualityProfileDraft] = useState<QualityProfileDefinition | null>(null);
   const [qualityProfileMessage, setQualityProfileMessage] = useState<string | null>(null);
@@ -1072,13 +1151,31 @@ export function LibrariesPage() {
   const [deletingLibraryIds, setDeletingLibraryIds] = useState<Record<number, boolean>>({});
   const [dashboardVisibilityPending, setDashboardVisibilityPending] = useState<Record<number, boolean>>({});
   const [historySourcePending, setHistorySourcePending] = useState<Record<number, boolean>>({});
-  const [activeSettingsPanelId, setActiveSettingsPanelId] = useState<SettingsPanelId>(() =>
-    settingsPanelFromSection(searchParams.get("section"))
-      ?? getActiveSettingsPanel("configuredLibraries"),
-  );
+  const [activeSettingsPanelId, setActiveSettingsPanelId] = useState<SettingsPanelId>(() => {
+    const requested = settingsPanelFromSection(searchParams.get("section"));
+    const initial = requested ?? getActiveSettingsPanel("configuredLibraries");
+    return desktopApp && initial === "accounts" ? "configuredLibraries" : initial;
+  });
+  const [accountsOverviewResetKey, setAccountsOverviewResetKey] = useState(0);
   const [settingsSearchQuery, setSettingsSearchQuery] = useState("");
   useEffect(() => {
-    const requestedPanel = settingsPanelFromSection(searchParams.get("section"));
+    if (["resolution-categories", "resolutionCategories"].includes(searchParams.get("section") ?? "")) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set("section", "quality-profiles");
+      nextParams.set("qualityTab", "resolution-categories");
+      setSearchParams(nextParams, { replace: true });
+    }
+    const parsedPanel = settingsPanelFromSection(searchParams.get("section"));
+    if (desktopApp && parsedPanel === "accounts") {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set("section", "libraries");
+      nextParams.delete("account");
+      nextParams.delete("settingsFocus");
+      setActiveSettingsPanelId(saveActiveSettingsPanel("configuredLibraries"));
+      setSearchParams(nextParams, { replace: true });
+      return;
+    }
+    const requestedPanel = parsedPanel;
     if (requestedPanel) {
       setActiveSettingsPanelId((current) => (
         current === requestedPanel ? current : saveActiveSettingsPanel(requestedPanel)
@@ -1088,7 +1185,20 @@ export function LibrariesPage() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("section", settingsSectionForPanel(activeSettingsPanelId));
     setSearchParams(nextParams, { replace: true });
-  }, [activeSettingsPanelId, searchParams, setSearchParams]);
+  }, [activeSettingsPanelId, desktopApp, searchParams, setSearchParams]);
+  useEffect(() => {
+    const nextTab = qualityProfileTabFromSearchParams(
+      searchParams.get("section"),
+      searchParams.get("qualityTab"),
+      canViewQualityProfiles,
+      canViewResolutionCategories,
+    );
+    if (!nextTab) return;
+    setActiveQualityProfileTab((current) => current === nextTab ? current : nextTab);
+    if (nextTab !== "resolutionCategories") {
+      setActiveQualityProfileMediaType((current) => current === nextTab ? current : nextTab);
+    }
+  }, [canViewQualityProfiles, canViewResolutionCategories, searchParams]);
   const [isSettingsNavCollapsed, setIsSettingsNavCollapsed] = useState(() => getSettingsNavCollapsed());
   const [isSettingsMobileMenuOpen, setIsSettingsMobileMenuOpen] = useState(false);
   const [recentScanJobs, setRecentScanJobs] = useState<RecentScanJob[]>([]);
@@ -1153,10 +1263,9 @@ export function LibrariesPage() {
   const [historyStorageError, setHistoryStorageError] = useState<string | null>(null);
   const [isLoadingHistoryStorage, setIsLoadingHistoryStorage] = useState(true);
   const [resolutionCategoryDrafts, setResolutionCategoryDrafts] = useState<ResolutionCategoryDraft[]>([]);
+  const [editingResolutionCategoryId, setEditingResolutionCategoryId] = useState<string | null>(null);
   const [featureFlagsStatus, setFeatureFlagsStatus] = useState<string | null>(null);
   const [scanPerformanceStatus, setScanPerformanceStatus] = useState<string | null>(null);
-  const [historyRetentionStatus, setHistoryRetentionStatus] = useState<string | null>(null);
-  const [historyRetentionStatusTone, setHistoryRetentionStatusTone] = useState<"success" | "error">("error");
   const [resolutionCategoriesStatus, setResolutionCategoriesStatus] = useState<string | null>(null);
   const [patternRecognitionStatus, setPatternRecognitionStatus] = useState<string | null>(null);
   const [telemetryPreviewStatus, setTelemetryPreviewStatus] = useState<string | null>(null);
@@ -1218,6 +1327,14 @@ export function LibrariesPage() {
       : t("telemetry.preview.notLoaded");
   const { preference: themePref, setPreference: setThemePref } = useTheme();
   const { activeJobs, hasActiveJobs, refresh, trackJob } = useScanJobs();
+  const canReconstructHistory = !auth.identity || auth.identity.owner || (
+    auth.identity.policy.mode === "future"
+      ? auth.identity.policy.shared.includes("library.read") && auth.identity.policy.shared.includes("library.scan")
+      : Object.values(auth.identity.policy.libraries).some((actions) =>
+          actions.includes("library.read") && actions.includes("library.scan"),
+        )
+  );
+  const hasReconstructionScanConflict = activeJobs.some(job => !auth.identity || auth.has("library.scan", job.library_id));
   const hadActiveJobsRef = useRef(hasActiveJobs);
   const hadActiveHistoryReconstructionRef = useRef(false);
   const isHistoryReconstructionActive =
@@ -1231,7 +1348,8 @@ export function LibrariesPage() {
       SETTINGS_NAV_ITEMS.map((item) => [item.id, t(item.labelKey)]),
     );
     return SETTINGS_SEARCH_TARGET_DEFINITIONS.filter((definition) => (
-      (releaseVisibility.federation || !["transcoding-tab-members", "transcoding-federation"].includes(definition.id))
+      (!desktopApp || definition.panel !== "accounts")
+      && (releaseVisibility.federation || !["transcoding-tab-members", "transcoding-federation"].includes(definition.id))
       && (releaseVisibility.automationRules || definition.id !== "transcoding-tab-rules")
     )).map((definition) => ({
       id: definition.id,
@@ -1241,13 +1359,24 @@ export function LibrariesPage() {
       aliases: definition.aliases,
       focus: definition.focus,
     }));
-  }, [i18n.resolvedLanguage, t]);
+  }, [desktopApp, i18n.resolvedLanguage, t]);
   const settingsSearchMatches = useMemo(
     () => rankSettingsSearchTargets(settingsSearchTargets, normalizedSettingsSearchQuery, activeSettingsPanelId),
     [activeSettingsPanelId, normalizedSettingsSearchQuery, settingsSearchTargets],
   );
   const focusedSettingsSearchTarget = searchParams.get("settingsFocus");
-  const visibleSettingsNavigationGroups = SETTINGS_NAV_GROUPS;
+  const panelRights: Partial<Record<SettingsPanelId, string>> = { jellyfin: "connector.view", qualityProfiles: "settings.quality.view", compatibilityProfiles: "settings.hardware.view", appSettings: "settings.app.view", patternRecognition: "settings.app.view", historyRetention: "settings.app.view", telemetry: "settings.app.view", transcodingPresets: "settings.presets.view", transcoding: "settings.app.view" };
+  const visibleSettingsNavigationGroups = SETTINGS_NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => {
+      if (desktopApp && item.id === "accounts") return false;
+      if (!auth.identity || auth.identity.owner || item.id === "accounts") return true;
+      if (item.id === "appSettings" && (auth.identity.kind === "account" || auth.identity.kind === "guest")) return true;
+      if (item.id === "qualityProfiles") return canViewQualityProfiles || auth.has("settings.app.view");
+      const requiredPermission = panelRights[item.id];
+      return !requiredPermission || auth.has(requiredPermission);
+    }),
+  })).filter((group) => group.items.length);
   const targetLibraryId = Number(searchParams.get("library") || 0);
   const focusedSettingsControl = searchParams.get("focus");
 
@@ -1297,6 +1426,9 @@ export function LibrariesPage() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("section", nextSection);
     nextParams.set("settingsFocus", nextFocus);
+    if (bestMatch.target.id === "settings-panel-resolution-categories") {
+      nextParams.set("qualityTab", "resolution-categories");
+    }
     if (bestMatch.target.panel !== "configuredLibraries") {
       nextParams.delete("library");
       nextParams.delete("focus");
@@ -1427,6 +1559,7 @@ export function LibrariesPage() {
     setHistoryRetentionInputs(nextHistoryRetentionInputs);
     persistedResolutionCategories.current = normalizeResolutionCategories(updated.resolution_categories);
     setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(persistedResolutionCategories.current));
+    setEditingResolutionCategoryId(null);
     setPatternRecognitionInputs(normalizePatternRecognitionInputs(updated.pattern_recognition));
     setDuplicateDurationToleranceInput(
       String(normalizePatternRecognitionInputs(updated.pattern_recognition).duplicate_matching.duration_tolerance_seconds),
@@ -1489,6 +1622,7 @@ export function LibrariesPage() {
   }
 
   async function saveTelemetryMode(mode: "off" | "minimal" | "enabled") {
+    if (!canEditAppSettings) return;
     setIsSavingTelemetry(true);
     setPendingTelemetryMode(mode);
     setTelemetryStatus(null);
@@ -1504,7 +1638,7 @@ export function LibrariesPage() {
   }
 
   async function sendTelemetryNowSilently() {
-    if (isSavingTelemetry || appTelemetry.environment_disabled || appTelemetry.mode !== "enabled") {
+    if (!canEditAppSettings || isSavingTelemetry || appTelemetry.environment_disabled || appTelemetry.mode !== "enabled") {
       return;
     }
     setIsSavingTelemetry(true);
@@ -1521,7 +1655,7 @@ export function LibrariesPage() {
   }
 
   function handleConfirmedTelemetryModeClick(mode: "off" | "minimal" | "enabled") {
-    if (mode !== "enabled" || appTelemetry.mode !== "enabled") {
+    if (!canEditAppSettings || mode !== "enabled" || appTelemetry.mode !== "enabled") {
       return;
     }
     const now = Date.now();
@@ -1746,16 +1880,24 @@ export function LibrariesPage() {
   }
 
   async function reconstructHistory() {
-    if (isHistoryReconstructionActive || hasActiveJobs) {
+    if (!canReconstructHistory || isHistoryReconstructionActive || hasReconstructionScanConflict) {
       return;
     }
-    setHistoryRetentionStatus(null);
     try {
       const status = await api.reconstructHistory();
       setHistoryReconstruction(status);
-    } catch (reason) {
-      setHistoryRetentionStatusTone("error");
-      setHistoryRetentionStatus((reason as Error).message);
+      trackExplicitJobStart({ kind: "history_reconstruction", status });
+    } catch {
+      notify({
+        type: "error",
+        message: t("libraries.historyRetention.reconstructFailed"),
+        topicKey: "history-reconstruction-start:all",
+        source: {
+          area: "settings",
+          href: "/settings?section=logs&settingsFocus=settings-panel-historyRetention",
+          label: t("libraries.historyRetention.title"),
+        },
+      });
     }
   }
 
@@ -1831,14 +1973,14 @@ export function LibrariesPage() {
   }, [activeSettingsPanelId, jellyfinLibrariesLoaded, loadJellyfinLibraries]);
 
   useEffect(() => {
-    if (activeSettingsPanelId !== "qualityProfiles" || qualityProfilesLoadedRef.current) {
+    if (activeSettingsPanelId !== "qualityProfiles" || !canViewQualityProfiles || qualityProfilesLoadedRef.current) {
       return;
     }
     qualityProfilesLoadedRef.current = true;
     void refreshQualityProfiles(true).catch(() => {
       qualityProfilesLoadedRef.current = false;
     });
-  }, [activeSettingsPanelId]);
+  }, [activeSettingsPanelId, canViewQualityProfiles]);
 
   useEffect(() => {
     if (!isRenamingQualityProfile) {
@@ -1856,7 +1998,7 @@ export function LibrariesPage() {
   }, [libraries.length, librariesLoaded]);
 
   useEffect(() => {
-    if (activeSettingsPanelId !== "recentScanLogs" || recentScanJobsLoadedRef.current) {
+    if (activeSettingsPanelId !== "logs" || (auth.identity && !hasLibraryPermission(auth.identity, "library.read")) || recentScanJobsLoadedRef.current) {
       return;
     }
     recentScanJobsLoadedRef.current = true;
@@ -1866,7 +2008,7 @@ export function LibrariesPage() {
   }, [activeSettingsPanelId]);
 
   useEffect(() => {
-    if (activeSettingsPanelId !== "historyRetention" || historyStorageLoadedRef.current) {
+    if (activeSettingsPanelId !== "logs" || (auth.identity && !auth.has("settings.app.view")) || historyStorageLoadedRef.current) {
       return;
     }
     historyStorageLoadedRef.current = true;
@@ -1876,7 +2018,7 @@ export function LibrariesPage() {
   }, [activeSettingsPanelId]);
 
   useEffect(() => {
-    if (activeSettingsPanelId !== "historyRetention" || historyReconstructionLoadedRef.current) {
+    if (activeSettingsPanelId !== "logs" || (auth.identity && !auth.has("settings.app.view")) || historyReconstructionLoadedRef.current) {
       return;
     }
     historyReconstructionLoadedRef.current = true;
@@ -1908,16 +2050,11 @@ export function LibrariesPage() {
     if (hadActiveHistoryReconstructionRef.current && !isHistoryReconstructionActive) {
       if (historyReconstruction.status === "completed" && historyReconstruction.result) {
         void refreshHistoryStorage().catch(() => undefined);
-        setHistoryRetentionStatusTone("success");
-        setHistoryRetentionStatus(formatHistoryReconstructionStatus(historyReconstruction.result));
-      } else if (historyReconstruction.status === "failed") {
-        setHistoryRetentionStatusTone("error");
-        setHistoryRetentionStatus(historyReconstruction.error ?? t("libraries.historyRetention.reconstructFailed"));
       }
     }
 
     hadActiveHistoryReconstructionRef.current = isHistoryReconstructionActive;
-  }, [historyReconstruction, isHistoryReconstructionActive, t]);
+  }, [historyReconstruction, isHistoryReconstructionActive]);
 
   useEffect(() => {
     setForm((current) =>
@@ -2144,6 +2281,7 @@ export function LibrariesPage() {
       String(normalizedPatternRecognition.duplicate_matching.duration_tolerance_seconds),
     );
     setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(persistedResolution));
+    setEditingResolutionCategoryId(null);
     setHideAutomaticUpdateReminders(appSettings.feature_flags.hide_automatic_update_reminders === true);
     setShowAnalyzedFilesCsvExport(appSettings.feature_flags.show_analyzed_files_csv_export);
     setShowFullWidthAppShell(appSettings.feature_flags.show_full_width_app_shell);
@@ -2536,6 +2674,7 @@ export function LibrariesPage() {
     try {
       const job = await api.scanLibrary(libraryId, scanType);
       trackJob(job);
+      trackExplicitJobStart({ kind: "scan", job });
       setLibraryMessages((messages) => ({ ...messages, [libraryId]: null }));
       return null;
     } catch (reason) {
@@ -2556,7 +2695,7 @@ export function LibrariesPage() {
 
     setIsRunningFullScanAll(true);
     try {
-      for (const library of libraries) {
+      for (const library of libraries.filter(item => !auth.identity || auth.has("library.scan", item.id))) {
         await requestLibraryScan(library.id, "full");
       }
     } finally {
@@ -2582,6 +2721,12 @@ export function LibrariesPage() {
       const results = await Promise.allSettled(
         enabledConnections.map((connection) => api.syncConnector(connection.id)),
       );
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled" && result.value.accepted) {
+          const connection = enabledConnections[index];
+          trackExplicitJobStart({ kind: "connector_sync", connectionId: connection.id, connectionName: connection.name, jobId: result.value.job_id });
+        }
+      });
       const failedResult = results.find((result) => result.status === "rejected");
       if (failedResult?.status === "rejected") {
         throw failedResult.reason;
@@ -2861,7 +3006,7 @@ export function LibrariesPage() {
     });
   }
 
-  function togglePatternRecognitionSection(section: PatternSectionKey) {
+  function togglePatternRecognitionSection(section: PatternRecognitionSectionToggleKey) {
     setPatternRecognitionSectionState((current) =>
       savePatternRecognitionSectionState({
         ...current,
@@ -2871,6 +3016,7 @@ export function LibrariesPage() {
   }
 
   function selectSettingsPanel(panelId: SettingsPanelId) {
+    if (desktopApp && panelId === "accounts") panelId = "configuredLibraries";
     setActiveSettingsPanelId(saveActiveSettingsPanel(panelId));
     setSettingsSearchQuery("");
     setIsSettingsMobileMenuOpen(false);
@@ -2881,6 +3027,31 @@ export function LibrariesPage() {
       nextParams.delete("library");
       nextParams.delete("focus");
     }
+    if (panelId === "accounts") nextParams.delete("account");
+    setSearchParams(nextParams);
+  }
+
+  function handleSettingsNavigationClick(panelId: SettingsPanelId) {
+    if (panelId === "accounts" && activeSettingsPanelId === "accounts") {
+      setAccountsOverviewResetKey((current) => current + 1);
+    }
+    selectSettingsPanel(panelId);
+  }
+
+  function selectQualityProfileTab(tab: QualityProfileTab) {
+    setActiveSettingsPanelId(saveActiveSettingsPanel("qualityProfiles"));
+    setActiveQualityProfileTab(tab);
+    if (tab !== "resolutionCategories") {
+      setActiveQualityProfileMediaType(tab);
+    }
+    setSettingsSearchQuery("");
+    setIsSettingsMobileMenuOpen(false);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("section", "quality-profiles");
+    nextParams.set("qualityTab", tab === "resolutionCategories" ? "resolution-categories" : tab);
+    nextParams.delete("settingsFocus");
+    nextParams.delete("library");
+    nextParams.delete("focus");
     setSearchParams(nextParams);
   }
 
@@ -2891,6 +3062,9 @@ export function LibrariesPage() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("section", settingsSectionForPanel(panelId));
     nextParams.set("settingsFocus", match.target.focus ?? `settings-panel-${panelId}`);
+    if (match.target.id === "settings-panel-resolution-categories") {
+      nextParams.set("qualityTab", "resolution-categories");
+    }
     if (panelId !== "configuredLibraries") {
       nextParams.delete("library");
       nextParams.delete("focus");
@@ -2931,6 +3105,18 @@ export function LibrariesPage() {
       });
     }
   }
+
+  useEffect(() => {
+    if (
+      activeSettingsPanelId !== "logs" ||
+      !Number.isSafeInteger(requestedScanJobId) ||
+      requestedScanJobId < 1 ||
+      !recentScanJobs.some((job) => job.id === requestedScanJobId) ||
+      expandedScanJobIds[requestedScanJobId] ||
+      scanJobDetailLoading[requestedScanJobId]
+    ) return;
+    void toggleScanJobExpansion(requestedScanJobId);
+  }, [activeSettingsPanelId, expandedScanJobIds, recentScanJobs, requestedScanJobId, scanJobDetailLoading, toggleScanJobExpansion]);
 
   async function persistAppSettingsSnapshot(
     nextUserPatterns: string[],
@@ -3038,7 +3224,6 @@ export function LibrariesPage() {
         setIgnorePatternsStatus(null);
         setFeatureFlagsStatus(null);
         setScanPerformanceStatus(null);
-        setHistoryRetentionStatus(null);
         setResolutionCategoriesStatus(null);
         setPatternRecognitionStatus(null);
       }
@@ -3076,7 +3261,6 @@ export function LibrariesPage() {
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
       setScanPerformanceStatus(null);
-      setHistoryRetentionStatus(null);
       void refreshHistoryStorage().catch(() => undefined);
     } catch (reason) {
       setShowAnalyzedFilesCsvExport(previousValue);
@@ -3123,7 +3307,6 @@ export function LibrariesPage() {
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
       setScanPerformanceStatus(null);
-      setHistoryRetentionStatus(null);
       void refreshHistoryStorage().catch(() => undefined);
     } catch (reason) {
       setShowFullWidthAppShell(previousValue);
@@ -3155,7 +3338,6 @@ export function LibrariesPage() {
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
       setScanPerformanceStatus(null);
-      setHistoryRetentionStatus(null);
       void refreshHistoryStorage().catch(() => undefined);
     } catch (reason) {
       setShowMusicQualityScore(previousValue);
@@ -3183,7 +3365,6 @@ export function LibrariesPage() {
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
       setScanPerformanceStatus(null);
-      setHistoryRetentionStatus(null);
       void refreshHistoryStorage().catch(() => undefined);
     } catch (reason) {
       setUnlimitedPanelSize(previousValue);
@@ -3216,7 +3397,6 @@ export function LibrariesPage() {
       setFeatureFlagsStatus(null);
       setIgnorePatternsStatus(null);
       setScanPerformanceStatus(null);
-      setHistoryRetentionStatus(null);
       void refreshHistoryStorage().catch(() => undefined);
     } catch (reason) {
       setInDepthDolbyVisionProfiles(previousValue);
@@ -3268,6 +3448,7 @@ export function LibrariesPage() {
     field: "days" | "storage_limit_gb",
     value: string,
   ) {
+    if (!canEditAppSettings) return;
     historyRetentionInputsRef.current = {
       ...historyRetentionInputsRef.current,
       [bucket]: {
@@ -3282,10 +3463,10 @@ export function LibrariesPage() {
         [field]: value,
       },
     }));
-    setHistoryRetentionStatus(null);
   }
 
   async function saveHistoryRetention(bucket: HistoryRetentionBucketKey) {
+    if (!canEditAppSettings) return;
     const currentBucket = appHistoryRetention[bucket];
     const nextBucketInputs = historyRetentionInputsRef.current[bucket];
     const nextHistoryRetention = {
@@ -3300,7 +3481,6 @@ export function LibrariesPage() {
     };
 
     setIsSavingHistoryRetention(true);
-    setHistoryRetentionStatus(null);
     try {
       const updated = await persistAppSettingsSnapshot(
         userIgnorePatternInputs,
@@ -3317,32 +3497,42 @@ export function LibrariesPage() {
       setFeatureFlagsStatus(null);
       setScanPerformanceStatus(null);
       setResolutionCategoriesStatus(null);
-      setHistoryRetentionStatus(null);
       void refreshHistoryStorage().catch(() => undefined);
-    } catch (reason) {
+    } catch {
       const revertedInputs = historyRetentionInputsFromSettings(appHistoryRetention);
       historyRetentionInputsRef.current = revertedInputs;
       setHistoryRetentionInputs(revertedInputs);
-      setHistoryRetentionStatusTone("error");
-      setHistoryRetentionStatus((reason as Error).message);
+      notify({
+        type: "error",
+        message: t("libraries.historyRetention.saveFailed"),
+        topicKey: `history-retention-save:${bucket}`,
+        source: {
+          area: "settings",
+          href: "/settings?section=logs&settingsFocus=settings-panel-historyRetention",
+          label: t("libraries.historyRetention.title"),
+        },
+      });
     } finally {
       setIsSavingHistoryRetention(false);
     }
   }
 
   function updateResolutionCategoryDraft(index: number, patch: Partial<ResolutionCategoryDraft>) {
+    if (!canEditResolutionCategories) return;
     setResolutionCategoryDrafts((current) =>
       current.map((draft, draftIndex) => (draftIndex === index ? { ...draft, ...patch } : draft)),
     );
     setResolutionCategoriesStatus(null);
   }
 
-  async function saveResolutionCategories(drafts: ResolutionCategoryDraft[] = resolutionCategoryDrafts) {
+  async function saveResolutionCategories(drafts: ResolutionCategoryDraft[] = resolutionCategoryDrafts): Promise<boolean> {
+    if (!canEditResolutionCategories) return false;
     const nextCategories = resolutionCategoriesFromDrafts(drafts);
     const changeKind = resolutionCategoryChangeSummary(persistedResolutionCategories.current, nextCategories);
     if (changeKind === "none") {
       setResolutionCategoriesStatus(null);
-      return;
+      setEditingResolutionCategoryId(null);
+      return true;
     }
 
     setIsSavingResolutionCategories(true);
@@ -3359,15 +3549,17 @@ export function LibrariesPage() {
       const normalized = normalizeResolutionCategories(updated.resolution_categories);
       persistedResolutionCategories.current = normalized;
       setResolutionCategoryDrafts(cloneResolutionCategoryDrafts(normalized));
+      setEditingResolutionCategoryId(null);
       setResolutionCategoriesStatus(null);
       setIgnorePatternsStatus(null);
       setFeatureFlagsStatus(null);
       setScanPerformanceStatus(null);
-      setHistoryRetentionStatus(null);
       applyUpdatedAppSettingsState(updated);
       void refreshHistoryStorage().catch(() => undefined);
+      return true;
     } catch (reason) {
       setResolutionCategoriesStatus((reason as Error).message);
+      return false;
     } finally {
       setIsSavingResolutionCategories(false);
     }
@@ -3419,7 +3611,6 @@ export function LibrariesPage() {
       setIgnorePatternsStatus(null);
       setFeatureFlagsStatus(null);
       setResolutionCategoriesStatus(null);
-      setHistoryRetentionStatus(null);
       setPatternRecognitionStatus(null);
       setScanPerformanceStatus(null);
       void refreshHistoryStorage().catch(() => undefined);
@@ -3437,31 +3628,76 @@ export function LibrariesPage() {
   }
 
   function addResolutionCategoryDraft() {
+    if (!canEditResolutionCategories) return;
+    const id = createResolutionCategoryId("resolution", resolutionCategoryDrafts);
     setResolutionCategoryDrafts((current) => [
       ...current,
-      {
-        id: createResolutionCategoryId("resolution", current),
-        label: "",
-        min_width: 0,
-        min_height: 0,
-        persisted: false,
-      },
+      { id, label: "", min_width: 0, min_height: 0, persisted: false },
     ]);
+    setEditingResolutionCategoryId(id);
+    setResolutionCategoriesStatus(null);
+  }
+
+  function cloneResolutionCategoryDraft(index: number) {
+    if (!canEditResolutionCategories) return;
+    const source = resolutionCategoryDrafts[index];
+    if (!source || (source.min_width === 0 && source.min_height === 0)) return;
+    const baseLabel = t("libraries.resolutionCategories.copyLabel", { label: source.label });
+    const categoryIdFromLabel = (value: string) => value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "resolution";
+    const existingIds = new Set(resolutionCategoryDrafts.map((category) => category.id));
+    let label = baseLabel;
+    let suffix = 2;
+    while (
+      existingIds.has(categoryIdFromLabel(label)) ||
+      resolutionCategoryDrafts.some((category) => category.label.trim().toLowerCase() === label.toLowerCase())
+    ) {
+      label = t("libraries.resolutionCategories.copyLabelNumbered", { label: source.label, count: suffix });
+      suffix += 1;
+    }
+    const clone: ResolutionCategoryDraft = {
+      ...source,
+      id: createResolutionCategoryId(label, resolutionCategoryDrafts),
+      label,
+      persisted: false,
+    };
+    setResolutionCategoryDrafts((current) => [...current, clone]);
+    setEditingResolutionCategoryId(clone.id);
+    setResolutionCategoriesStatus(null);
+  }
+
+  function cancelResolutionCategoryEdit(category: ResolutionCategoryDraft) {
+    setResolutionCategoryDrafts((current) => category.persisted
+      ? cloneResolutionCategoryDrafts(persistedResolutionCategories.current)
+      : current.filter((draft) => draft.id !== category.id));
+    setEditingResolutionCategoryId(null);
     setResolutionCategoriesStatus(null);
   }
 
   async function removeResolutionCategoryDraft(index: number) {
+    if (!canEditResolutionCategories) return;
+    const category = resolutionCategoryDrafts[index];
+    if (!category || (category.min_width === 0 && category.min_height === 0)) return;
+    const currentDrafts = resolutionCategoryDrafts;
     const nextDrafts = resolutionCategoryDrafts.filter((_, draftIndex) => draftIndex !== index);
     setResolutionCategoryDrafts(nextDrafts);
+    setEditingResolutionCategoryId(null);
     setResolutionCategoriesStatus(null);
-    await saveResolutionCategories(nextDrafts);
+    const saved = await saveResolutionCategories(nextDrafts);
+    if (!saved) setResolutionCategoryDrafts(currentDrafts);
   }
 
   async function restoreDefaultResolutionCategories() {
+    if (!canEditResolutionCategories) return;
     const nextDrafts = cloneResolutionCategoryDrafts(DEFAULT_RESOLUTION_CATEGORIES);
+    const currentDrafts = resolutionCategoryDrafts;
     setResolutionCategoryDrafts(nextDrafts);
     setResolutionCategoriesStatus(null);
-    await saveResolutionCategories(nextDrafts);
+    const saved = await saveResolutionCategories(nextDrafts);
+    if (!saved) setResolutionCategoryDrafts(currentDrafts);
   }
 
   function scheduleIgnorePatternsSave(nextPatterns: string[], nextDefaultPatterns: string[] = []) {
@@ -3611,7 +3847,6 @@ export function LibrariesPage() {
       setIgnorePatternsStatus(null);
       setFeatureFlagsStatus(null);
       setScanPerformanceStatus(null);
-      setHistoryRetentionStatus(null);
       setResolutionCategoriesStatus(null);
     } catch (reason) {
       const reverted = normalizePatternRecognitionInputs(appSettings.pattern_recognition);
@@ -3887,6 +4122,22 @@ export function LibrariesPage() {
     }
     if (!detail) {
       return null;
+    }
+
+    if (detail.quality_progress) {
+      return (
+        <div className="scan-log-detail">
+          <div className="scan-log-summary-meta scan-log-summary-meta-detail">
+            <span>{t("scanLogs.startedAt")}: {formatDate(detail.started_at)}</span>
+            <span>{t("scanLogs.finishedAt")}: {formatDate(detail.finished_at)}</span>
+            <span>{t("scanLogs.duration")}: {formatDuration(detail.duration_seconds)}</span>
+          </div>
+          <div className="notice">{t("scanLogs.qualityProgress", {
+            processed: detail.quality_progress.files_scanned,
+            total: detail.quality_progress.files_total,
+          })}</div>
+        </div>
+      );
     }
 
     const patternHits = detail.scan_summary.discovery.ignored_pattern_hits;
@@ -4217,13 +4468,15 @@ export function LibrariesPage() {
             onClick={onToggle}
           >
             <span className="ignore-pattern-section-title">{title}</span>
-            <span className="sr-only">{count}</span>
+            {options.showCount === false ? null : <span className="sr-only">{count}</span>}
           </button>
           {options.titleAddon}
         </div>
-        <span className="ignore-pattern-section-meta">
-          <span className="badge">{count}</span>
-        </span>
+        {options.showCount === false ? null : (
+          <span className="ignore-pattern-section-meta">
+            <span className="badge">{count}</span>
+          </span>
+        )}
         {options.headerAction ? (
           <div className="ignore-pattern-section-header-action">{options.headerAction}</div>
         ) : null}
@@ -4306,14 +4559,71 @@ export function LibrariesPage() {
     );
   }
 
+  function renderPatternRecognitionListEntries(key: PatternSectionKey, placeholder: string) {
+    const patterns = patternListValue(patternRecognitionInputs, key);
+    const draftValue = patternRecognitionDrafts[key];
+    return (
+      <div className="ignore-pattern-section-body">
+        <div className="ignore-pattern-row ignore-pattern-row-draft">
+          <div className="ignore-pattern-control">
+            <input
+              className="settings-choice-input"
+              type="text"
+              value={draftValue}
+              onChange={(event) => {
+                setPatternRecognitionDrafts((current) => ({ ...current, [key]: event.target.value }));
+                setPatternRecognitionStatus(null);
+              }}
+              placeholder={placeholder}
+              spellCheck={false}
+            />
+            <button
+              type="button"
+              className="secondary icon-only-button ignore-pattern-action-button"
+              aria-label={t("libraries.patternRecognition.addPattern")}
+              disabled={isSavingPatternRecognition || !draftValue.trim()}
+              onClick={() => void addPatternRecognitionEntry(key)}
+            >
+              <Plus aria-hidden="true" className="nav-icon" />
+            </button>
+          </div>
+        </div>
+        <div className="ignore-patterns-stack">
+          {patterns.map((pattern, index) => (
+            <div className="ignore-pattern-row ignore-pattern-row-saved" key={`${key}-${index}`}>
+              <div className="ignore-pattern-control">
+                <input
+                  className="settings-choice-input"
+                  type="text"
+                  value={pattern}
+                  onChange={(event) => updatePatternRecognitionEntry(key, index, event.target.value)}
+                  onBlur={() => void finalizePatternRecognitionEntry(key, index)}
+                  spellCheck={false}
+                />
+                <button
+                  type="button"
+                  className="secondary icon-only-button ignore-pattern-action-button"
+                  aria-label={t("libraries.patternRecognition.removePattern", { index: index + 1 })}
+                  disabled={isSavingPatternRecognition}
+                  onClick={() => void removePatternRecognitionEntry(key, index)}
+                >
+                  <Trash2 aria-hidden="true" className="nav-icon" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   function renderPatternRecognitionList(
-    key: PatternSectionKey,
+    key: PatternRecognitionListSectionKey,
     title: string,
     placeholder: string,
     options: PatternRecognitionSectionHeaderOptions = {},
   ) {
     const patterns = patternListValue(patternRecognitionInputs, key);
-    const draftValue = patternRecognitionDrafts[key];
     const expanded = patternRecognitionSectionState[key];
     return (
       <div className="ignore-pattern-section pattern-recognition-section" key={key}>
@@ -4324,59 +4634,7 @@ export function LibrariesPage() {
           () => togglePatternRecognitionSection(key),
           options,
         )}
-        {expanded ? (
-          <div className="ignore-pattern-section-body">
-            <div className="ignore-pattern-row ignore-pattern-row-draft">
-              <div className="ignore-pattern-control">
-                <input
-                  className="settings-choice-input"
-                  type="text"
-                  value={draftValue}
-                  onChange={(event) => {
-                    setPatternRecognitionDrafts((current) => ({ ...current, [key]: event.target.value }));
-                    setPatternRecognitionStatus(null);
-                  }}
-                  placeholder={placeholder}
-                  spellCheck={false}
-                />
-                <button
-                  type="button"
-                  className="secondary icon-only-button ignore-pattern-action-button"
-                  aria-label={t("libraries.patternRecognition.addPattern")}
-                  disabled={isSavingPatternRecognition || !draftValue.trim()}
-                  onClick={() => void addPatternRecognitionEntry(key)}
-                >
-                  <Plus aria-hidden="true" className="nav-icon" />
-                </button>
-              </div>
-            </div>
-            <div className="ignore-patterns-stack">
-              {patterns.map((pattern, index) => (
-                <div className="ignore-pattern-row ignore-pattern-row-saved" key={`${key}-${index}`}>
-                  <div className="ignore-pattern-control">
-                    <input
-                      className="settings-choice-input"
-                      type="text"
-                      value={pattern}
-                      onChange={(event) => updatePatternRecognitionEntry(key, index, event.target.value)}
-                      onBlur={() => void finalizePatternRecognitionEntry(key, index)}
-                      spellCheck={false}
-                    />
-                    <button
-                      type="button"
-                      className="secondary icon-only-button ignore-pattern-action-button"
-                      aria-label={t("libraries.patternRecognition.removePattern", { index: index + 1 })}
-                      disabled={isSavingPatternRecognition}
-                      onClick={() => void removePatternRecognitionEntry(key, index)}
-                    >
-                      <Trash2 aria-hidden="true" className="nav-icon" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
+        {expanded ? renderPatternRecognitionListEntries(key, placeholder) : null}
       </div>
     );
   }
@@ -5282,6 +5540,7 @@ export function LibrariesPage() {
                     <TooltipTrigger
                       ariaLabel={t("libraries.quality.visualDensityTooltipAria")}
                       content={t("libraries.quality.visualDensityHint")}
+                      className="settings-heading-tooltip"
                       align="start"
                     />
                   </span>
@@ -5637,6 +5896,8 @@ export function LibrariesPage() {
           </div>
         ) : (
           <PathBrowser
+            context="edit"
+            libraryId={pathDialogForm.libraryId}
             value={pathDialogForm.path}
             selectedPaths={pathDialogForm.paths}
             onChange={(path) => setPathDialogForm((current) => current ? { ...current, path } : current)}
@@ -5676,6 +5937,10 @@ export function LibrariesPage() {
 
   function renderQualityProfilesPanel() {
     const visibleProfiles = qualityProfiles.filter((profile) => profile.media_type === activeQualityProfileMediaType);
+    const visibleQualityProfileTabs: QualityProfileTab[] = [
+      ...(canViewQualityProfiles ? QUALITY_PROFILE_MEDIA_TYPES : []),
+      ...(canViewResolutionCategories ? ["resolutionCategories" as const] : []),
+    ];
     const draft = qualityProfileDraft;
     const isBuiltInProtected = Boolean(draft?.is_builtin);
     const builtInProtectedHint = t("libraries.qualityProfiles.builtInProtectedHint");
@@ -5686,7 +5951,7 @@ export function LibrariesPage() {
 
     const selectMediaType = (mediaType: QualityProfileMediaType) => {
       setIsRenamingQualityProfile(false);
-      setActiveQualityProfileMediaType(mediaType);
+      selectQualityProfileTab(mediaType);
       const nextProfile =
         qualityProfiles.find((profile) => profile.media_type === mediaType && profile.is_default)
         ?? qualityProfiles.find((profile) => profile.media_type === mediaType)
@@ -5776,13 +6041,13 @@ export function LibrariesPage() {
                               title={t("libraries.qualityProfiles.editResolutionCategories")}
                               onClick={(event) => {
                                 event.stopPropagation();
-                                selectSettingsPanel("resolutionCategories");
+                                selectQualityProfileTab("resolutionCategories");
                               }}
                               onKeyDown={(event) => {
                                 if (event.key === "Enter" || event.key === " ") {
                                   event.preventDefault();
                                   event.stopPropagation();
-                                  selectSettingsPanel("resolutionCategories");
+                                  selectQualityProfileTab("resolutionCategories");
                                 }
                               }}
                             >
@@ -5850,55 +6115,142 @@ export function LibrariesPage() {
     return (
       <AsyncPanel
         title={t("libraries.qualityProfiles.title")}
-        loading={qualityProfilesLoading}
-        error={qualityProfilesError}
+        loading={canViewQualityProfiles && activeQualityProfileTab !== "resolutionCategories" && qualityProfilesLoading}
+        error={canViewQualityProfiles && activeQualityProfileTab !== "resolutionCategories" ? qualityProfilesError : null}
       >
         <div className="quality-profile-panel-stack">
           <div className="compatibility-profile-list quality-profile-list">
             <div className="settings-profile-toggle-row transcode-automation-toggle-row quality-profile-toggle-row">
               <div className="transcode-automation-tab-controls">
-                <div className="transcode-automation-tab-list" role="tablist" aria-label={t("libraries.qualityProfiles.mediaType")} aria-orientation="horizontal">
-                  {(["video", "music", "audiobook"] as QualityProfileMediaType[]).map((mediaType, index) => (
-                    <button
-                      key={mediaType}
-                      type="button"
-                      id={`quality-profile-media-tab-${mediaType}`}
-                      role="tab"
-                      className={`transcode-automation-tab-button${activeQualityProfileMediaType === mediaType ? " active" : ""}`}
-                      aria-selected={activeQualityProfileMediaType === mediaType}
-                      tabIndex={activeQualityProfileMediaType === mediaType ? 0 : -1}
-                      data-toggle-key={mediaType}
-                      onClick={() => selectMediaType(mediaType)}
-                      onKeyDown={(event) => {
-                        let nextIndex: number | null = null;
-                        if (event.key === "ArrowRight") nextIndex = (index + 1) % 3;
-                        if (event.key === "ArrowLeft") nextIndex = (index + 2) % 3;
-                        if (event.key === "Home") nextIndex = 0;
-                        if (event.key === "End") nextIndex = 2;
-                        if (nextIndex === null) return;
-                        event.preventDefault();
-                        const nextMediaType = (["video", "music", "audiobook"] as QualityProfileMediaType[])[nextIndex];
-                        selectMediaType(nextMediaType);
-                        window.requestAnimationFrame(() => document.getElementById(`quality-profile-media-tab-${nextMediaType}`)?.focus());
-                      }}
-                    >
-                      <span className="transcode-automation-tab-label">{t(`libraries.qualityProfiles.mediaTypes.${mediaType}`)}</span>
-                    </button>
-                  ))}
+                <div className="transcode-automation-tab-list" role="tablist" aria-label={t("libraries.qualityProfiles.title")} aria-orientation="horizontal">
+                  {visibleQualityProfileTabs.map((tab, index) => {
+                    const isResolutionCategories = tab === "resolutionCategories";
+                    const tabId = `quality-profile-media-tab-${isResolutionCategories ? "resolution-categories" : tab}`;
+                    const label = isResolutionCategories
+                      ? t("libraries.resolutionCategories.title")
+                      : t(`libraries.qualityProfiles.mediaTypes.${tab}`);
+                    const tabClassName = `transcode-automation-tab-button${activeQualityProfileTab === tab ? " active" : ""}`;
+                    const dataToggleKey = isResolutionCategories ? "resolution-categories" : tab;
+                    const dataSettingsSearchTarget = isResolutionCategories ? "quality-profile-media-tab-resolution-categories" : undefined;
+                    const handleTabClick = () => {
+                      if (isResolutionCategories) {
+                        selectQualityProfileTab(tab);
+                      } else {
+                        selectMediaType(tab);
+                      }
+                    };
+                    const handleTabKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+                      let nextIndex: number | null = null;
+                      if (event.key === "ArrowRight") nextIndex = (index + 1) % visibleQualityProfileTabs.length;
+                      if (event.key === "ArrowLeft") nextIndex = (index + visibleQualityProfileTabs.length - 1) % visibleQualityProfileTabs.length;
+                      if (event.key === "Home") nextIndex = 0;
+                      if (event.key === "End") nextIndex = visibleQualityProfileTabs.length - 1;
+                      if (nextIndex === null) return;
+                      event.preventDefault();
+                      const nextTab = visibleQualityProfileTabs[nextIndex];
+                      if (nextTab === "resolutionCategories") {
+                        selectQualityProfileTab(nextTab);
+                      } else {
+                        selectMediaType(nextTab);
+                      }
+                      const nextTabId = `quality-profile-media-tab-${nextTab === "resolutionCategories" ? "resolution-categories" : nextTab}`;
+                      window.requestAnimationFrame(() => document.getElementById(nextTabId)?.focus());
+                    };
+                    const tabContent = <span className="transcode-automation-tab-label">{label}</span>;
+
+                    if (isResolutionCategories && activeQualityProfileTab === "resolutionCategories") {
+                      return (
+                        <TooltipTrigger
+                          key={tab}
+                          as="button"
+                          id={tabId}
+                          role="tab"
+                          className={tabClassName}
+                          ariaLabel={label}
+                          ariaExpanded={null}
+                          ariaSelected
+                          tabIndex={0}
+                          dataToggleKey={dataToggleKey}
+                          dataSettingsSearchTarget={dataSettingsSearchTarget}
+                          content={RESOLUTION_CATEGORY_TOOLTIP}
+                          hoverOpenDelay={350}
+                          preserveLineBreaks
+                          pinOnClick={false}
+                          onClick={handleTabClick}
+                          onKeyDown={handleTabKeyDown}
+                        >
+                          {tabContent}
+                        </TooltipTrigger>
+                      );
+                    }
+
+                    return (
+                      <button
+                        key={tab}
+                        type="button"
+                        id={tabId}
+                        role="tab"
+                        className={tabClassName}
+                        aria-selected={activeQualityProfileTab === tab}
+                        tabIndex={activeQualityProfileTab === tab ? 0 : -1}
+                        data-toggle-key={dataToggleKey}
+                        data-settings-search-target={dataSettingsSearchTarget}
+                        onClick={handleTabClick}
+                        onKeyDown={handleTabKeyDown}
+                      >
+                        {tabContent}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-              <div className="settings-profile-toggle-actions">
-                <button
-                  type="button"
-                  className="secondary small settings-panel-header-action"
-                  disabled={qualityProfileSaving}
-                  onClick={() => void createNewQualityProfile()}
-                >
-                  <Plus aria-hidden="true" className="nav-icon" />
-                  <span>{t("libraries.qualityProfiles.create")}</span>
-                </button>
-              </div>
+              {(activeQualityProfileTab === "resolutionCategories" ? canViewResolutionCategories : canViewQualityProfiles) ? (
+                <div className="settings-profile-toggle-actions">
+                  {activeQualityProfileTab === "resolutionCategories" ? (
+                    <>
+                      <TooltipTrigger
+                        ariaLabel={t("libraries.resolutionCategories.restoreDefaults")}
+                        content={t("libraries.resolutionCategories.restoreDefaults")}
+                        className="secondary icon-only-button resolution-category-restore-button"
+                        disabled={
+                          !canEditResolutionCategories ||
+                          !appSettingsLoaded ||
+                          isSavingResolutionCategories ||
+                          editingResolutionCategoryId !== null ||
+                          resolutionCategoryDefaultsChangeKind === "none"
+                        }
+                        pinOnClick={false}
+                        onClick={() => void restoreDefaultResolutionCategories()}
+                      >
+                        <History aria-hidden="true" className="nav-icon" size={16} />
+                      </TooltipTrigger>
+                      <button
+                        type="button"
+                        className="secondary small settings-panel-header-action resolution-category-add"
+                        onClick={addResolutionCategoryDraft}
+                        disabled={!canEditResolutionCategories || !appSettingsLoaded || isSavingResolutionCategories || editingResolutionCategoryId !== null}
+                      >
+                        <Plus aria-hidden="true" className="nav-icon" size={15} />
+                        {t("libraries.resolutionCategories.addCategory")}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="secondary small settings-panel-header-action"
+                      disabled={qualityProfileSaving}
+                      onClick={() => void createNewQualityProfile()}
+                    >
+                      <Plus aria-hidden="true" className="nav-icon" />
+                      <span>{t("libraries.qualityProfiles.create")}</span>
+                    </button>
+                  )}
+                </div>
+              ) : null}
             </div>
+            {activeQualityProfileTab === "resolutionCategories" ? renderResolutionCategoriesEditor() : null}
+            {activeQualityProfileTab !== "resolutionCategories" && canViewQualityProfiles ? (
+              <>
             {visibleProfiles.map((profile) => {
               const expanded = expandedQualityProfileId === profile.id;
               const profileDraft = draft?.id === profile.id ? draft : null;
@@ -6033,6 +6385,8 @@ export function LibrariesPage() {
               );
             })}
             {!visibleProfiles.length ? <p className="compatibility-profile-search-empty">{t("libraries.qualityProfiles.empty")}</p> : null}
+              </>
+            ) : null}
           </div>
         </div>
       </AsyncPanel>
@@ -6048,6 +6402,134 @@ export function LibrariesPage() {
     DEFAULT_RESOLUTION_CATEGORIES,
     normalizedResolutionDrafts,
   );
+
+  function renderResolutionCategoriesEditor() {
+    return (
+      <div className="quality-profile-resolution-categories">
+        {!canEditResolutionCategories ? <p className="field-hint">{t("access.readOnly")}</p> : null}
+        <div className="compatibility-profile-list quality-profile-list resolution-category-list">
+          {resolutionCategoryDrafts.map((category, index) => {
+            const isEditing = editingResolutionCategoryId === category.id;
+            const isFallback = category.persisted && persistedResolutionCategories.current.some(
+              (persisted) => persisted.id === category.id && persisted.min_width === 0 && persisted.min_height === 0,
+            );
+            const fallbackCount = normalizedResolutionDrafts.filter(
+              (draft) => draft.min_width === 0 && draft.min_height === 0,
+            ).length;
+            const canSaveDraft = Boolean(category.label.trim()) && fallbackCount === 1 && resolutionCategoryChangeKind !== "none";
+            const otherCategoryIsEditing = editingResolutionCategoryId !== null && !isEditing;
+            const fieldsDisabled = !canEditResolutionCategories || !appSettingsLoaded || isSavingResolutionCategories;
+
+            return (
+                <article className={`compatibility-profile-list-item${isEditing ? " is-editing" : ""}`} key={category.id}>
+                  <div className={`compatibility-profile-list-row quality-profile-list-row resolution-category-list-row${isEditing ? " is-editing" : ""}`}>
+                    {isEditing ? (
+                      <div className="resolution-category-edit-fields">
+                        <SettingsInlineLabelInput
+                          id={`resolution-category-label-${category.id}`}
+                          label={t("libraries.resolutionCategories.label")}
+                          wrapperClassName="is-label"
+                          type="text"
+                          placeholder={category.persisted ? undefined : t("libraries.resolutionCategories.newCategory")}
+                          value={category.label}
+                          disabled={fieldsDisabled}
+                          onChange={(event) => updateResolutionCategoryDraft(index, { label: event.target.value })}
+                        />
+                        <SettingsInlineLabelInput
+                          id={`resolution-category-width-${category.id}`}
+                          label={t("libraries.resolutionCategories.minWidth")}
+                          type="number"
+                          min={0}
+                          value={category.min_width}
+                          disabled={fieldsDisabled || isFallback}
+                          onChange={(event) => updateResolutionCategoryDraft(index, { min_width: Number(event.target.value) })}
+                        />
+                        <SettingsInlineLabelInput
+                          id={`resolution-category-height-${category.id}`}
+                          label={t("libraries.resolutionCategories.minHeight")}
+                          type="number"
+                          min={0}
+                          value={category.min_height}
+                          disabled={fieldsDisabled || isFallback}
+                          onChange={(event) => updateResolutionCategoryDraft(index, { min_height: Number(event.target.value) })}
+                        />
+                      </div>
+                    ) : (
+                      <div className="transcode-automation-list-copy quality-profile-list-copy resolution-category-list-copy">
+                        <strong>{category.label || t("libraries.resolutionCategories.newCategory")}</strong>
+                        <small>{t("libraries.resolutionCategories.minWidthValue", { value: category.min_width })}</small>
+                        <small>{t("libraries.resolutionCategories.minHeightValue", { value: category.min_height })}</small>
+                      </div>
+                    )}
+                    <div className="compatibility-profile-quick-actions quality-profile-quick-actions resolution-category-quick-actions">
+                      {isEditing ? (
+                        <>
+                          <button
+                            type="button"
+                            className="quality-profile-action-button is-save"
+                            title={t("libraries.resolutionCategories.save")}
+                            aria-label={t("libraries.resolutionCategories.save")}
+                            disabled={fieldsDisabled || !canSaveDraft}
+                            onClick={() => void saveResolutionCategories()}
+                          >
+                            <Save aria-hidden="true" className="nav-icon" />
+                          </button>
+                          <button
+                            type="button"
+                            className="quality-profile-action-button"
+                            title={t("libraries.resolutionCategories.cancel")}
+                            aria-label={t("libraries.resolutionCategories.cancel")}
+                            disabled={isSavingResolutionCategories}
+                            onClick={() => cancelResolutionCategoryEdit(category)}
+                          >
+                            <X aria-hidden="true" className="nav-icon" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="quality-profile-action-button"
+                            title={t("libraries.resolutionCategories.edit")}
+                            aria-label={t("libraries.resolutionCategories.edit")}
+                            disabled={!canEditResolutionCategories || !appSettingsLoaded || isSavingResolutionCategories || otherCategoryIsEditing}
+                            onClick={() => setEditingResolutionCategoryId(category.id)}
+                          >
+                            <SquarePenIcon aria-hidden="true" className="nav-icon" size={17} />
+                          </button>
+                          <button
+                            type="button"
+                            className="quality-profile-action-button"
+                            title={t("libraries.resolutionCategories.clone")}
+                            aria-label={t("libraries.resolutionCategories.clone")}
+                            disabled={!canEditResolutionCategories || !appSettingsLoaded || isSavingResolutionCategories || isFallback || otherCategoryIsEditing}
+                            onClick={() => cloneResolutionCategoryDraft(index)}
+                          >
+                            <CopyIcon aria-hidden="true" className="nav-icon" />
+                          </button>
+                          <button
+                            type="button"
+                            className="quality-profile-action-button"
+                            title={t("libraries.resolutionCategories.delete")}
+                            aria-label={t("libraries.resolutionCategories.delete")}
+                            disabled={!canEditResolutionCategories || resolutionCategoryDrafts.length <= 1 || isSavingResolutionCategories || isFallback || otherCategoryIsEditing}
+                            onClick={() => void removeResolutionCategoryDraft(index)}
+                          >
+                            <DeleteIcon aria-hidden="true" className="nav-icon" size={18} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </article>
+            );
+          })}
+        </div>
+        {isSavingResolutionCategories ? <p className="field-hint">{t("libraries.resolutionCategories.saving")}</p> : null}
+        {resolutionCategoriesStatus ? <div className="alert">{resolutionCategoriesStatus}</div> : null}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -6110,7 +6592,7 @@ export function LibrariesPage() {
                         className={`settings-navigation-item settings-mobile-navigation-item${active ? " active" : ""}`}
                         aria-current={active ? "page" : undefined}
                         tabIndex={isSettingsMobileMenuOpen ? 0 : -1}
-                        onClick={() => selectSettingsPanel(item.id)}
+                        onClick={() => handleSettingsNavigationClick(item.id)}
                       >
                         {active ? <span className="nav-active-pill" aria-hidden="true" /> : null}
                         <span className="settings-navigation-item-content">
@@ -6200,7 +6682,7 @@ export function LibrariesPage() {
             </div>
           ) : null}
           <nav className="settings-navigation-list">
-            {(isSettingsNavCollapsed ? SETTINGS_NAV_GROUPS : visibleSettingsNavigationGroups).map((group) => (
+            {visibleSettingsNavigationGroups.map((group) => (
               <div className="settings-navigation-group" key={group.id}>
                 {!isSettingsNavCollapsed ? (
                   <div className="settings-navigation-group-label">{t(group.labelKey)}</div>
@@ -6218,7 +6700,7 @@ export function LibrariesPage() {
                       aria-label={label}
                       title={isSettingsNavCollapsed ? label : undefined}
                       data-settings-panel-id={item.id}
-                      onClick={() => selectSettingsPanel(item.id)}
+                      onClick={() => handleSettingsNavigationClick(item.id)}
                     >
                       {active ? <span className="nav-active-pill" aria-hidden="true" /> : null}
                       <span className="settings-navigation-item-content">
@@ -6267,6 +6749,7 @@ export function LibrariesPage() {
         <div
           className="settings-main-column"
         >
+          {!desktopApp && activeSettingsPanelId === "accounts" ? <AccountsPanel overviewResetKey={accountsOverviewResetKey} openOwnAccount={searchParams.get("account") === "me" || searchParams.get("section") === "personal-account"} onCloseAccount={() => { const nextParams = new URLSearchParams(searchParams); nextParams.delete("account"); nextParams.set("section", "accounts"); setSearchParams(nextParams, { replace: true }); }} /> : null}
           {activeSettingsPanelId === "configuredLibraries" ? (
           <AsyncPanel
             title={t("libraries.settingsNavigationLibraries")}
@@ -6580,6 +7063,7 @@ export function LibrariesPage() {
                             <TooltipTrigger
                               ariaLabel={t("libraries.sections.source.descriptionAria")}
                               content={t("libraries.sections.source.description")}
+                              className="settings-heading-tooltip"
                             >
                               ?
                             </TooltipTrigger>
@@ -6660,6 +7144,7 @@ export function LibrariesPage() {
                             <TooltipTrigger
                               ariaLabel={t("libraries.sections.analysis.descriptionAria")}
                               content={t("libraries.sections.analysis.description")}
+                              className="settings-heading-tooltip"
                             >
                               ?
                             </TooltipTrigger>
@@ -6889,135 +7374,6 @@ export function LibrariesPage() {
             <TranscodingPresetsSettingsPanel searchFocus={focusedSettingsSearchTarget} />
           ) : null}
 
-          {activeSettingsPanelId === "resolutionCategories" ? (
-          <AsyncPanel
-            title={t("libraries.resolutionCategories.title")}
-            className="resolution-categories-async-panel"
-            titleAddon={
-              <TooltipTrigger
-                ariaLabel="Explain reduced default resolution thresholds"
-                content={RESOLUTION_CATEGORY_TOOLTIP}
-                preserveLineBreaks
-              >
-                ?
-              </TooltipTrigger>
-            }
-            collapseActions={
-              <>
-                <TooltipTrigger
-                  ariaLabel={t("libraries.resolutionCategories.restoreDefaults")}
-                  content={t("libraries.resolutionCategories.restoreDefaults")}
-                  className="secondary icon-only-button resolution-category-restore-button"
-                  disabled={
-                    !appSettingsLoaded ||
-                    isSavingResolutionCategories ||
-                    resolutionCategoryDefaultsChangeKind === "none"
-                  }
-                  pinOnClick={false}
-                  onClick={() => void restoreDefaultResolutionCategories()}
-                >
-                  <History aria-hidden="true" className="nav-icon" size={16} />
-                </TooltipTrigger>
-                <button
-                  type="button"
-                  className="secondary small settings-panel-header-action resolution-category-add"
-                  onClick={addResolutionCategoryDraft}
-                  disabled={!appSettingsLoaded || isSavingResolutionCategories}
-                >
-                  <Plus aria-hidden="true" className="nav-icon" size={15} />
-                  {t("libraries.resolutionCategories.addCategory")}
-                </button>
-              </>
-            }
-          >
-            <div className="settings-sidebar-stack">
-              <div className="resolution-category-table-shell">
-                <table className="resolution-category-table">
-                  <thead>
-                    <tr>
-                      <th>Label</th>
-                      <th>Min width</th>
-                      <th>Min height</th>
-                      <th><span className="sr-only">Actions</span></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {resolutionCategoryDrafts.map((category, index) => (
-                      <tr className={category.persisted ? undefined : "resolution-category-new-row"} key={category.id}>
-                        <td>
-                          <label className="sr-only" htmlFor={`resolution-category-label-${category.id}`}>Label</label>
-                          <input
-                            id={`resolution-category-label-${category.id}`}
-                            className="settings-choice-input"
-                            type="text"
-                            placeholder={category.persisted ? undefined : t("libraries.resolutionCategories.newCategory")}
-                            value={category.label}
-                            onChange={(event) => updateResolutionCategoryDraft(index, { label: event.target.value })}
-                            onBlur={() => void saveResolutionCategories()}
-                          />
-                        </td>
-                        <td>
-                          <label className="sr-only" htmlFor={`resolution-category-width-${category.id}`}>Min width</label>
-                          <input
-                            id={`resolution-category-width-${category.id}`}
-                            className="settings-choice-input"
-                            type="number"
-                            min={0}
-                            placeholder={category.persisted ? undefined : "0"}
-                            value={category.min_width}
-                            onChange={(event) =>
-                              updateResolutionCategoryDraft(index, { min_width: Number(event.target.value) })
-                            }
-                            onBlur={() => void saveResolutionCategories()}
-                          />
-                        </td>
-                        <td>
-                          <label className="sr-only" htmlFor={`resolution-category-height-${category.id}`}>Min height</label>
-                          <input
-                            id={`resolution-category-height-${category.id}`}
-                            className="settings-choice-input"
-                            type="number"
-                            min={0}
-                            placeholder={category.persisted ? undefined : "0"}
-                            value={category.min_height}
-                            onChange={(event) =>
-                              updateResolutionCategoryDraft(index, { min_height: Number(event.target.value) })
-                            }
-                            onBlur={() => void saveResolutionCategories()}
-                          />
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="secondary icon-only-button resolution-category-action-button"
-                            aria-label={`Remove resolution category ${category.label || category.id}`}
-                            onClick={() => void removeResolutionCategoryDraft(index)}
-                            disabled={resolutionCategoryDrafts.length <= 1 || isSavingResolutionCategories}
-                          >
-                            <DeleteIcon aria-hidden="true" className="nav-icon" size={18} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {isSavingResolutionCategories ? <p className="field-hint">Saving resolution categories…</p> : null}
-              {resolutionCategoryChangeKind === "labels" ? (
-                <p className="field-hint">
-                  Label changes save automatically. Search and detail pills update immediately; quality scores stay as-is.
-                </p>
-              ) : null}
-              {resolutionCategoryChangeKind === "logic" ? (
-                <p className="field-hint">
-                  Threshold and category changes save automatically and queue quality-score recomputation for affected libraries.
-                </p>
-              ) : null}
-              {resolutionCategoriesStatus ? <div className="alert">{resolutionCategoriesStatus}</div> : null}
-            </div>
-          </AsyncPanel>
-          ) : null}
-
           {activeSettingsPanelId === "patternRecognition" ? (
           <AsyncPanel
             title={t("libraries.patternRecognition.title")}
@@ -7025,6 +7381,7 @@ export function LibrariesPage() {
               <TooltipTrigger
                 ariaLabel={t("libraries.patternRecognition.docsTooltipAria")}
                 content={`${t("libraries.patternRecognition.subtitle")}\n${t("libraries.patternRecognition.docsHint")}`}
+                className="settings-heading-tooltip"
                 preserveLineBreaks
               >
                 ?
@@ -7046,157 +7403,183 @@ export function LibrariesPage() {
           >
             <div className="settings-sidebar-stack">
               <div className="field">
-                <div className="distribution-copy">
-                  <div className="field-label-row">
-                    <strong>{t("libraries.patternRecognition.duplicateTitle")}</strong>
-                    <TooltipTrigger
-                      ariaLabel={t("libraries.patternRecognition.duplicateTooltipAria")}
-                      content={t("libraries.patternRecognition.duplicateHint")}
-                      preserveLineBreaks
-                    >
-                      ?
-                    </TooltipTrigger>
-                  </div>
-                </div>
-                <div className="inline-form-grid">
-                  <div className="field">
-                    <div className="field-label-row pattern-recognition-field-label-row">
-                      <label htmlFor="duplicate-duration-tolerance">
-                        {t("libraries.patternRecognition.durationTolerance")}
-                      </label>
-                      <TooltipTrigger
-                        ariaLabel={t("libraries.patternRecognition.durationToleranceTooltipAria")}
-                        content={t("libraries.patternRecognition.durationToleranceHint")}
-                        preserveLineBreaks
-                      >
-                        ?
-                      </TooltipTrigger>
-                    </div>
-                    <input
-                      id="duplicate-duration-tolerance"
-                      className="settings-choice-input"
-                      type="number"
-                      min={DUPLICATE_DURATION_TOLERANCE_MIN}
-                      max={DUPLICATE_DURATION_TOLERANCE_MAX}
-                      step={1}
-                      value={duplicateDurationToleranceInput}
-                      disabled={isSavingPatternRecognition}
-                      onChange={(event) => {
-                        setDuplicateDurationToleranceInput(event.currentTarget.value);
-                        setPatternRecognitionStatus(null);
-                      }}
-                      onBlur={() => void saveDuplicateDurationTolerance()}
-                    />
-                  </div>
-                </div>
-                <div className="ignore-pattern-sections">
-                  {renderPatternRecognitionList(
-                    "duplicate_filename_suffix_regexes",
-                    t("libraries.patternRecognition.filenameSuffixRegexes"),
-                    t("libraries.patternRecognition.filenameSuffixPlaceholder"),
+                <div className="ignore-pattern-section pattern-recognition-section">
+                  {renderPatternRecognitionSectionHeader(
+                    t("libraries.patternRecognition.duplicateTitle"),
+                    patternListValue(patternRecognitionInputs, "duplicate_filename_suffix_regexes").length,
+                    patternRecognitionSectionState.duplicate_matching,
+                    () => togglePatternRecognitionSection("duplicate_matching"),
                     {
+                      titleAddon: (
+                        <TooltipTrigger
+                          ariaLabel={t("libraries.patternRecognition.duplicateTooltipAria")}
+                          content={t("libraries.patternRecognition.duplicateHint")}
+                          preserveLineBreaks
+                        >
+                          ?
+                        </TooltipTrigger>
+                      ),
                       headerAction: renderPatternRecognitionRestoreAction(
                         t("libraries.patternRecognition.restoreDuplicateDefaults"),
                         isSavingPatternRecognition,
                         restoreDefaultDuplicateMatching,
                       ),
+                      showCount: false,
                     },
                   )}
-                </div>
-              </div>
-              <div className="app-settings-divider pattern-recognition-section-divider" aria-hidden="true" />
-              <div className="field">
-                <div className="distribution-copy">
-                  <div className="field-label-row">
-                    <strong>{t("libraries.patternRecognition.showSeasonTitle")}</strong>
-                    <TooltipTrigger
-                      ariaLabel={t("libraries.patternRecognition.showSeasonTooltipAria")}
-                      content={t("libraries.patternRecognition.showSeasonHint")}
-                      preserveLineBreaks
-                    >
-                      ?
-                    </TooltipTrigger>
-                  </div>
-                  {renderPatternRecognitionRestoreAction(
-                    t("libraries.patternRecognition.restoreShowSeasonDefaults"),
-                    isSavingPatternRecognition,
-                    restoreDefaultShowSeasonPatterns,
-                  )}
-                </div>
-                <div className="pattern-recognition-settings-grid">
-                  <div className="field pattern-recognition-mode-field">
-                    <label>
-                      <span>{t("libraries.patternRecognition.modeLabel")}</span>
-                      <select
-                        className="settings-choice-input"
-                        value={patternRecognitionInputs.show_season_patterns.recognition_mode}
-                        disabled={isSavingPatternRecognition}
-                        onChange={(event) =>
-                          void updateShowSeasonRecognitionMode(event.currentTarget.value as "folder_depth" | "regex")
-                        }
-                      >
-                        <option value="folder_depth">{t("libraries.patternRecognition.modeFolderDepth")}</option>
-                        <option value="regex">{t("libraries.patternRecognition.modeRegex")}</option>
-                      </select>
-                    </label>
-                  </div>
-                  {patternRecognitionInputs.show_season_patterns.recognition_mode === "folder_depth" ? (
-                    <>
-                      <div className="field">
-                        <label>
-                          <span>{t("libraries.patternRecognition.seriesFolderDepth")}</span>
-                          <select
-                            className="settings-choice-input"
-                            value={String(patternRecognitionInputs.show_season_patterns.series_folder_depth)}
-                            disabled={isSavingPatternRecognition}
-                            onChange={(event) =>
-                              void updateShowSeasonDepth("series_folder_depth", Number.parseInt(event.currentTarget.value, 10))
-                            }
+                  {patternRecognitionSectionState.duplicate_matching ? (
+                    <div className="ignore-pattern-section-body">
+                      <div className="pattern-recognition-duration-row">
+                        <div className="field-label-row pattern-recognition-field-label-row">
+                          <label htmlFor="duplicate-duration-tolerance">
+                            {t("libraries.patternRecognition.durationTolerance")}
+                          </label>
+                          <TooltipTrigger
+                            ariaLabel={t("libraries.patternRecognition.durationToleranceTooltipAria")}
+                            content={t("libraries.patternRecognition.durationToleranceHint")}
+                            preserveLineBreaks
                           >
-                            {Array.from({ length: 8 }, (_, index) => index + 1).map((depth) => (
-                              <option key={`series-depth-${depth}`} value={depth}>
-                                {depth}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                            ?
+                          </TooltipTrigger>
+                        </div>
+                        <input
+                          id="duplicate-duration-tolerance"
+                          className="settings-choice-input"
+                          type="number"
+                          min={DUPLICATE_DURATION_TOLERANCE_MIN}
+                          max={DUPLICATE_DURATION_TOLERANCE_MAX}
+                          step={1}
+                          value={duplicateDurationToleranceInput}
+                          disabled={isSavingPatternRecognition}
+                          onChange={(event) => {
+                            setDuplicateDurationToleranceInput(event.currentTarget.value);
+                            setPatternRecognitionStatus(null);
+                          }}
+                          onBlur={() => void saveDuplicateDurationTolerance()}
+                        />
                       </div>
-                      <div className="field">
-                        <label>
-                          <span>{t("libraries.patternRecognition.seasonFolderDepth")}</span>
-                          <select
-                            className="settings-choice-input"
-                            value={String(patternRecognitionInputs.show_season_patterns.season_folder_depth)}
-                            disabled={isSavingPatternRecognition}
-                            onChange={(event) =>
-                              void updateShowSeasonDepth("season_folder_depth", Number.parseInt(event.currentTarget.value, 10))
-                            }
-                          >
-                            {Array.from({ length: 8 }, (_, index) => index + 1).map((depth) => (
-                              <option key={`season-depth-${depth}`} value={depth}>
-                                {depth}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                      <div className="pattern-recognition-inline-list">
+                        <div className="pattern-recognition-inline-list-header">
+                          <span className="ignore-pattern-section-title">
+                            {t("libraries.patternRecognition.filenameSuffixRegexes")}
+                          </span>
+                          <span className="badge">
+                            {patternListValue(patternRecognitionInputs, "duplicate_filename_suffix_regexes").length}
+                          </span>
+                        </div>
+                        {renderPatternRecognitionListEntries(
+                          "duplicate_filename_suffix_regexes",
+                          t("libraries.patternRecognition.filenameSuffixPlaceholder"),
+                        )}
                       </div>
-                    </>
+                    </div>
                   ) : null}
                 </div>
-                {patternRecognitionInputs.show_season_patterns.recognition_mode === "regex" ? (
-                  <div className="ignore-pattern-sections">
-                    {renderPatternRecognitionList(
-                      "series_folder_regexes",
-                      t("libraries.patternRecognition.seriesFolderRegexes"),
-                      String.raw`^(?P<title>.+?)$`,
-                    )}
-                    {renderPatternRecognitionList(
-                      "season_folder_regexes",
-                      t("libraries.patternRecognition.seasonFolderRegexes"),
-                      String.raw`^(?:Season|Staffel)\s*(?P<season>\d{1,3})(?:\s+\([^)]*\))?(?:\s+\[[^\]]+\])*$`,
-                    )}
-                  </div>
-                ) : null}
+              </div>
+              <div className="field">
+                <div className="ignore-pattern-section pattern-recognition-section">
+                  {renderPatternRecognitionSectionHeader(
+                    t("libraries.patternRecognition.showSeasonTitle"),
+                    0,
+                    patternRecognitionSectionState.show_season_settings,
+                    () => togglePatternRecognitionSection("show_season_settings"),
+                    {
+                      titleAddon: (
+                        <TooltipTrigger
+                          ariaLabel={t("libraries.patternRecognition.showSeasonTooltipAria")}
+                          content={t("libraries.patternRecognition.showSeasonHint")}
+                          preserveLineBreaks
+                        >
+                          ?
+                        </TooltipTrigger>
+                      ),
+                      headerAction: renderPatternRecognitionRestoreAction(
+                        t("libraries.patternRecognition.restoreShowSeasonDefaults"),
+                        isSavingPatternRecognition,
+                        restoreDefaultShowSeasonPatterns,
+                      ),
+                      showCount: false,
+                    },
+                  )}
+                  {patternRecognitionSectionState.show_season_settings ? (
+                    <div className="ignore-pattern-section-body">
+                      <div className="pattern-recognition-settings-grid">
+                        <div className="field pattern-recognition-mode-field">
+                          <label>
+                            <span>{t("libraries.patternRecognition.modeLabel")}</span>
+                            <select
+                              className="settings-choice-input"
+                              value={patternRecognitionInputs.show_season_patterns.recognition_mode}
+                              disabled={isSavingPatternRecognition}
+                              onChange={(event) =>
+                                void updateShowSeasonRecognitionMode(event.currentTarget.value as "folder_depth" | "regex")
+                              }
+                            >
+                              <option value="folder_depth">{t("libraries.patternRecognition.modeFolderDepth")}</option>
+                              <option value="regex">{t("libraries.patternRecognition.modeRegex")}</option>
+                            </select>
+                          </label>
+                        </div>
+                        {patternRecognitionInputs.show_season_patterns.recognition_mode === "folder_depth" ? (
+                          <>
+                            <div className="field">
+                              <label>
+                                <span>{t("libraries.patternRecognition.seriesFolderDepth")}</span>
+                                <select
+                                  className="settings-choice-input"
+                                  value={String(patternRecognitionInputs.show_season_patterns.series_folder_depth)}
+                                  disabled={isSavingPatternRecognition}
+                                  onChange={(event) =>
+                                    void updateShowSeasonDepth("series_folder_depth", Number.parseInt(event.currentTarget.value, 10))
+                                  }
+                                >
+                                  {Array.from({ length: 8 }, (_, index) => index + 1).map((depth) => (
+                                    <option key={`series-depth-${depth}`} value={depth}>
+                                      {depth}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            </div>
+                            <div className="field">
+                              <label>
+                                <span>{t("libraries.patternRecognition.seasonFolderDepth")}</span>
+                                <select
+                                  className="settings-choice-input"
+                                  value={String(patternRecognitionInputs.show_season_patterns.season_folder_depth)}
+                                  disabled={isSavingPatternRecognition}
+                                  onChange={(event) =>
+                                    void updateShowSeasonDepth("season_folder_depth", Number.parseInt(event.currentTarget.value, 10))
+                                  }
+                                >
+                                  {Array.from({ length: 8 }, (_, index) => index + 1).map((depth) => (
+                                    <option key={`season-depth-${depth}`} value={depth}>
+                                      {depth}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            </div>
+                          </>
+                        ) : null}
+                      </div>
+                      {patternRecognitionInputs.show_season_patterns.recognition_mode === "regex" ? (
+                        <div className="ignore-pattern-sections">
+                          {renderPatternRecognitionList(
+                            "series_folder_regexes",
+                            t("libraries.patternRecognition.seriesFolderRegexes"),
+                            String.raw`^(?P<title>.+?)$`,
+                          )}
+                          {renderPatternRecognitionList(
+                            "season_folder_regexes",
+                            t("libraries.patternRecognition.seasonFolderRegexes"),
+                            String.raw`^(?:Season|Staffel)\s*(?P<season>\d{1,3})(?:\s+\([^)]*\))?(?:\s+\[[^\]]+\])*$`,
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
               </div>
 
               {renderPatternRecognitionList(
@@ -7208,6 +7591,7 @@ export function LibrariesPage() {
                     <TooltipTrigger
                       ariaLabel={t("libraries.patternRecognition.bonusTooltipAria")}
                       content={t("libraries.patternRecognition.bonusHint")}
+                      className="settings-heading-tooltip"
                       preserveLineBreaks
                     >
                       ?
@@ -7230,6 +7614,7 @@ export function LibrariesPage() {
                     <TooltipTrigger
                       ariaLabel={t("libraries.ignorePatternsTooltipAria")}
                       content={t("libraries.ignorePatternsTooltip")}
+                      className="settings-heading-tooltip"
                       preserveLineBreaks
                     >
                       ?
@@ -7252,16 +7637,19 @@ export function LibrariesPage() {
           </AsyncPanel>
           ) : null}
 
-          {activeSettingsPanelId === "historyRetention" ? (
-          <AsyncPanel
+          {activeSettingsPanelId === "logs" ? (
+            <AsyncPanel title={t("logs.title")}>
+            <div id="settings-panel-logs" className="settings-sidebar-stack" tabIndex={-1}>
+              {(!auth.identity || auth.has("settings.app.view")) ? (<>
+          <LogsSection key="historyRetention" id="settings-panel-historyRetention" defaultOpen={initialLogsSection.current === "history-retention" || initialLogsSection.current === "historyRetention"}
             title={t("libraries.historyRetention.title")}
-            collapseActions={
+            actions={canReconstructHistory ? (
               <div className="history-retention-title-actions">
                 <button
                   type="button"
                   className="secondary small settings-panel-header-action history-retention-reconstruct-button"
                   onClick={() => void reconstructHistory()}
-                  disabled={!appSettingsLoaded || isHistoryReconstructionActive || hasActiveJobs}
+                  disabled={!canReconstructHistory || !appSettingsLoaded || isHistoryReconstructionActive || hasReconstructionScanConflict}
                 >
                   {isHistoryReconstructionActive
                     ? t("libraries.historyRetention.reconstructing")
@@ -7273,13 +7661,14 @@ export function LibrariesPage() {
                   preserveLineBreaks
                 />
               </div>
-            }
+            ) : null}
           >
             <div className="settings-sidebar-stack history-retention-panel-content">
+              {!canEditAppSettings ? <p className="muted">{t("libraries.historyRetention.editPermissionRequired")}</p> : null}
               {isLoadingHistoryStorage ? <p className="field-hint">{t("libraries.historyRetention.loading")}</p> : null}
               {historyStorageError ? <div className="alert">{historyStorageError}</div> : null}
               <div className="history-retention-tables">
-                <div className="settings-table-shell history-retention-table-shell">
+                {canEditAppSettings ? <div className="settings-table-shell history-retention-table-shell">
                   <table className="settings-data-table history-retention-table">
                     <thead>
                       <tr>
@@ -7311,6 +7700,7 @@ export function LibrariesPage() {
                       </tr>
                     </thead>
                     <tbody>
+                      <NotificationRetentionControl />
                       {HISTORY_RETENTION_BUCKETS.map((bucket) => {
                         const bucketTitle = historyRetentionBucketTitle(bucket);
                         return (
@@ -7325,7 +7715,7 @@ export function LibrariesPage() {
                                 min="0"
                                 inputMode="numeric"
                                 value={historyRetentionInputs[bucket].days}
-                                disabled={isSavingHistoryRetention || !appSettingsLoaded}
+                                disabled={!canEditAppSettings || isSavingHistoryRetention || !appSettingsLoaded}
                                 onChange={(event) => updateHistoryRetentionInput(bucket, "days", event.target.value)}
                                 onBlur={() => void saveHistoryRetention(bucket)}
                               />
@@ -7340,7 +7730,7 @@ export function LibrariesPage() {
                                 step="0.1"
                                 inputMode="decimal"
                                 value={historyRetentionInputs[bucket].storage_limit_gb}
-                                disabled={isSavingHistoryRetention || !appSettingsLoaded}
+                                disabled={!canEditAppSettings || isSavingHistoryRetention || !appSettingsLoaded}
                                 onChange={(event) =>
                                   updateHistoryRetentionInput(bucket, "storage_limit_gb", event.target.value)
                                 }
@@ -7352,7 +7742,7 @@ export function LibrariesPage() {
                       })}
                     </tbody>
                   </table>
-                </div>
+                </div> : null}
                 <p className="field-hint">{t("libraries.historyRetention.scopeNote")}</p>
                 <div className="settings-table-shell history-retention-table-shell">
                   <table className="settings-data-table history-retention-table">
@@ -7382,7 +7772,6 @@ export function LibrariesPage() {
                   </table>
                 </div>
               </div>
-              <TranscodeHistorySettingsPanel libraries={libraries} />
               {historyReconstruction && isHistoryReconstructionActive ? (
                 <div className="history-reconstruction-progress" role="status" aria-live="polite">
                   <div className="distribution-copy">
@@ -7431,19 +7820,12 @@ export function LibrariesPage() {
                   })}
                 </p>
               ) : null}
-              {historyRetentionStatus ? (
-                <div className={`alert${historyRetentionStatusTone === "success" ? " success" : ""}`}>
-                  {historyRetentionStatus}
-                </div>
-              ) : null}
             </div>
-          </AsyncPanel>
-          ) : null}
-
-          {activeSettingsPanelId === "recentScanLogs" ? (
-          <AsyncPanel
+          </LogsSection>
+              </>) : null}
+              {(!auth.identity || hasLibraryPermission(auth.identity, "library.read")) ? (<>
+          <LogsSection key="recentScanLogs" id="settings-panel-recentScanLogs" defaultOpen
             title={t("scanLogs.title")}
-            subtitle={t("scanLogs.subtitle")}
             loading={isLoadingRecentScanJobs}
             error={recentScanJobsError}
           >
@@ -7473,7 +7855,8 @@ export function LibrariesPage() {
                                   {formatOutcome(t, job.outcome)}
                                 </span>
                                 <span className="badge">{formatTriggerSource(t, job.trigger_source)}</span>
-                                {job.job_type === "full" ? (
+                                {job.origin?.name ? <span className="badge">{job.origin.name}</span> : null}
+                                {job.job_type === "full" || job.job_type === "quality_recompute" ? (
                                   <span className="badge">{formatScanJobType(t, job.job_type)}</span>
                                 ) : null}
                                 {expanded ? (
@@ -7504,7 +7887,19 @@ export function LibrariesPage() {
                 </div>
               </>
             )}
-          </AsyncPanel>
+          </LogsSection>
+              </>) : null}
+              {(!auth.identity || hasLibraryPermission(auth.identity, "transcode.view")) ? (
+                <LogsSection key="transcodeHistory" id="settings-panel-transcodeHistory" title={t("transcoding.globalHistory")} defaultOpen={initialLogsSection.current === "transcode-history"}>
+                  <TranscodeHistorySettingsPanel libraries={libraries} showHeading={false} />
+                </LogsSection>
+              ) : null}
+              <LogsSection key="notificationHistory" id="settings-panel-notificationHistory" title={t("logs.notifications")} defaultOpen={initialLogsSection.current === "notification-history"}>
+                <NotificationHistoryPanel />
+              </LogsSection>
+
+            </div>
+            </AsyncPanel>
           ) : null}
 
           {activeSettingsPanelId === "telemetry" ? (
@@ -7514,7 +7909,7 @@ export function LibrariesPage() {
               <TelemetryModeToggle
                 compact
                 mode={appTelemetry.mode}
-                disabled={!appSettingsLoaded || isSavingTelemetry || appTelemetry.environment_disabled}
+                disabled={!canEditAppSettings || !appSettingsLoaded || isSavingTelemetry || appTelemetry.environment_disabled}
                 undecided={appTelemetry.mode === "none" || appTelemetry.mode === "initialized"}
                 pendingMode={pendingTelemetryMode}
                 onChange={(mode) => void saveTelemetryMode(mode)}
@@ -7626,6 +8021,8 @@ export function LibrariesPage() {
             title={t("libraries.appSettings")}
           >
             <div className="settings-sidebar-stack">
+              {auth.identity?.kind !== "guest" ? (
+              <SettingsSection id="app-settings-appearance" title={t("settingsSections.appearance")} defaultOpen>
               <div className="app-settings-performance-grid">
                 <div className="field">
                   <label htmlFor="app-language">{t("libraries.language")}</label>
@@ -7656,9 +8053,11 @@ export function LibrariesPage() {
                   </select>
                 </div>
               </div>
-              <div className="app-settings-divider" aria-hidden="true" />
-              <div className="app-settings-section">
-                <p className="app-settings-section-title">{t("libraries.scanSettingsTitle")}</p>
+              </SettingsSection>
+              ) : null}
+              <NotificationSettingsPanel />
+              {canViewGlobalAppSettings ? (<>
+              <SettingsSection id="app-settings-scans" title={t("libraries.scanSettingsTitle")} defaultOpen>
                 <div className="app-settings-performance-grid">
                   <div className="field">
                     <div className="field-label-row">
@@ -7675,7 +8074,7 @@ export function LibrariesPage() {
                       id="scan-worker-count"
                       className="settings-choice-input"
                       value={scanWorkerCountInput}
-                      disabled={isSavingScanPerformance || !appSettingsLoaded}
+                      disabled={!canEditAppSettings || isSavingScanPerformance || !appSettingsLoaded}
                       onChange={(event) => {
                         updateScanWorkerCountInput(event.target.value);
                         void saveScanPerformance(event.target.value, parallelScanJobsInputRef.current);
@@ -7703,7 +8102,7 @@ export function LibrariesPage() {
                       id="parallel-scan-jobs"
                       className="settings-choice-input"
                       value={parallelScanJobsInput}
-                      disabled={isSavingScanPerformance || !appSettingsLoaded}
+                      disabled={!canEditAppSettings || isSavingScanPerformance || !appSettingsLoaded}
                       onChange={(event) => {
                         updateParallelScanJobsInput(event.target.value);
                         void saveScanPerformance(scanWorkerCountInputRef.current, event.target.value);
@@ -7717,10 +8116,8 @@ export function LibrariesPage() {
                     </select>
                   </div>
                 </div>
-              </div>
-              <div className="app-settings-divider" aria-hidden="true" />
-              <div className="app-settings-section">
-                <p className="app-settings-section-title">{t("libraries.plotsChartsTitle")}</p>
+              </SettingsSection>
+              <SettingsSection id="app-settings-charts" title={t("libraries.plotsChartsTitle")} defaultOpen>
                 <div className="app-settings-performance-grid">
                   <div className="field">
                     <div className="field-label-row">
@@ -7737,7 +8134,7 @@ export function LibrariesPage() {
                       id="comparison-scatter-point-limit"
                       className="settings-choice-input"
                       value={comparisonScatterPointLimitInput}
-                      disabled={isSavingScanPerformance || !appSettingsLoaded}
+                      disabled={!canEditAppSettings || isSavingScanPerformance || !appSettingsLoaded}
                       onChange={(event) => {
                         updateComparisonScatterPointLimitInput(event.target.value);
                         void saveScanPerformance(
@@ -7755,11 +8152,9 @@ export function LibrariesPage() {
                     </select>
                   </div>
                 </div>
-              </div>
+              </SettingsSection>
               {scanPerformanceStatus ? <div className="alert">{scanPerformanceStatus}</div> : null}
-              <div className="app-settings-divider" aria-hidden="true" />
-              <div className="app-settings-section">
-                <p className="app-settings-section-title">{t("libraries.featureFlagsTitle")}</p>
+              <SettingsSection id="app-settings-features" title={t("libraries.featureFlagsTitle")} defaultOpen>
                 <div className="app-settings-flag-list">
                   <div className="app-settings-flag-row">
                     <label className="app-settings-flag-toggle" htmlFor="hide-automatic-update-reminders">
@@ -7767,7 +8162,7 @@ export function LibrariesPage() {
                         id="hide-automatic-update-reminders"
                         type="checkbox"
                         checked={hideAutomaticUpdateReminders}
-                        disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                        disabled={!canEditAppSettings || isSavingFeatureFlags || !appSettingsLoaded}
                         onChange={(event) => void toggleHideAutomaticUpdateReminders(event.target.checked)}
                       />
                       <span>{t("libraries.featureFlags.hideAutomaticUpdateReminders")}</span>
@@ -7786,7 +8181,7 @@ export function LibrariesPage() {
                         id="show-analyzed-files-csv-export"
                         type="checkbox"
                         checked={showAnalyzedFilesCsvExport}
-                        disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                        disabled={!canEditAppSettings || isSavingFeatureFlags || !appSettingsLoaded}
                         onChange={(event) => void toggleAnalyzedFilesCsvExport(event.target.checked)}
                       />
                       <span>{t("libraries.featureFlags.showAnalyzedFilesCsvExport")}</span>
@@ -7805,7 +8200,7 @@ export function LibrariesPage() {
                         id="show-full-width-app-shell"
                         type="checkbox"
                         checked={showFullWidthAppShell}
-                        disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                        disabled={!canEditAppSettings || isSavingFeatureFlags || !appSettingsLoaded}
                         onChange={(event) => void toggleFullWidthAppShell(event.target.checked)}
                       />
                       <span>{t("libraries.featureFlags.showFullWidthAppShell")}</span>
@@ -7824,7 +8219,7 @@ export function LibrariesPage() {
                         id="show-music-quality-score"
                         type="checkbox"
                         checked={showMusicQualityScore}
-                        disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                        disabled={!canEditAppSettings || isSavingFeatureFlags || !appSettingsLoaded}
                         onChange={(event) => void toggleShowMusicQualityScore(event.target.checked)}
                       />
                       <span>{t("libraries.featureFlags.showMusicQualityScore")}</span>
@@ -7843,7 +8238,7 @@ export function LibrariesPage() {
                         id="unlimited-panel-size"
                         type="checkbox"
                         checked={unlimitedPanelSize}
-                        disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                        disabled={!canEditAppSettings || isSavingFeatureFlags || !appSettingsLoaded}
                         onChange={(event) => void toggleUnlimitedPanelSize(event.target.checked)}
                       />
                       <span>{t("libraries.featureFlags.unlimitedPanelSize")}</span>
@@ -7862,7 +8257,7 @@ export function LibrariesPage() {
                         id="in-depth-dolby-vision-profiles"
                         type="checkbox"
                         checked={inDepthDolbyVisionProfiles}
-                        disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                        disabled={!canEditAppSettings || isSavingFeatureFlags || !appSettingsLoaded}
                         onChange={(event) => void toggleInDepthDolbyVisionProfiles(event.target.checked)}
                       />
                       <span>{t("libraries.featureFlags.inDepthDolbyVisionProfiles")}</span>
@@ -7884,7 +8279,7 @@ export function LibrariesPage() {
                         id="show-all-playbacks-when-unstacked"
                         type="checkbox"
                         checked={showAllPlaybacksWhenUnstacked}
-                        disabled={isSavingFeatureFlags || !appSettingsLoaded}
+                        disabled={!canEditAppSettings || isSavingFeatureFlags || !appSettingsLoaded}
                         onChange={(event) =>
                           void toggleShowAllPlaybacksWhenUnstacked(event.target.checked)}
                       />
@@ -7903,8 +8298,9 @@ export function LibrariesPage() {
                     </TooltipTrigger>
                   </div>
                 </div>
-              </div>
               {featureFlagsStatus ? <div className="alert">{featureFlagsStatus}</div> : null}
+              </SettingsSection>
+              </>) : null}
             </div>
           </AsyncPanel>
           ) : null}

@@ -1,3 +1,16 @@
+import { LogsSection, SettingsSection } from "../components/LogsSection";
+import { NotificationHistoryList, NotificationRetentionRow } from "../components/NotificationHistoryPanel";
+import { NotificationCard, NotificationDeck } from "../components/NotificationHost";
+import { NotificationSettingsFields, NotificationSettingsPanel } from "../components/NotificationSettingsPanel";
+import { SettingsInlineLabelInput } from "../components/SettingsInlineLabelInput";
+import { SettingsInlineLabelSelect } from "../components/SettingsInlineLabelSelect";
+import { DEFAULT_NOTIFICATION_SETTINGS } from "../lib/notification-settings";
+import type { NotificationEntry, NotificationType } from "../lib/notifications";
+import { HistoryReconstructionControl, emptyHistoryStatus } from "../components/HistoryReconstructionControl";
+import { ScanJobCard } from "../components/AppShell";
+import { HeaderAccountMenu } from "../components/HeaderAccountMenu";
+import { AccountsPanel } from "../components/AccountsPanel";
+import { emptyPolicy } from "../lib/auth";
 import { TableQualityScore } from "../components/TableQualityScore";
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -83,6 +96,7 @@ import {
   SquareArrowOutUpRight,
   Trash2,
   Unplug,
+  User,
   UserRoundCheck,
   X,
 } from "lucide-react";
@@ -452,7 +466,7 @@ function AnalyzedFilesTable() {
   );
 }
 
-function SettingsNavigationFixture({ collapsed = false, noResults = false }: { collapsed?: boolean; noResults?: boolean }) {
+function SettingsNavigationFixture({ collapsed = false, noResults = false, desktop = false }: { collapsed?: boolean; noResults?: boolean; desktop?: boolean }) {
   return (
     <div className={`settings-layout${collapsed ? " is-settings-nav-collapsed" : ""}`}>
       <aside className="settings-navigation-panel" aria-label="Settings navigation">
@@ -554,6 +568,7 @@ function SettingsNavigationFixture({ collapsed = false, noResults = false }: { c
           </div>
           <div className="settings-navigation-group">
             {!collapsed ? <div className="settings-navigation-group-label">Application</div> : null}
+            {!desktop ? <button type="button" className="settings-navigation-item" aria-label="Users & access" data-settings-panel-id="accounts"><User aria-hidden="true" className="nav-icon" /><span className="settings-navigation-item-content"><span>Users & access</span></span></button> : null}
             <button type="button" className="settings-navigation-item" aria-label="App settings" data-settings-panel-id="appSettings">
               <span className="settings-navigation-item-content">
                 <Settings className="nav-icon" aria-hidden="true" />
@@ -563,10 +578,10 @@ function SettingsNavigationFixture({ collapsed = false, noResults = false }: { c
           </div>
           <div className="settings-navigation-group">
             {!collapsed ? <div className="settings-navigation-group-label">Maintenance &amp; Diagnostics</div> : null}
-            <button type="button" className="settings-navigation-item" aria-label="Recent scan logs" data-settings-panel-id="recentScans">
+            <button type="button" className="settings-navigation-item" aria-label="Logs" data-settings-panel-id="logs">
               <span className="settings-navigation-item-content">
                 <History className="nav-icon" aria-hidden="true" />
-                {!collapsed ? <span>Recent scan logs</span> : null}
+                {!collapsed ? <span>Logs</span> : null}
               </span>
             </button>
           </div>
@@ -637,7 +652,7 @@ function QualityProfileFixture() {
       <div className="compatibility-profile-list quality-profile-list">
         <div className="settings-profile-toggle-row transcode-automation-toggle-row quality-profile-toggle-row">
           <div className="transcode-automation-tab-controls">
-            <div className="transcode-automation-tab-list" role="tablist" aria-label="Media type" aria-orientation="horizontal">
+            <div className="transcode-automation-tab-list" role="tablist" aria-label="Quality profiles" aria-orientation="horizontal">
               <button type="button" role="tab" className="transcode-automation-tab-button active" aria-selected="true" tabIndex={0}>
                 <span className="transcode-automation-tab-label">Video</span>
               </button>
@@ -646,6 +661,9 @@ function QualityProfileFixture() {
               </button>
               <button type="button" role="tab" className="transcode-automation-tab-button" aria-selected="false" tabIndex={-1}>
                 <span className="transcode-automation-tab-label">Audiobook</span>
+              </button>
+              <button type="button" id="quality-profile-media-tab-resolution-categories" role="tab" className="transcode-automation-tab-button" aria-selected="false" tabIndex={-1} data-toggle-key="resolution-categories" data-settings-search-target="quality-profile-media-tab-resolution-categories">
+                <span className="transcode-automation-tab-label">Resolutions</span>
               </button>
             </div>
           </div>
@@ -729,7 +747,7 @@ function QualityProfileFixture() {
                       <span className="quality-profile-metric-name">
                         <strong>Resolution</strong>
                         <TooltipTrigger ariaLabel="Explain Resolution metric" className="quality-profile-metric-tooltip" content="Resolution score based on the selected resolution categories." />
-                        <span role="button" tabIndex={0} className="quality-profile-metric-link-button" aria-label="Edit resolution categories" title="Edit resolution categories">
+                        <span role="button" tabIndex={0} className="quality-profile-metric-link-button" aria-label="Edit resolutions" title="Edit resolutions">
                           <SquarePenIcon aria-hidden="true" className="nav-icon" size={16} />
                         </span>
                       </span>
@@ -875,35 +893,16 @@ function StatisticLayoutFixture() {
   );
 }
 
-function ScanJobFixture({ determinate = false }: { determinate?: boolean }) {
-  return (
-    <div className={`scan-job-card ${determinate ? "is-determinate ui-elements-determinate-scan" : "is-indeterminate"}`.trim()}>
-      <div className="scan-job-card-main">
-        <AnimatedSearchIcon animateOnMount className="scan-job-card-search-icon" />
-        <span className="scan-job-card-name">{determinate ? "Music library" : "Movies archive"}</span>
-        <div className="scan-job-metrics">
-          {[
-            { icon: FilePlusCorner, value: "42" },
-            { icon: FileDiff, value: "18" },
-            { icon: FileExclamationPoint, value: "3" },
-            { icon: FileCheckCorner, value: determinate ? "82%" : "128" },
-          ].map(({ icon: Icon, value }) => (
-            <span key={value} className="scan-job-metric-item">
-              <span className="scan-job-metric-icon-wrap">
-                <Icon aria-hidden="true" size={14} />
-                <span className="scan-job-metric-value">{value}</span>
-              </span>
-            </span>
-          ))}
-        </div>
-        <div className="scan-job-card-actions">
-          <button type="button" className="secondary icon-only-button scan-job-toggle-button" aria-label="Toggle">
-            <ListFilter aria-hidden="true" className="nav-icon" />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+function ScanJobFixture({ determinate = false, canStop = true }: { determinate?: boolean; canStop?: boolean }) {
+  return <ScanJobCard
+    stopping={false}
+    canStop={canStop}
+    onStop={() => {}}
+    job={{ id: determinate ? 2 : 1, library_id: 1, library_name: determinate ? "Music library" : "Movies archive",
+      status: "running", job_type: "incremental", files_total: 100, files_scanned: 82, errors: 3,
+      started_at: null, finished_at: null, progress_percent: 82, progress_mode: determinate ? "determinate" : "indeterminate",
+      phase_label: "Processing", phase_detail: null, new_files_live: 42, modified_files_live: 18 }}
+  />;
 }
 
 function ScanLogFixture() {
@@ -917,6 +916,7 @@ function ScanLogFixture() {
           </div>
           <div className="meta-tags">
             <span className="badge scan-log-outcome badge-completed_with_issues">Completed with issues</span>
+            <span className="badge">Alex</span>
             <span className="scan-badge badge">Scheduled</span>
             <ChevronRight aria-hidden="true" className="nav-icon" />
           </div>
@@ -1092,7 +1092,7 @@ function PreviewFixture() {
   );
 }
 
-function DuplicateGroupFixture({ suppressed = false }: { suppressed?: boolean }) {
+function DuplicateGroupFixture({ suppressed = false, canEdit = true }: { suppressed?: boolean; canEdit?: boolean }) {
   return (
     <div className={`duplicate-group-card${suppressed ? " is-suppressed" : ""}`}>
       <div className="duplicate-group-summary">
@@ -1105,9 +1105,9 @@ function DuplicateGroupFixture({ suppressed = false }: { suppressed?: boolean })
         <button type="button" className="secondary icon-only-button duplicate-group-action duplicate-group-compare-action" aria-label="Compare files">
           <GitCompareArrowsIcon className="duplicate-group-action-icon" size={17} />
         </button>
-        <button type="button" className="secondary icon-only-button duplicate-group-action" aria-label="Hide group">
+        {canEdit ? <button type="button" className="secondary icon-only-button duplicate-group-action" aria-label={suppressed ? "Restore group" : "Hide group"}>
           {suppressed ? <Eye className="duplicate-group-action-icon is-suppressed" /> : <EyeOff className="duplicate-group-action-icon" />}
-        </button>
+        </button> : null}
       </div>
       <div className="duplicate-group-items-scroll">
         <div className="duplicate-group-item-card">
@@ -1262,6 +1262,58 @@ function ReleaseDialogFixture({ telemetryOff = false }: { telemetryOff?: boolean
   );
 }
 
+function NotificationCatalogFixture() {
+  const { t } = useTranslation();
+  const [settings, setSettings] = useState(DEFAULT_NOTIFICATION_SETTINGS);
+  const [disabled, setDisabled] = useState(false);
+  const types: NotificationType[] = ["success", "info", "warning", "error"];
+  const areas = ["transcoding", "library", "connectors", "settings"] as const;
+  const entries: NotificationEntry[] = types.map((type, index) => ({
+    id: index + 1, type, topicKey: "catalog-preview",
+    message: [t("notifications.previewPrefix"), { reference: t("notifications.jobReference", { id: 314 }) }, t(`notifications.previewJob.${type}`)],
+    source: { area: areas[index], href: "/settings?section=application#notification-settings", label: t("notifications.title") },
+  }));
+  const overflow = Array.from({ length: 8 }, (_, index) => ({ ...entries[index % entries.length], id: index + 1 }));
+  return (
+    <div className="settings-sidebar-stack">
+      <label className="field"><span><input type="checkbox" checked={disabled} onChange={(event) => setDisabled(event.target.checked)} /> Disabled / read-only controls</span></label>
+      <NotificationSettingsFields value={settings} onChange={setSettings} disabled={disabled} />
+      <div className="ui-elements-notification-examples">
+        {entries.map((entry) => <div key={entry.id} className="ui-elements-notification-example"><NotificationCard entry={entry} settings={settings} /></div>)}
+        <NotificationDeck entries={overflow} settings={settings} />
+      </div>
+    </div>
+  );
+}
+
+function AppSettingsSectionsFixture() {
+  const { t } = useTranslation();
+  const [notifications, setNotifications] = useState(DEFAULT_NOTIFICATION_SETTINGS);
+  return <div className="settings-main-column"><AsyncPanel title={t("libraries.appSettings")}>
+    <div className="settings-sidebar-stack">
+      <SettingsSection id="catalog-app-appearance" title={t("settingsSections.appearance")} defaultOpen>
+        <div className="app-settings-performance-grid">
+          <label className="field"><span>{t("libraries.language")}</span><select className="settings-choice-input" defaultValue="en"><option value="en">English</option><option value="de">Deutsch</option></select></label>
+          <label className="field"><span>{t("libraries.theme")}</span><select className="settings-choice-input" defaultValue="system"><option value="system">{t("theme.system")}</option><option value="light">{t("theme.light")}</option><option value="dark">{t("theme.dark")}</option></select></label>
+        </div>
+      </SettingsSection>
+      <SettingsSection id="catalog-app-notifications" title={t("notifications.title")} defaultOpen><NotificationSettingsFields value={notifications} onChange={setNotifications} /></SettingsSection>
+      <SettingsSection id="catalog-app-scans" title={t("libraries.scanSettingsTitle")} defaultOpen>
+        <div className="app-settings-performance-grid">
+          <label className="field"><span>{t("libraries.scanWorkerCount")}</span><select className="settings-choice-input" defaultValue="4"><option value="4">4</option><option value="8">8</option></select></label>
+          <label className="field"><span>{t("libraries.parallelScanJobs")}</span><select className="settings-choice-input" defaultValue="2"><option value="2">2</option><option value="4">4</option></select></label>
+        </div>
+      </SettingsSection>
+      <SettingsSection id="catalog-app-charts" title={t("libraries.plotsChartsTitle")} defaultOpen>
+        <label className="field"><span>{t("libraries.comparisonScatterPointLimit")}</span><select className="settings-choice-input" defaultValue="5000"><option value="5000">5000</option><option value="10000">10000</option></select></label>
+      </SettingsSection>
+      <SettingsSection id="catalog-app-features" title={t("libraries.featureFlagsTitle")} defaultOpen>
+        <div className="app-settings-flag-list">{["hideAutomaticUpdateReminders", "showAnalyzedFilesCsvExport"].map((key) => <div className="app-settings-flag-row" key={key}><label className="app-settings-flag-toggle"><input type="checkbox" defaultChecked={false} /><span>{t(`libraries.featureFlags.${key}`)}</span></label></div>)}</div>
+      </SettingsSection>
+    </div>
+  </AsyncPanel></div>;
+}
+
 export function UiElementsPage() {
   const { t, i18n } = useTranslation();
   const [copyStreamLanguage, setCopyStreamLanguage] = useState("und");
@@ -1324,7 +1376,7 @@ export function UiElementsPage() {
         <div className="ui-elements-content">
           <CatalogSection definition={catalogSections[0]}>
             <VariantGroup title="Tokens and type">
-              <VariantCard title="Theme tokens" source={`${source}: globals.css`} classes={["--bg", "--panel", "--surface", "--surface-subtle", "--border", "--scrollbar-thumb", "--scrollbar-thumb-hover", "--accent", "--accent-2"]} wide>
+              <VariantCard title="Theme tokens" source={`${source}: globals.css`} classes={["--bg", "--panel", "--surface", "--surface-subtle", "--border", "--scrollbar-thumb", "--scrollbar-thumb-hover", "--accent", "--accent-2", "--shadow", "--shadow-control", "--shadow-selected"]} wide>
                 <div className="ui-elements-token-grid">
                   {colorTokens.map((token) => (
                     <article key={token.name} className="ui-elements-token">
@@ -1349,7 +1401,7 @@ export function UiElementsPage() {
 
           <CatalogSection definition={catalogSections[1]}>
             <VariantGroup title="Header variants">
-              <VariantCard title="Primary and library nav" source={header} status="Icons show page names after two seconds of hover. The Library icon opens a list on hover or click." classes={["media-nav-panel", "media-nav-icons", "media-nav-library-menu", "media-nav-library-list", "library-nav-link", "icon-nav-button", "nav-active-pill", "data-tooltip"]}>
+              <VariantCard title="Primary and library nav" source={header} status="Icons show page names after two seconds of hover. The Library icon opens a list on hover or click. The open menu and active navigation pill use the approved midpoint shadow." classes={["media-nav-panel", "media-nav-icons", "media-nav-library-menu", "media-nav-library-list", "library-nav-link", "icon-nav-button", "nav-active-pill", "data-tooltip"]}>
                 <div style={{ minHeight: 165 }}>
                 <div className="media-nav-panel">
                   <div className="media-nav-icons">
@@ -1379,6 +1431,16 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
+              <VariantCard title="Header account menu" source={`${header} > signed-in account menu`} status="Account actions stay behind the Lucide User icon, with a compact divider separating them from page navigation. The open menu uses the approved midpoint shadow." classes={["media-header-account-divider", "media-header-account", "media-header-account-trigger", "media-header-account-menu", "media-header-account-menu-item"]} wide>
+                <div style={{ minHeight: 160 }}>
+                  <div className="media-nav-panel" style={{ width: "max-content", maxWidth: "100%", margin: 0 }}>
+                    <div className="media-nav-icons">
+                      <a href="/settings" className="icon-nav-button" aria-label="Settings" data-tooltip="Settings" onClick={preventCatalogNavigation}><span className="nav-link-content"><Settings aria-hidden="true" className="nav-icon" /></span></a>
+                      <HeaderAccountMenu username="Frederik Emmer" owner kind="account" onSignOut={() => undefined} onAccountClick={preventCatalogNavigation} initiallyOpen />
+                    </div>
+                  </div>
+                </div>
+              </VariantCard>
               <VariantCard title="Brand, version, and update labels" source={header} classes={["app-title-link", "app-title-icon", "app-version", "app-version-update"]} status="On phones, the 42px logo uses balanced header spacing; the version pill stays compact on wider screens.">
                 <div className="app-title-block">
                   <a href="/" className="app-title-link" aria-label="Dashboard" onClick={preventCatalogNavigation}>
@@ -1392,12 +1454,81 @@ export function UiElementsPage() {
           </CatalogSection>
 
           <CatalogSection definition={catalogSections[2]}>
+            <VariantGroup title="App settings">
+              <VariantCard title="Compact collapsible App settings groups" source="LibrariesPage.tsx / LogsSection.tsx > SettingsSection / NotificationSettingsPanel.tsx" status="Provisional grouping: appearance, notifications, scan settings, plots/charts and feature flags. All start expanded and collapse independently using the existing notification/settings sub-panel DOM. Catalog controls only change local sample values." classes={["settings-sidebar-stack", "transcode-federation-panel", "transcode-federation-heading", "app-settings-performance-grid", "app-settings-flag-list"]} wide>
+                <AppSettingsSectionsFixture />
+              </VariantCard>
+            </VariantGroup>
+            <VariantGroup title="Logs">
+              <VariantCard title="Unified Logs settings" source="LibrariesPage.tsx / LogsSection.tsx / NotificationHistoryPanel.tsx" status="Standard settings AsyncPanel frame and padding; each permitted history or retention section expands independently. Notification retention reuses the compact table row. Retention comes first and owns the settings reconstruction action; scan logs have no reconstruction button or accuracy tooltip. Reconstruction keeps live progress inline, while start failures and terminal outcomes use notifications. Retention-value save failures also use notifications. Scan/notification helper copy is omitted and both empty states use notice. Preview messages stay out of history. Notification history is personal, searched on the server and paginated; the examples below do not call APIs." classes={["settings-sidebar-stack", "transcode-federation-panel", "notification-history-toolbar", "file-history-entry", "notification-history-message"]} wide>
+                <div className="settings-main-column">
+                <AsyncPanel title={t("logs.title")}>
+                <div className="settings-sidebar-stack">
+                  <LogsSection id="catalog-logs-retention" title={t("libraries.historyRetention.title")}>
+                    <div className="settings-table-shell history-retention-table-shell"><table className="settings-data-table history-retention-table">
+                      <thead><tr><th>{t("libraries.historyRetention.bucketLabel")}</th><th>{t("libraries.historyRetention.daysLabel")}</th><th>{t("libraries.historyRetention.storageLimitLabel")}</th></tr></thead>
+                      <tbody><NotificationRetentionRow id="catalog-notification-retention-days" days="30" disabled /></tbody>
+                    </table></div>
+                  </LogsSection>
+                  <LogsSection id="catalog-logs-scan" title={t("scanLogs.title")}><div className="notice">{t("scanLogs.empty")}</div></LogsSection>
+                  <LogsSection id="catalog-logs-transcode" title={t("transcoding.globalHistory")}><p className="field-hint">{t("transcoding.history.empty")}</p></LogsSection>
+                  <LogsSection id="catalog-logs-notifications" title={t("logs.notifications")} defaultOpen>
+                    <label className="settings-navigation-search"><Search aria-hidden="true" className="nav-icon" /><input type="search" placeholder={t("logs.searchNotifications")} aria-label={t("logs.searchNotifications")} /></label>
+                    <NotificationHistoryList items={[{ id: 1, created_at: "2026-10-24T10:00:00Z", type: "success", message: t("notifications.connector.testSucceeded", { name: "Living room" }), source: { area: "connectors", href: "/settings?section=jellyfin", label: t("connectors.title") } }, { id: 2, created_at: "2026-10-24T09:00:00Z", type: "error", message: t("notifications.connector.testFailed", { name: "Living room" }), source: { area: "connectors", href: "/settings?section=jellyfin", label: t("connectors.title") } }]} />
+                  </LogsSection>
+
+                  <LogsSection id="catalog-logs-notifications-empty" title="Notifications · empty" defaultOpen><div className="notice">{t("logs.noNotifications")}</div></LogsSection>
+                  <LogsSection id="catalog-logs-loading" title="Notifications · loading" loading defaultOpen><span /></LogsSection>
+                  <LogsSection id="catalog-logs-error" title="Notifications · unavailable" error={t("logs.loadFailed")} defaultOpen><span /></LogsSection>
+                </div>
+                </AsyncPanel>
+                </div>
+              </VariantCard>
+            </VariantGroup>
+            <VariantGroup title="Notifications">
+              <VariantCard title="Notification settings and cards" source="NotificationSettingsPanel.tsx / NotificationHost.tsx / lib/notifications.tsx" status="Shared controls, one/ten random transient previews, clear-visible action, all four statuses and source icons, neutral reference pill, palette/style choices, read-only controls and an eight-card keyboard/hover scroll stack. Saving a duration change restarts timers for visible cards; ordinary pauses preserve the remaining time. Preview actions do not write history; catalog values are local and example cards have no expiry timers." classes={["notification-card", "notification-deck", "notification-reference", "notification-preview-controls"]} wide>
+                <NotificationCatalogFixture />
+              </VariantCard>
+            </VariantGroup>
+            <VariantGroup title="Local accounts and authentication">
+              <VariantCard title="Local accounts and rights A3.4" status="The overview uses compact prototype-style rows with initials and a final Guest row without a subtitle; account status is managed on the selected account page. Selecting the active Users & access navigation item returns from an account to the overview. Rights groups start collapsed and search opens matching groups. Account-list and rights-tree searches reuse the settings sidebar search style with its leading search icon. The selected username, Permissions/Account tabs, status control when editable, and Close action share the panel header. Open Owner for the read-only rights view without status editing or save actions. Personal settings live under the signed-in account’s Account tab, with no separate settings navigation item; Guest also has the language and theme controls there, saved in that browser’s local Guest namespace. Owner account settings pair the username with a masked current-password field and show only Save and Sign out actions. Owner group toggles stay checked and disabled. The global Presets & Profiles group sits between Connectors and Users & access and contains quality, compatibility and transcoding-preset permissions; its preset rights are labeled View/Edit Transcoding presets. Global app-settings permissions are in Settings. Per-library job rights remain in each library’s Transcoding subsection, whose tooltip points to Presets & Profiles. Library creation, global app settings, connector catalog scope and Library access guidance use compact tooltip markers beside their labels. Locked rows retain full width and keyboard/touch tooltips; Alex and Guest show editable rows. The Guest Library access tooltip explains shared job provenance and the required other/system-job cancellation permission. The account tab selector and list surface use the approved midpoint shadow." source="AccountsPanel.tsx · Settings > Users & access" classes={["access-accounts-panel", "access-account-row", "access-account-avatar", "access-owner-hint", "access-permission-label", "access-permission-section-heading", "access-permission-tooltip", "toggle-switch", "access-tree-header", "library-history-range-toggle", "settings-navigation-search", "access-search-field", "nav-icon"]} wide>
+        <div id="accounts-catalog">
+        <p className="muted">AccountsPanel.tsx · access-* layout · shared toggle-switch, profile-list, SlidingTogglePill · login and forced password form: lib/auth.tsx</p>
+        <AccountsPanel fixture={{ actor: { id: "catalog-owner", username: "Owner", kind: "account", owner: true, revision: 1, must_change_password: false, policy: emptyPolicy() }, accounts: [
+          { id: "catalog-owner", username: "Owner", owner: true, active: true, editable: false, must_change_password: false, policy: emptyPolicy() },
+          { id: "catalog-user", username: "Alex", owner: false, active: true, editable: true, must_change_password: false, policy: { ...emptyPolicy(), libraries: { "1": ["library.read"] } } },
+          { id: "catalog-inactive", username: "Inactive account with a longer name", owner: false, active: false, editable: true, must_change_password: true, policy: emptyPolicy() }
+        ], libraries: [{ id: 1, name: "Movies", actions: ["library.read", "library.preview"] }, { id: 2, name: "Music", actions: ["library.read"] }] }} />
+        </div>
+      </VariantCard>
+      <VariantCard title="Account and Guest notifications in App settings" source="LibrariesPage.tsx > App settings / NotificationSettingsPanel.tsx; AccountsPanel.tsx > access rights" status="The editor lives only in App settings. Every signed-in account can save its own preferences without a notification permission. Guest can open this panel and save preferences to the browser-local Guest namespace; global settings stay hidden, while Guest language and theme remain in the personal settings panel. This live example edits the current identity only." classes={["notification-settings-panel", "transcode-federation-heading", "settings-choice-input", "notification-preview-controls"]} wide>
+        <NotificationSettingsPanel sectionId="catalog-app-notification-settings" />
+      </VariantCard>
+      <VariantCard title="Owner account settings" source="AccountsPanel.tsx · PersonalAccountPanel" status="The owner confirms username changes with a masked current password; reveal is explicit. Save and Sign out use equal-width standard buttons. The owner account view has no separate password-change form." classes={["personal-account-credentials-grid", "personal-account-password-control", "personal-account-password-toggle", "personal-account-actions"]} wide>
+        <form className="form-grid">
+          <div className="app-settings-performance-grid personal-account-credentials-grid">
+            <label>{t("access.username")}<input readOnly value="Frederik" autoComplete="username" /></label>
+            <label>{t("access.currentPassword")}<span className="personal-account-password-control"><input readOnly value="" type="password" autoComplete="current-password" /><button type="button" className="icon-button icon-button-bordered personal-account-password-toggle" aria-label={t("access.showPassword")} aria-pressed="false"><Eye aria-hidden="true" className="nav-icon" /></button></span></label>
+          </div>
+          <div className="button-row personal-account-actions"><button type="button">{t("access.save")}</button><button type="button" className="secondary">{t("access.logout")}</button></div>
+        </form>
+      </VariantCard>
+      <VariantCard title="Login and forced password states" source="lib/auth.tsx" classes={["access-login", "form-grid", "alert"]}>
+      <section className="access-login panel" aria-label="Login and forced password states">
+        <h2>{t("access.changePassword")}</h2><p className="muted">{t("access.changeRequired")}</p>
+        <div className="form-grid"><label>{t("access.currentPassword")}<input type="password" autoComplete="off" readOnly value="" /></label><label>{t("access.newPassword")}<input type="password" autoComplete="off" readOnly value="" /></label><p role="alert" className="alert">{t("access.passwordRequirements")}</p><div className="button-row"><button type="button" disabled>{t("access.save")}</button><button type="button" className="secondary">{t("access.logout")}</button></div></div>
+      </section>
+      </VariantCard>
+            </VariantGroup>
             <VariantGroup title="Navigation and settings controls">
-              <VariantCard title="Settings sidebar" source={`${settings} > Navigation`} classes={["settings-navigation-panel", "settings-navigation-item", "settings-navigation-quick-action", "settings-navigation-search-stack", "settings-mobile-navigation-search-stack", "settings-mobile-navigation-search", "settings-search-results", "settings-search-result", "settings-search-result-label", "settings-search-result-context"]} wide>
+              <VariantCard title="Settings sidebar" source={`${settings} > Navigation`} status="Open navigation and search-result menus use the approved midpoint shadow; selected navigation uses the matching softer pill." classes={["settings-navigation-panel", "settings-navigation-item", "settings-navigation-quick-action", "settings-navigation-search-stack", "settings-mobile-navigation-search-stack", "settings-mobile-navigation-search", "settings-search-results", "settings-search-result", "settings-search-result-label", "settings-search-result-context"]} wide>
                 <SettingsNavigationFixture />
               </VariantCard>
-              <VariantCard title="Settings sidebar · no search match" source={`${settings} > Navigation > Search empty`} classes={["settings-navigation-panel", "settings-navigation-search-stack", "settings-search-results", "settings-search-result-empty"]} wide>
+              <VariantCard title="Settings sidebar · no search match" source={`${settings} > Navigation > Search empty`} status="The open search-results menu uses the approved midpoint shadow." classes={["settings-navigation-panel", "settings-navigation-search-stack", "settings-search-results", "settings-search-result-empty"]} wide>
                 <SettingsNavigationFixture noResults />
+              </VariantCard>
+              <VariantCard title="Desktop settings sidebar · no local account access" source={`${settings} > Navigation`} status="Desktop keeps its single local application identity; account management, login, and rights APIs are unavailable. Navigation selection uses the approved midpoint shadow." classes={["settings-navigation-panel", "settings-navigation-item", "settings-navigation-quick-action"]} wide>
+                <SettingsNavigationFixture desktop />
               </VariantCard>
               <VariantCard title="Libraries panel header actions" source={`${settings} > Libraries`} classes={["libraries-settings-panel", "async-panel-toggle-actions", "library-scan-button", "settings-panel-header-action"]} wide>
                 <section className="panel async-panel libraries-settings-panel">
@@ -1421,7 +1552,7 @@ export function UiElementsPage() {
                   <div className="async-panel-body"><div className="notice">Configured libraries</div></div>
                 </section>
               </VariantCard>
-              <VariantCard title="Compatibility profile list" source={`${settings} > Hard/Software Profiles`} status="Hover and keyboard focus highlight the full profile row including actions; favorite actions fill their symbol" classes={["compatibility-profile-list", "compatibility-profile-search", "compatibility-profile-list-item", "compatibility-profile-list-row", "quality-profile-list-row", "compatibility-profile-list-trigger", "compatibility-profile-quick-actions", "transcode-automation-list-copy", "compatibility-profile-list-copy", "compatibility-profile-details", "settings-choice-input"]} wide>
+              <VariantCard title="Compatibility profile list" source={`${settings} > Hard/Software Profiles`} status="Hardware, Software / Player and Combination profiles use a left-side chevron that points right while closed and down while open." classes={["compatibility-profiles-async-panel", "compatibility-profile-list", "compatibility-profile-search", "compatibility-profile-list-item", "compatibility-profile-list-row", "quality-profile-list-row", "compatibility-profile-list-trigger", "compatibility-profile-quick-actions", "transcode-automation-list-copy", "compatibility-profile-list-copy", "compatibility-profile-details", "connector-connection-chevron", "settings-choice-input"]} wide>
                 <div className="compatibility-profile-list compatibility-profile-catalog-list">
                   <div className="compatibility-profile-search">
                     <Search size={16} aria-hidden="true" className="compatibility-profile-search-icon" />
@@ -1430,8 +1561,8 @@ export function UiElementsPage() {
                   <article className="compatibility-profile-list-item">
                     <div className="compatibility-profile-list-row quality-profile-list-row">
                       <button type="button" className="compatibility-profile-list-trigger">
+                        <span className="connector-connection-chevron"><ChevronRight aria-hidden="true" className="nav-icon" /></span>
                         <span className="transcode-automation-list-copy compatibility-profile-list-copy"><strong>Apple TV 4K 3rd Gen</strong></span>
-                        <ChevronDown aria-hidden="true" />
                       </button>
                       <div className="compatibility-profile-quick-actions">
                         <button type="button" className="secondary icon-only-button compatibility-profile-quick-action is-favorite" aria-label="Remove Apple TV profile from favorites" aria-pressed="true">
@@ -1452,8 +1583,8 @@ export function UiElementsPage() {
                   <article className="compatibility-profile-list-item is-expanded">
                     <div className="compatibility-profile-list-row quality-profile-list-row">
                       <button type="button" className="compatibility-profile-list-trigger" aria-expanded="true">
+                        <span className="connector-connection-chevron"><ChevronRight aria-hidden="true" className="nav-icon" /></span>
                         <span className="transcode-automation-list-copy compatibility-profile-list-copy"><strong>VLC 3 Desktop</strong></span>
-                        <ChevronDown aria-hidden="true" />
                       </button>
                       <div className="compatibility-profile-quick-actions">
                         <button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label="Add VLC profile to favorites" aria-pressed="false">
@@ -1487,13 +1618,35 @@ export function UiElementsPage() {
                   </article>
                 </div>
               </VariantCard>
-              <VariantCard title="Structured compatibility capability editor" source={`${settings} > Hard/Software Profiles > Profile details`} classes={["compatibility-capability-section", "compatibility-capability-row", "compatibility-capability-limits", "settings-choice-input"]} status="Nested surfaces follow the active theme without light gray fallbacks." wide>
-                <details className="compatibility-capability-section" open>
-                  <summary>Sources</summary>
+              <VariantCard title="Compatibility profiles: view permission only" source="CompatibilityProfilesPanel.tsx > canEdit / combination details" status="The common permission covers hardware, software and combinations. Read-only views keep expansion and personal favorites; create/edit/clone/delete actions are hidden." classes={["compatibility-profiles-async-panel", "compatibility-profile-list", "compatibility-profile-list-item", "compatibility-profile-list-row", "compatibility-profile-list-trigger", "compatibility-profile-details", "connector-connection-chevron", "settings-choice-input"]} wide>
+                <div className="compatibility-profile-list compatibility-profile-catalog-list">
+                  <article className="compatibility-profile-list-item is-expanded">
+                    <div className="compatibility-profile-list-row quality-profile-list-row">
+                      <button type="button" className="compatibility-profile-list-trigger" aria-expanded="true">
+                        <span className="connector-connection-chevron"><ChevronRight aria-hidden="true" className="nav-icon" /></span>
+                        <span className="transcode-automation-list-copy compatibility-profile-list-copy"><strong>Living room combination</strong></span>
+                      </button>
+                      <div className="compatibility-profile-quick-actions">
+                        <button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label="Add living room combination to favorites" aria-pressed="false"><AnimatedSparklesIcon size={18} aria-hidden="true" className="nav-icon" /></button>
+                      </div>
+                    </div>
+                    <div className="compatibility-profile-details">
+                      <div className="compatibility-profile-form-grid">
+                        <label>Name<input className="settings-choice-input" value="Living room combination" readOnly /></label>
+                        <label>Hardware<select className="settings-choice-input" disabled defaultValue="apple-tv"><option value="apple-tv">Apple TV</option></select></label>
+                        <label>Software / Player<select className="settings-choice-input" disabled defaultValue="player"><option value="player">Example player</option></select></label>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+              </VariantCard>
+              <VariantCard title="Structured compatibility capability editor" source={`${settings} > Hard/Software Profiles > Profile details`} classes={["compatibility-capability-section", "compatibility-capability-tree-section", "compatibility-capability-section-body", "compatibility-capability-row", "compatibility-hardware-video-row", "compatibility-capability-limits", "compatibility-hardware-decode-toggle", "settings-inline-label-field", "settings-inline-label-field-label", "has-stepper", "settings-inline-label-select", "settings-inline-label-select-label", "connector-connection-chevron", "settings-choice-input", "icon-button", "icon-button-borderless", "icon-button-static"]} status="Capability sections use the same left chevron, row height and indentation as the User Permissions tree. Single-line text and number fields reuse the Resolution Categories inset-label input; capability dropdowns place the same compact label before the native chevron. The video codec selector and hardware-decode toggle share the row; remove actions use borderless icon buttons. Checkbox and multiline labels otherwise stay unchanged." wide>
+                <details className="compatibility-capability-section compatibility-capability-tree-section" open>
+                  <summary><span className="connector-connection-chevron"><ChevronRight aria-hidden="true" className="nav-icon" /></span><strong>Sources</strong></summary>
                   <div className="compatibility-capability-section-body">
                     <div className="compatibility-capability-editor">
                       <div className="compatibility-capability-row compatibility-source-row">
-                        <label>Label<input className="settings-choice-input" defaultValue="Technical specifications" /></label>
+                        <SettingsInlineLabelInput label="Label" defaultValue="Technical specifications" />
                         <label>
                           URL
                           <span className="compatibility-source-url-control is-readonly">
@@ -1507,113 +1660,118 @@ export function UiElementsPage() {
                     </div>
                   </div>
                 </details>
-                <details className="compatibility-capability-section" open>
-                  <summary>Audio capabilities</summary>
+                <details className="compatibility-capability-section compatibility-capability-tree-section" open>
+                  <summary><span className="connector-connection-chevron"><ChevronRight aria-hidden="true" className="nav-icon" /></span><strong>Audio capabilities</strong></summary>
                   <div className="compatibility-capability-section-body">
                     <div className="compatibility-capability-editor">
                       <div className="compatibility-capability-row">
-                        <label>
-                          Format
-                          <select className="settings-choice-input" defaultValue="truehd">
+                        <SettingsInlineLabelSelect label="Format" defaultValue="truehd">
                             <option value="aac">AAC (aac)</option>
                             <option value="eac3">Dolby Digital Plus / E-AC-3 (eac3)</option>
                             <option value="truehd">Dolby TrueHD (truehd)</option>
                             <option value="dts_hd">DTS-HD (dts_hd)</option>
                             <option value="flac">FLAC (flac)</option>
-                          </select>
-                        </label>
-                        <label>
-                          Support
-                          <select className="settings-choice-input" defaultValue="passthrough_only">
+                        </SettingsInlineLabelSelect>
+                        <SettingsInlineLabelSelect label="Support" defaultValue="passthrough_only">
                             <option value="true">Supported</option>
                             <option value="limited">Limited</option>
                             <option value="passthrough_only">Passthrough only</option>
                             <option value="false">Unsupported</option>
-                          </select>
-                        </label>
-                        <button type="button" className="secondary icon-only-button compatibility-capability-remove" aria-label="Remove TrueHD">
+                        </SettingsInlineLabelSelect>
+                        <button type="button" className="icon-button icon-button-borderless icon-button-static compatibility-capability-remove" aria-label="Remove TrueHD">
                           <DeleteIcon size={18} aria-hidden="true" className="nav-icon" />
                         </button>
                       </div>
                     </div>
                   </div>
                 </details>
-                <div className="compatibility-video-capability">
-                  <div className="compatibility-capability-row">
-                    <label>
-                      Codec
-                      <select className="settings-choice-input" defaultValue="hevc">
-                        <option value="h264">H.264 / AVC (h264)</option>
-                        <option value="hevc">H.265 / HEVC (hevc)</option>
-                        <option value="vvc">H.266 / VVC (vvc)</option>
-                        <option value="av1">AV1 (av1)</option>
-                        <option value="prores">Apple ProRes (prores)</option>
-                      </select>
-                    </label>
-                    <label className="compatibility-hardware-decode-toggle">
-                      <span>Hardware decode</span>
-                      <span className="compatibility-checkbox-field">
-                        <input type="checkbox" defaultChecked />
-                      </span>
-                    </label>
+                <details className="compatibility-capability-section compatibility-capability-tree-section" open>
+                  <summary><span className="connector-connection-chevron"><ChevronRight aria-hidden="true" className="nav-icon" /></span><strong>Video capabilities</strong></summary>
+                  <div className="compatibility-capability-section-body">
+                    <div className="compatibility-video-capability">
+                      <div className="compatibility-capability-row compatibility-hardware-video-row">
+                        <SettingsInlineLabelSelect label="Codec" defaultValue="hevc">
+                            <option value="h264">H.264 / AVC (h264)</option>
+                            <option value="hevc">H.265 / HEVC (hevc)</option>
+                            <option value="vvc">H.266 / VVC (vvc)</option>
+                            <option value="av1">AV1 (av1)</option>
+                            <option value="prores">Apple ProRes (prores)</option>
+                        </SettingsInlineLabelSelect>
+                        <label className="compatibility-hardware-decode-toggle">
+                          <span>Hardware decode</span>
+                          <span className="compatibility-checkbox-field">
+                            <input type="checkbox" defaultChecked />
+                          </span>
+                        </label>
+                        <button type="button" className="icon-button icon-button-borderless icon-button-static compatibility-capability-remove" aria-label="Remove H.264">
+                          <DeleteIcon size={18} aria-hidden="true" className="nav-icon" />
+                        </button>
+                      </div>
+                      <div className="compatibility-capability-limits">
+                        <SettingsInlineLabelInput label="Max. resolution" placeholder="e.g. 4K" />
+                        <SettingsInlineLabelInput label="Max. FPS" type="number" placeholder="e.g. 60" />
+                        <SettingsInlineLabelInput label="Bit depth" placeholder="e.g. 8, 10" />
+                        <SettingsInlineLabelInput label="HDR formats" placeholder="e.g. HDR10, Dolby Vision" />
+                      </div>
+                    </div>
                   </div>
-                  <div className="compatibility-capability-limits">
-                    <label>Max. resolution<input className="settings-choice-input" placeholder="e.g. 4K" /></label>
-                    <label>Max. FPS<input className="settings-choice-input" placeholder="e.g. 60" /></label>
-                    <label>Bit depth<input className="settings-choice-input" placeholder="e.g. 8, 10" /></label>
-                    <label>HDR formats<input className="settings-choice-input" placeholder="e.g. HDR10, Dolby Vision" /></label>
+                </details>
+                <details className="compatibility-capability-section compatibility-capability-tree-section" open>
+                  <summary><span className="connector-connection-chevron"><ChevronRight aria-hidden="true" className="nav-icon" /></span><strong>Containers</strong></summary>
+                  <div className="compatibility-capability-section-body">
+                    <div className="compatibility-capability-row compatibility-container-row">
+                      <SettingsInlineLabelSelect label="Container" defaultValue="mkv">
+                          <option value="mp4">MP4 / ISO Base Media (mp4)</option>
+                          <option value="mkv">Matroska Video (mkv)</option>
+                          <option value="webm">WebM (webm)</option>
+                          <option value="m2ts">Blu-ray MPEG-2 Transport Stream (m2ts)</option>
+                          <option value="mxf">Material Exchange Format (mxf)</option>
+                      </SettingsInlineLabelSelect>
+                    </div>
                   </div>
-                </div>
-                <div className="compatibility-capability-row compatibility-container-row">
-                  <label>
-                    Container
-                    <select className="settings-choice-input" defaultValue="mkv">
-                      <option value="mp4">MP4 / ISO Base Media (mp4)</option>
-                      <option value="mkv">Matroska Video (mkv)</option>
-                      <option value="webm">WebM (webm)</option>
-                      <option value="m2ts">Blu-ray MPEG-2 Transport Stream (m2ts)</option>
-                      <option value="mxf">Material Exchange Format (mxf)</option>
-                    </select>
-                  </label>
-                </div>
-                <div className="compatibility-capability-row">
-                  <label>
-                    Subtitle format
-                    <select className="settings-choice-input" defaultValue="subrip">
-                      <option value="subrip">SubRip / SRT (subrip)</option>
-                      <option value="ass">Advanced SubStation Alpha (ass)</option>
-                      <option value="webvtt">WebVTT (webvtt)</option>
-                      <option value="hdmv_pgs_subtitle">Blu-ray PGS (hdmv_pgs_subtitle)</option>
-                      <option value="dvd_subtitle">DVD VobSub (dvd_subtitle)</option>
-                    </select>
-                  </label>
-                </div>
-                <div className="compatibility-video-capability">
-                  <div className="compatibility-capability-row">
-                    <label>Codec<select className="settings-choice-input" defaultValue="hevc"><option value="hevc">H.265 / HEVC (hevc)</option></select></label>
-                    <label>
-                      Playback mode
-                      <select className="settings-choice-input" defaultValue="conditional">
-                        <option value="direct">Direct</option>
-                        <option value="direct_stream">Direct stream / remux</option>
-                        <option value="video_transcode">Video transcode</option>
-                        <option value="conditional">Conditional</option>
-                      </select>
-                    </label>
+                </details>
+                <details className="compatibility-capability-section compatibility-capability-tree-section" open>
+                  <summary><span className="connector-connection-chevron"><ChevronRight aria-hidden="true" className="nav-icon" /></span><strong>Subtitles</strong></summary>
+                  <div className="compatibility-capability-section-body">
+                    <div className="compatibility-capability-row">
+                      <SettingsInlineLabelSelect label="Subtitle format" defaultValue="subrip">
+                          <option value="subrip">SubRip / SRT (subrip)</option>
+                          <option value="ass">Advanced SubStation Alpha (ass)</option>
+                          <option value="webvtt">WebVTT (webvtt)</option>
+                          <option value="hdmv_pgs_subtitle">Blu-ray PGS (hdmv_pgs_subtitle)</option>
+                          <option value="dvd_subtitle">DVD VobSub (dvd_subtitle)</option>
+                      </SettingsInlineLabelSelect>
+                    </div>
                   </div>
-                  <label className="compatibility-profile-reason">
-                    Conditions (JSON)
-                    <textarea className="settings-choice-input" readOnly rows={3} value={'[{"kind":"device_capability","value":"HEVC decoder"}]'} />
-                  </label>
-                </div>
-                <details className="compatibility-capability-section" open>
-                  <summary>Combined compatibility rules</summary>
+                </details>
+                <details className="compatibility-capability-section compatibility-capability-tree-section" open>
+                  <summary><span className="connector-connection-chevron"><ChevronRight aria-hidden="true" className="nav-icon" /></span><strong>Software video capabilities</strong></summary>
+                  <div className="compatibility-capability-section-body">
+                    <div className="compatibility-video-capability">
+                      <div className="compatibility-capability-row">
+                        <SettingsInlineLabelSelect label="Codec" defaultValue="hevc"><option value="hevc">H.265 / HEVC (hevc)</option></SettingsInlineLabelSelect>
+                        <SettingsInlineLabelSelect label="Playback mode" defaultValue="conditional">
+                            <option value="direct">Direct</option>
+                            <option value="direct_stream">Direct stream / remux</option>
+                            <option value="video_transcode">Video transcode</option>
+                            <option value="conditional">Conditional</option>
+                        </SettingsInlineLabelSelect>
+                      </div>
+                      <label className="compatibility-profile-reason">
+                        Conditions (JSON)
+                        <textarea className="settings-choice-input" readOnly rows={3} value={'[{"kind":"device_capability","value":"HEVC decoder"}]'} />
+                      </label>
+                    </div>
+                  </div>
+                </details>
+                <details className="compatibility-capability-section compatibility-capability-tree-section" open>
+                  <summary><span className="connector-connection-chevron"><ChevronRight aria-hidden="true" className="nav-icon" /></span><strong>Combined compatibility rules</strong></summary>
                   <div className="compatibility-capability-section-body">
                     <textarea className="compatibility-profile-json-editor" readOnly rows={4} value={'[{"id":"hevc-mkv-remux","match":{"containers":["mkv"],"video_codecs":["hevc"]},"mode":"direct_stream"}]'} />
                   </div>
                 </details>
               </VariantCard>
-              <VariantCard title="Compact combination profile tabs" source={`${settings} > Hard/Software Profiles`} classes={["panel-title-row", "tooltip-trigger", "compatibility-profile-list", "compatibility-profile-catalog-list", "settings-profile-toggle-row", "transcode-automation-toggle-row", "transcode-automation-tab-controls", "transcode-automation-tab-list", "transcode-automation-tab-button", "transcode-automation-tab-label", "settings-profile-toggle-actions", "settings-panel-header-action", "compatibility-profile-header-action"]} wide>
+              <VariantCard title="Compact combination profile tabs" source={`${settings} > Hard/Software Profiles`} classes={["panel-title-row", "tooltip-trigger", "compatibility-profiles-async-panel", "compatibility-profile-list", "compatibility-profile-catalog-list", "compatibility-profile-list-item", "compatibility-profile-list-row", "compatibility-profile-list-trigger", "compatibility-profile-quick-actions", "connector-connection-chevron", "settings-profile-toggle-row", "transcode-automation-toggle-row", "transcode-automation-tab-controls", "transcode-automation-tab-list", "transcode-automation-tab-button", "transcode-automation-tab-label", "settings-profile-toggle-actions", "settings-panel-header-action", "compatibility-profile-header-action"]} wide>
                 <div className="compatibility-profile-list compatibility-profile-catalog-list">
                   <div className="panel-title-row">
                     <h2>Hardware &amp; software profiles</h2>
@@ -1663,8 +1821,8 @@ export function UiElementsPage() {
                   <article className="compatibility-profile-list-item">
                     <div className="compatibility-profile-list-row quality-profile-list-row">
                       <button type="button" className="compatibility-profile-list-trigger" aria-expanded="false">
+                        <span className="connector-connection-chevron"><ChevronRight aria-hidden="true" className="nav-icon" /></span>
                         <span className="transcode-automation-list-copy compatibility-profile-list-copy"><strong>Apple TV 4K 3rd Gen</strong></span>
-                        <ChevronDown aria-hidden="true" />
                       </button>
                       <div className="compatibility-profile-quick-actions">
                         <button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label="Add Apple TV profile to favorites">
@@ -1698,7 +1856,7 @@ export function UiElementsPage() {
                   </a>
                 </div>
               </VariantCard>
-              <VariantCard title="Compact history retention tables" source="Settings > History retention" status="Tighter rows and shorter forecast headings" classes={["history-retention-tables", "settings-table-shell", "history-retention-table-shell", "settings-data-table", "history-retention-table", "history-retention-input"]} wide>
+              <VariantCard title="Compact history retention tables" source="Settings > Logs > History retention" status="Tighter rows and shorter forecast headings" classes={["history-retention-tables", "settings-table-shell", "history-retention-table-shell", "settings-data-table", "history-retention-table", "history-retention-input"]} wide>
                 <div className="history-retention-tables">
                   <div className="settings-table-shell history-retention-table-shell">
                     <table className="settings-data-table history-retention-table">
@@ -1714,19 +1872,30 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="History reconstruction action" source={`${settings} > History retention`} classes={["settings-panel-header-action", "history-retention-reconstruct-button"]}>
+              <VariantCard title="History retention values without edit permission" source="Settings > Logs > History retention > settings.app.view only" status="Hide the editable retention table while keeping storage forecasts readable" classes={["history-retention-panel-content", "settings-table-shell", "history-retention-tables", "history-retention-table", "muted"]} wide>
+                <div className="settings-sidebar-stack history-retention-panel-content">
+                  <p className="muted">Editing retention values requires global app settings edit permission.</p>
+                  <div className="settings-table-shell history-retention-table-shell">
+                    <table className="settings-data-table history-retention-table">
+                      <thead><tr><th>History type</th><th>Current storage</th><th>Daily average</th><th>30-day projection</th><th>Configured forecast</th></tr></thead>
+                      <tbody><tr><th scope="row">File history</th><td>1.2 GB</td><td>24 MB</td><td>720 MB</td><td>3.4 GB</td></tr></tbody>
+                    </table>
+                  </div>
+                </div>
+              </VariantCard>
+              <VariantCard title="History reconstruction action" source={`${settings} > Logs > History retention`} status="Shown only when the account can read and scan at least one library" classes={["settings-panel-header-action", "history-retention-reconstruct-button"]}>
                 <button type="button" className="secondary small settings-panel-header-action history-retention-reconstruct-button">
                   Reconstruct history
                 </button>
               </VariantCard>
-              <VariantCard title="Pattern recognition actions" source={`${settings} > Pattern recognition`} classes={["panel-header", "panel-title-row", "async-panel-header-status", "pattern-recognition-doc-button", "pattern-recognition-restore-button", "ignore-pattern-section-toggle-row", "ignore-pattern-section-header-action"]} wide>
+              <VariantCard title="Pattern recognition actions" source={`${settings} > Pattern recognition`} classes={["panel-header", "panel-title-row", "settings-heading-tooltip", "async-panel-header-status", "pattern-recognition-doc-button", "pattern-recognition-restore-button", "ignore-pattern-section-toggle-row", "ignore-pattern-section-header-action"]} wide>
                 <div className="panel-header">
                   <div>
                     <div className="panel-title-row">
                       <h2>Folder &amp; pattern recognition</h2>
                       <TooltipTrigger
                         ariaLabel="Explain folder and pattern recognition"
-                        content={"Configure scan-time series, bonus, and duplicate filename patterns plus ignored paths.\nPattern examples and matching rules are documented separately."}
+                        content={"Configure scan-time series, bonus, and duplicate filename patterns plus ignored paths.\nPattern examples and matching rules are documented separately."} className="settings-heading-tooltip"
                         preserveLineBreaks
                       >
                         ?
@@ -1754,47 +1923,25 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="Duplicate filename matching settings" source={`${settings} > Pattern recognition`} classes={["distribution-copy", "pattern-recognition-field-label-row", "pattern-recognition-restore-button", "app-settings-divider", "pattern-recognition-section-divider", "ignore-pattern-section", "pattern-recognition-section", "ignore-pattern-section-toggle-row", "ignore-pattern-section-toggle-lead", "ignore-pattern-section-toggle", "ignore-pattern-section-meta", "ignore-pattern-section-title", "ignore-pattern-section-chevron"]} wide>
+              <VariantCard title="Pattern recognition subpanels" source={`${settings} > Pattern recognition`} classes={["field", "pattern-recognition-duration-row", "pattern-recognition-inline-list", "pattern-recognition-inline-list-header", "pattern-recognition-settings-grid", "pattern-recognition-field-label-row", "pattern-recognition-restore-button", "ignore-pattern-section", "pattern-recognition-section", "ignore-pattern-section-toggle-row", "ignore-pattern-section-toggle-lead", "ignore-pattern-section-toggle", "ignore-pattern-section-meta", "ignore-pattern-section-title", "ignore-pattern-section-chevron", "ignore-pattern-section-body", "ignore-pattern-row", "ignore-pattern-control", "ignore-pattern-action-button"]} wide>
                 <div className="field">
-                  <div className="distribution-copy">
-                    <div className="field-label-row">
-                      <strong>Duplicate filename matching</strong>
-                      <TooltipTrigger
-                        ariaLabel="Explain duplicate filename matching"
-                        content="Filename duplicates use a cleaned title core. Trailing years and square-bracketed release metadata are ignored; every file in a group must have a known runtime within the configured tolerance."
-                        preserveLineBreaks
-                      >
-                        ?
-                      </TooltipTrigger>
-                    </div>
-                  </div>
-                  <div className="inline-form-grid">
-                    <div className="field">
-                      <div className="field-label-row pattern-recognition-field-label-row">
-                        <label htmlFor="ui-pattern-duration-tolerance">Maximum runtime difference (seconds)</label>
+                  <div className="ignore-pattern-section pattern-recognition-section">
+                    <div className="ignore-pattern-section-toggle-row">
+                      <button type="button" className="secondary icon-only-button ignore-pattern-section-chevron" aria-label="Collapse Duplicate filename matching" aria-expanded="true">
+                        <ChevronDown aria-hidden="true" className="nav-icon" />
+                      </button>
+                      <div className="ignore-pattern-section-toggle-lead">
+                        <button type="button" className="secondary ignore-pattern-section-toggle ignore-pattern-section-toggle-plain" aria-expanded="true">
+                          <span className="ignore-pattern-section-title">Duplicate filename matching</span>
+                        </button>
                         <TooltipTrigger
-                          ariaLabel="Explain maximum runtime difference"
-                          content="10 seconds is the default. Set 0 for equal runtimes only. Changes to suffix regexes require a new scan."
+                          ariaLabel="Explain duplicate filename matching"
+                          content="Filename duplicates use a cleaned title core. Trailing years and square-bracketed release metadata are ignored; every file in a group must have a known runtime within the configured tolerance."
                           preserveLineBreaks
                         >
                           ?
                         </TooltipTrigger>
                       </div>
-                      <input id="ui-pattern-duration-tolerance" className="settings-choice-input" type="number" min={0} max={300} defaultValue={10} />
-                    </div>
-                  </div>
-                  <div className="ignore-pattern-section pattern-recognition-section">
-                    <div className="ignore-pattern-section-toggle-row">
-                      <button type="button" className="secondary icon-only-button ignore-pattern-section-chevron" aria-label="Collapse Filename suffix regexes" aria-expanded="true">
-                        <ChevronDown aria-hidden="true" className="nav-icon" />
-                      </button>
-                      <div className="ignore-pattern-section-toggle-lead">
-                        <button type="button" className="secondary ignore-pattern-section-toggle ignore-pattern-section-toggle-plain" aria-expanded="true">
-                          <span className="ignore-pattern-section-title">Filename suffix regexes</span>
-                          <span className="sr-only">1</span>
-                        </button>
-                      </div>
-                      <span className="ignore-pattern-section-meta"><span className="badge">1</span></span>
                       <div className="ignore-pattern-section-header-action">
                         <TooltipTrigger
                           ariaLabel="Restore duplicate matching defaults"
@@ -1806,12 +1953,72 @@ export function UiElementsPage() {
                         </TooltipTrigger>
                       </div>
                     </div>
+                    <div className="ignore-pattern-section-body">
+                      <div className="pattern-recognition-duration-row">
+                      <div className="field-label-row pattern-recognition-field-label-row">
+                        <label htmlFor="ui-pattern-duration-tolerance">Maximum runtime difference (seconds)</label>
+                        <TooltipTrigger
+                          ariaLabel="Explain maximum runtime difference"
+                          content="10 seconds is the default. Set 0 for equal runtimes only. Changes to suffix regexes require a new scan."
+                          preserveLineBreaks
+                        >
+                          ?
+                        </TooltipTrigger>
+                      </div>
+                      <input id="ui-pattern-duration-tolerance" className="settings-choice-input" type="number" min={0} max={300} defaultValue={10} />
+                      </div>
+                      <div className="pattern-recognition-inline-list">
+                        <div className="pattern-recognition-inline-list-header">
+                          <span className="ignore-pattern-section-title">Filename suffix regexes</span>
+                          <span className="badge">1</span>
+                        </div>
+                        <div className="ignore-pattern-section-body">
+                          <div className="ignore-pattern-row ignore-pattern-row-draft">
+                            <div className="ignore-pattern-control">
+                              <input className="settings-choice-input" defaultValue="" placeholder="Add a filename suffix pattern" />
+                              <button type="button" className="secondary icon-only-button ignore-pattern-action-button" aria-label="Add pattern">
+                                <Plus aria-hidden="true" className="nav-icon" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="ignore-pattern-row ignore-pattern-row-saved">
+                            <div className="ignore-pattern-control">
+                              <input className="settings-choice-input" defaultValue="(?:\\s+\\(\\d{4}\\)|\\s+\\[[^\\]]*\\])+\\s*$" />
+                              <button type="button" className="secondary icon-only-button ignore-pattern-action-button" aria-label="Remove pattern">
+                                <Trash2 aria-hidden="true" className="nav-icon" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="app-settings-divider pattern-recognition-section-divider" aria-hidden="true" />
                 <div className="field">
-                  <div className="field-label-row">
-                    <strong>Show &amp; Seasons</strong>
+                  <div className="ignore-pattern-section pattern-recognition-section">
+                    <div className="ignore-pattern-section-toggle-row">
+                      <button type="button" className="secondary icon-only-button ignore-pattern-section-chevron" aria-label="Collapse Show & Seasons" aria-expanded="true">
+                        <ChevronDown aria-hidden="true" className="nav-icon" />
+                      </button>
+                      <div className="ignore-pattern-section-toggle-lead">
+                        <button type="button" className="secondary ignore-pattern-section-toggle ignore-pattern-section-toggle-plain" aria-expanded="true">
+                          <span className="ignore-pattern-section-title">Show &amp; Seasons</span>
+                        </button>
+                        <TooltipTrigger ariaLabel="Explain show and season recognition" content="Choose how show and season folders are recognized." preserveLineBreaks>?</TooltipTrigger>
+                      </div>
+                      <div className="ignore-pattern-section-header-action">
+                        <TooltipTrigger ariaLabel="Restore show and season defaults" content="Restore show and season defaults" className="secondary icon-only-button pattern-recognition-restore-button" pinOnClick={false}>
+                          <History aria-hidden="true" className="nav-icon" size={16} />
+                        </TooltipTrigger>
+                      </div>
+                    </div>
+                    <div className="ignore-pattern-section-body">
+                      <div className="pattern-recognition-settings-grid">
+                        <div className="field"><label><span>Recognition mode</span><select className="settings-choice-input" defaultValue="folder-depth"><option value="folder-depth">Folder depth</option></select></label></div>
+                        <div className="field"><label><span>Series folder depth</span><select className="settings-choice-input" defaultValue="1"><option value="1">1</option></select></label></div>
+                        <div className="field"><label><span>Season folder depth</span><select className="settings-choice-input" defaultValue="2"><option value="2">2</option></select></label></div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </VariantCard>
@@ -1844,14 +2051,29 @@ export function UiElementsPage() {
               <VariantCard title="Table view editor" source={`${settings} > Table View`} classes={["settings-data-table", "statistics-drag-handle", "settings-checkbox-cell"]} wide>
                 <TableViewSettingsFixture />
               </VariantCard>
-              <VariantCard title="Connector heading help tooltip" source={`${settings} > Connectors`} classes={["async-panel", "panel-title-row", "tooltip-trigger", "settings-panel-header-action"]} wide>
+              <VariantCard title="Connector action feedback" source="ConnectorSettingsPanel.tsx > ConnectionCard" status="Save, test, activation, sync/cancel requests and removal use transient notifications. No action-result panel is inserted below the buttons. Sync/cancel messages describe acceptance, not completion. Failed connection tests keep redacted technical details in browser-local storage across restarts; results from unsaved addresses are labeled as such, while the toast stays generic." classes={["notification-card", "notification-source-link", "connector-action-button", "connector-technical-details", "connector-test-diagnostic"]} wide>
+                <div className="ui-elements-notification-examples">
+                  <div className="ui-elements-notification-example">
+                    <NotificationCard settings={DEFAULT_NOTIFICATION_SETTINGS} entry={{ id: 1, type: "success", topicKey: "connector:catalog", message: t("notifications.connector.testSucceeded", { name: "Living room" }), source: { area: "connectors", href: "/settings?section=jellyfin", label: t("connectors.title") } }} />
+                  </div>
+                  <div className="ui-elements-notification-example">
+                    <NotificationCard settings={DEFAULT_NOTIFICATION_SETTINGS} entry={{ id: 2, type: "error", topicKey: "connector:catalog", message: t("notifications.connector.testFailed", { name: "Living room" }), source: { area: "connectors", href: "/settings?section=jellyfin", label: t("connectors.title") } }} />
+                  </div>
+                </div>
+                <details className="connector-technical-details connector-test-diagnostic" open>
+                  <summary>{t("connectors.testDiagnosticTitle")}</summary>
+                  <p className="field-hint">{t("connectors.testDiagnosticUnsavedUrl")}</p>
+                  <pre tabIndex={0}>{t("connectors.testDiagnosticExample")}</pre>
+                </details>
+              </VariantCard>
+              <VariantCard title="Connector heading help tooltip" source={`${settings} > Connectors`} classes={["async-panel", "panel-title-row", "settings-heading-tooltip", "tooltip-trigger", "settings-panel-header-action"]} wide>
                 <div className="settings-main-column">
-                  <AsyncPanel title="Connectors" titleAddon={<TooltipTrigger ariaLabel="Explain connector setup" content="Connect MediaLyze to one or more media servers and map each external library location to a stable MediaLyze root.">?</TooltipTrigger>} collapseActions={<button type="button" className="secondary small settings-panel-header-action"><Plus aria-hidden="true" className="nav-icon" /><span>Add connection</span></button>}>
+                  <AsyncPanel title="Connectors" titleAddon={<TooltipTrigger ariaLabel="Explain connector setup" content="Connect MediaLyze to one or more media servers and map each external library location to a stable MediaLyze root." className="settings-heading-tooltip">?</TooltipTrigger>} collapseActions={<button type="button" className="secondary small settings-panel-header-action"><Plus aria-hidden="true" className="nav-icon" /><span>Add connection</span></button>}>
                     <div className="notice">Connection accordions appear below the heading.</div>
                   </AsyncPanel>
                 </div>
               </VariantCard>
-              <VariantCard title="Shared connector accordion · expanded Jellyfin connection" source={`${settings} > Connectors`} classes={["library-settings-card", "connector-connection-card", "connector-connection-header", "connector-connection-header-main", "connector-connection-toggle", "connector-connection-url", "toggle-switch", "connector-enabled-switch", "connector-enabled-switch-track", "connector-enabled-switch-thumb", "library-settings-body", "connector-connection-body", "connector-form-grid", "connector-action-button", "connector-secret-action-button", "connector-users-section", "connector-users-toggle"]} wide>
+              <VariantCard title="Shared connector accordion · expanded Jellyfin connection" source={`${settings} > Connectors`} status="Library assignment, path mapping and analyzed-user explanations appear beside their headings as compact tooltips. A subtle divider separates the connection settings from three compact mapping and analyzed-user sections, with no dividers between those sections; user search matches the settings navigation search." classes={["library-settings-card", "connector-connection-card", "connector-connection-header", "connector-connection-header-main", "connector-connection-toggle", "connector-connection-url", "toggle-switch", "connector-enabled-switch", "connector-enabled-switch-track", "connector-enabled-switch-thumb", "library-settings-body", "connector-connection-body", "connector-form-grid", "connector-action-button", "connector-secret-action-button", "connector-users-section", "connector-users-section-header", "connector-mapping-section-header", "connector-mapping-section-title", "connector-users-section-copy-toggle", "connector-mapping-expand-toggle", "settings-heading-tooltip", "connector-users-description-tooltip", "connector-users-summary", "connector-users-toggle", "connector-mapping-description-tooltip"]} wide>
                 <article className="media-card library-settings-card connector-connection-card is-expanded">
                   <header className="connector-connection-header">
                     <div className="connector-connection-header-main"><label className="toggle-switch connector-enabled-switch" title="Disable"><input type="checkbox" role="switch" defaultChecked aria-label="Disable" /><span className="toggle-switch-track connector-enabled-switch-track" aria-hidden="true"><span className="toggle-switch-thumb connector-enabled-switch-thumb" /></span></label><button type="button" className="connector-connection-toggle" aria-expanded="true"><span className="connector-connection-chevron" aria-hidden="true"><ChevronDown className="nav-icon" /></span><span className="connector-connection-identity"><span className="connector-connection-title"><span className="connector-provider-icon" data-provider="jellyfin" title="Jellyfin"><ConnectorProviderIcon provider="jellyfin" aria-hidden="true" /><span className="sr-only">Jellyfin</span></span><strong>Living Room</strong><span className="connector-connection-url">https://living-room.example</span></span></span></button></div>
@@ -1863,39 +2085,41 @@ export function UiElementsPage() {
                       <div className="jellyfin-actions"><button type="button" className="connector-action-button"><Check aria-hidden="true" />Save</button><button type="button" className="secondary small connector-action-button"><Network aria-hidden="true" />Test</button><button type="button" className="secondary small connector-action-button"><RefreshCw aria-hidden="true" />Sync now</button><button type="button" className="secondary small connector-action-button"><CircleStop aria-hidden="true" />Cancel sync</button><button type="button" className="secondary small connector-action-button connector-secret-action-button"><KeyRound aria-hidden="true" />Replace key</button><button type="button" className="secondary small danger connector-action-button"><Trash2 aria-hidden="true" />Remove</button></div>
                     </section>
                     <section className="connector-detail-section connector-mapping-section">
-                      <div className="connector-mapping-section-header"><button type="button" className="connector-users-toggle connector-mapping-section-copy-toggle" aria-expanded="false"><div><h4>Library assignments</h4><p>Assign connector libraries automatically from verified paths or choose them manually.</p></div></button><div className="library-history-range-toggle connector-mapping-mode" role="group" aria-label="Library assignment mode"><SlidingTogglePill activeKey="automatic" className="nav-active-pill library-history-range-pill" /><button type="button" data-toggle-key="automatic" className="library-history-range-button active" aria-pressed="true"><span className="library-history-range-button-content"><span>Automatic</span></span></button><button type="button" data-toggle-key="manual" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>Manual</span></span></button></div><button type="button" className="connector-mapping-expand-toggle" aria-label="Expand Library assignments" aria-expanded="false"><ChevronRight className="nav-icon" /></button></div>
+                      <div className="connector-mapping-section-header"><div className="connector-mapping-section-title"><button type="button" className="connector-users-toggle connector-mapping-section-copy-toggle" aria-expanded="false"><h4>Library assignments</h4></button><TooltipTrigger ariaLabel={t("connectors.mapping.descriptionAria", { title: t("connectors.mapping.libraries.title") })} content={t("connectors.mapping.libraries.description")} className="settings-heading-tooltip connector-mapping-description-tooltip" /></div><div className="library-history-range-toggle connector-mapping-mode" role="group" aria-label="Library assignment mode"><SlidingTogglePill activeKey="automatic" className="nav-active-pill library-history-range-pill" /><button type="button" data-toggle-key="automatic" className="library-history-range-button active" aria-pressed="true"><span className="library-history-range-button-content"><span>Automatic</span></span></button><button type="button" data-toggle-key="manual" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>Manual</span></span></button></div><button type="button" className="connector-mapping-expand-toggle" aria-label="Expand Library assignments" aria-expanded="false"><ChevronRight className="nav-icon" /></button></div>
                     </section>
                     <section className="connector-detail-section connector-mapping-section">
-                      <div className="connector-mapping-section-header"><button type="button" className="connector-users-toggle connector-mapping-section-copy-toggle" aria-expanded="false"><div><h4>Path mappings</h4><p>Map connector locations to one or more MediaLyze roots.</p></div></button><div className="library-history-range-toggle connector-mapping-mode" role="group" aria-label="Path mapping mode"><SlidingTogglePill activeKey="automatic" className="nav-active-pill library-history-range-pill" /><button type="button" data-toggle-key="automatic" className="library-history-range-button active" aria-pressed="true"><span className="library-history-range-button-content"><span>Automatic</span></span></button><button type="button" data-toggle-key="manual" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>Manual</span></span></button></div><button type="button" className="connector-mapping-expand-toggle" aria-label="Expand Path mappings" aria-expanded="false"><ChevronRight className="nav-icon" /></button></div>
+                      <div className="connector-mapping-section-header"><div className="connector-mapping-section-title"><button type="button" className="connector-users-toggle connector-mapping-section-copy-toggle" aria-expanded="false"><h4>Path mappings</h4></button><TooltipTrigger ariaLabel={t("connectors.mapping.descriptionAria", { title: t("connectors.mapping.paths.title") })} content={t("connectors.mapping.paths.description")} className="settings-heading-tooltip connector-mapping-description-tooltip" /></div><div className="library-history-range-toggle connector-mapping-mode" role="group" aria-label="Path mapping mode"><SlidingTogglePill activeKey="automatic" className="nav-active-pill library-history-range-pill" /><button type="button" data-toggle-key="automatic" className="library-history-range-button active" aria-pressed="true"><span className="library-history-range-button-content"><span>Automatic</span></span></button><button type="button" data-toggle-key="manual" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>Manual</span></span></button></div><button type="button" className="connector-mapping-expand-toggle" aria-label="Expand Path mappings" aria-expanded="false"><ChevronRight className="nav-icon" /></button></div>
                     </section>
                     <section className="connector-detail-section connector-users-section">
-                      <button type="button" className="connector-users-toggle" aria-expanded="false"><div><h4>Analyzed users</h4><p>3 of 3 selected</p></div><ChevronRight aria-hidden="true" className="nav-icon" /></button>
+                      <div className="connector-mapping-section-header connector-users-section-header"><div className="connector-mapping-section-title"><button type="button" className="connector-users-toggle connector-users-section-copy-toggle" aria-expanded="false"><h4>Analyzed users</h4></button><TooltipTrigger ariaLabel={t("connectors.users.descriptionAria")} content={t("connectors.users.description")} className="settings-heading-tooltip connector-users-description-tooltip" /></div><span className="connector-users-summary">3 / 3 selected</span><button type="button" className="connector-mapping-expand-toggle" aria-label="Toggle analyzed-user list" aria-expanded="false"><ChevronRight aria-hidden="true" className="nav-icon" /></button></div>
                     </section>
                   </div>
                 </article>
               </VariantCard>
-              <VariantCard title="Connector mapping modes · auto, manual, stale, multi-root" source={`${settings} > Connectors > Connection`} classes={["connector-mapping-section", "connector-mapping-mode", "connector-mapping-card", "connector-technical-details", "settings-choice-input", "mapping-stale"]} wide>
+              <VariantCard title="Connector mapping modes · auto, manual, stale, multi-root" source={`${settings} > Connectors > Connection`} status="Path mapping guidance is shown from a tooltip beside the section heading." classes={["connector-mapping-section", "connector-mapping-section-title", "settings-heading-tooltip", "connector-mapping-description-tooltip", "connector-mapping-mode", "connector-mapping-card", "connector-technical-details", "settings-choice-input", "mapping-stale"]} wide>
                 <section className="connector-detail-section connector-mapping-section">
-                  <div className="connector-mapping-section-header"><button type="button" className="connector-users-toggle connector-mapping-section-copy-toggle" aria-expanded="true"><div><h4>Path mappings</h4><p>Map connector locations to one or more MediaLyze roots.</p></div></button><div className="library-history-range-toggle connector-mapping-mode" role="group" aria-label="Path mapping mode"><SlidingTogglePill activeKey="manual" className="nav-active-pill library-history-range-pill" /><button type="button" data-toggle-key="automatic" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>Automatic</span></span></button><button type="button" data-toggle-key="manual" className="library-history-range-button active" aria-pressed="true"><span className="library-history-range-button-content"><span>Manual</span></span></button></div><button type="button" className="connector-mapping-expand-toggle" aria-label="Collapse Path mappings" aria-expanded="true"><ChevronDown className="nav-icon" /></button></div>
+                  <div className="connector-mapping-section-header"><div className="connector-mapping-section-title"><button type="button" className="connector-users-toggle connector-mapping-section-copy-toggle" aria-expanded="true"><h4>Path mappings</h4></button><TooltipTrigger ariaLabel={t("connectors.mapping.descriptionAria", { title: t("connectors.mapping.paths.title") })} content={t("connectors.mapping.paths.description")} className="settings-heading-tooltip connector-mapping-description-tooltip" /></div><div className="library-history-range-toggle connector-mapping-mode" role="group" aria-label="Path mapping mode"><SlidingTogglePill activeKey="manual" className="nav-active-pill library-history-range-pill" /><button type="button" data-toggle-key="automatic" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>Automatic</span></span></button><button type="button" data-toggle-key="manual" className="library-history-range-button active" aria-pressed="true"><span className="library-history-range-button-content"><span>Manual</span></span></button></div><button type="button" className="connector-mapping-expand-toggle" aria-label="Collapse Path mappings" aria-expanded="true"><ChevronDown className="nav-icon" /></button></div>
                   <div className="connector-mapping-body">
                     <article className="connector-mapping-card"><div className="connector-mapping-row-main"><select className="settings-choice-input" defaultValue="movies"><option value="movies">Movies: /srv/jellyfin/movies</option></select><span>→</span><select className="settings-choice-input" defaultValue="root-a"><option value="root-a">Movies: Main</option></select><span className="badge mapping-verified">Verified</span></div><details className="connector-technical-details"><summary>Technical mapping fields</summary></details></article>
                     <article className="connector-mapping-card"><div className="connector-mapping-row-main"><select className="settings-choice-input" defaultValue="archive"><option value="archive">Movies: /archive/movies</option></select><span>→</span><select className="settings-choice-input" defaultValue="root-b"><option value="root-b">Movies: Archive</option></select><span className="badge mapping-stale">Stale</span></div><details className="connector-technical-details"><summary>Technical mapping fields</summary></details></article>
                   </div>
                 </section>
               </VariantCard>
-              <VariantCard title="Library assignment · required link and creation recommendation" source={`${settings} > Connectors > Connection`} classes={["connector-mapping-section", "connector-mapping-summary-card", "connector-library-assignment-row", "connector-library-choice", "connector-create-recommendation"]} wide>
-                <section className="connector-detail-section connector-mapping-section"><div className="connector-mapping-section-header"><button type="button" className="connector-users-toggle connector-mapping-section-copy-toggle" aria-expanded="true"><div><h4>Library assignments</h4><p>Assign connector libraries automatically or manually.</p></div></button><div className="library-history-range-toggle connector-mapping-mode" role="group" aria-label="Library assignment mode"><SlidingTogglePill activeKey="automatic" className="nav-active-pill library-history-range-pill" /><button type="button" data-toggle-key="automatic" className="library-history-range-button active" aria-pressed="true"><span className="library-history-range-button-content"><span>Automatic</span></span></button><button type="button" data-toggle-key="manual" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>Manual</span></span></button></div><button type="button" className="connector-mapping-expand-toggle" aria-label="Collapse Library assignments" aria-expanded="true"><ChevronDown className="nav-icon" /></button></div><div className="connector-mapping-body"><div className="connector-mapping-summary-card"><div className="connector-mapping-summary"><strong>75% path coverage</strong><span>9 of 12 assets matched</span></div><div className="connector-mapping-coverage-track" aria-hidden="true"><span style={{ width: "75%" }} /></div></div><article className="connector-mapping-card connector-library-assignment-card"><div className="connector-library-assignment-row"><div className="connector-library-assignment-source"><strong>Movies</strong></div><span className="connector-library-assignment-arrow" aria-hidden="true">→</span><div className="connector-library-choice-list"><label className="connector-library-choice is-selected is-required"><input type="checkbox" defaultChecked disabled /><span>Movies</span><small>required by path mapping</small></label></div></div></article><article className="connector-mapping-card connector-library-assignment-card"><div className="connector-library-assignment-row"><div className="connector-library-assignment-source"><strong>Documentaries</strong></div><span className="connector-library-assignment-arrow" aria-hidden="true">→</span><div className="connector-library-choice-list"><label className="connector-library-choice"><input type="checkbox" /><span>Movies</span></label><details className="connector-technical-details connector-create-library-details" open><summary>Create a matching MediaLyze library</summary><div className="connector-create-recommendation connector-form-grid"><label><span>Name</span><input className="settings-choice-input" defaultValue="Documentaries" /></label><label><span>Local root path</span><input className="settings-choice-input" defaultValue="/media/documentaries" /></label><button type="button" className="secondary small connector-action-button">Create library</button></div></details></div></div></article></div></section>
+              <VariantCard title="Library assignment · required link and creation recommendation" source={`${settings} > Connectors > Connection`} status="Library assignment guidance is shown from a tooltip beside the section heading." classes={["connector-mapping-section", "connector-mapping-section-title", "settings-heading-tooltip", "connector-mapping-description-tooltip", "connector-mapping-summary-card", "connector-library-assignment-row", "connector-library-choice", "connector-create-recommendation"]} wide>
+                <section className="connector-detail-section connector-mapping-section"><div className="connector-mapping-section-header"><div className="connector-mapping-section-title"><button type="button" className="connector-users-toggle connector-mapping-section-copy-toggle" aria-expanded="true"><h4>Library assignments</h4></button><TooltipTrigger ariaLabel={t("connectors.mapping.descriptionAria", { title: t("connectors.mapping.libraries.title") })} content={t("connectors.mapping.libraries.description")} className="settings-heading-tooltip connector-mapping-description-tooltip" /></div><div className="library-history-range-toggle connector-mapping-mode" role="group" aria-label="Library assignment mode"><SlidingTogglePill activeKey="automatic" className="nav-active-pill library-history-range-pill" /><button type="button" data-toggle-key="automatic" className="library-history-range-button active" aria-pressed="true"><span className="library-history-range-button-content"><span>Automatic</span></span></button><button type="button" data-toggle-key="manual" className="library-history-range-button" aria-pressed="false"><span className="library-history-range-button-content"><span>Manual</span></span></button></div><button type="button" className="connector-mapping-expand-toggle" aria-label="Collapse Library assignments" aria-expanded="true"><ChevronDown className="nav-icon" /></button></div><div className="connector-mapping-body"><div className="connector-mapping-summary-card"><div className="connector-mapping-summary"><strong>75% path coverage</strong><span>9 of 12 assets matched</span></div><div className="connector-mapping-coverage-track" aria-hidden="true"><span style={{ width: "75%" }} /></div></div><article className="connector-mapping-card connector-library-assignment-card"><div className="connector-library-assignment-row"><div className="connector-library-assignment-source"><strong>Movies</strong></div><span className="connector-library-assignment-arrow" aria-hidden="true">→</span><div className="connector-library-choice-list"><label className="connector-library-choice is-selected is-required"><input type="checkbox" defaultChecked disabled /><span>Movies</span><small>required by path mapping</small></label></div></div></article><article className="connector-mapping-card connector-library-assignment-card"><div className="connector-library-assignment-row"><div className="connector-library-assignment-source"><strong>Documentaries</strong></div><span className="connector-library-assignment-arrow" aria-hidden="true">→</span><div className="connector-library-choice-list"><label className="connector-library-choice"><input type="checkbox" /><span>Movies</span></label><details className="connector-technical-details connector-create-library-details" open><summary>Create a matching MediaLyze library</summary><div className="connector-create-recommendation connector-form-grid"><label><span>Name</span><input className="settings-choice-input" defaultValue="Documentaries" /></label><label><span>Local root path</span><input className="settings-choice-input" defaultValue="/media/documentaries" /></label><button type="button" className="secondary small connector-action-button">Create library</button></div></details></div></div></article></div></section>
               </VariantCard>
-              <VariantCard title="Analyzed users · expanded, grouped, and searchable" source={`${settings} > Connectors > Connection`} classes={["connector-users-section", "connector-users-toggle", "connector-users-body", "jellyfin-user-selection", "jellyfin-user-search", "jellyfin-user-groups"]} wide>
-                <section className="connector-detail-section connector-users-section">
-                  <button type="button" className="connector-users-toggle" aria-expanded="true"><div><h4>Analyzed users</h4><p>2 of 3 selected</p></div><ChevronDown aria-hidden="true" className="nav-icon" /></button>
+              <VariantCard title="Analyzed users · expanded, grouped, and searchable" source={`${settings} > Connectors > Connection`} classes={["connector-users-section", "connector-users-section-header", "connector-mapping-section-header", "connector-mapping-section-title", "connector-users-section-copy-toggle", "connector-mapping-expand-toggle", "settings-heading-tooltip", "connector-users-description-tooltip", "connector-users-summary", "connector-users-toggle", "connector-users-body", "jellyfin-user-selection", "jellyfin-user-groups", "settings-navigation-search", "connector-user-search", "library-settings-body", "connector-connection-body"]} wide>
+                <div className="library-settings-body connector-connection-body">
+                  <section className="connector-detail-section connector-users-section">
+                  <div className="connector-mapping-section-header connector-users-section-header"><div className="connector-mapping-section-title"><button type="button" className="connector-users-toggle connector-users-section-copy-toggle" aria-expanded="true"><h4>Analyzed users</h4></button><TooltipTrigger ariaLabel={t("connectors.users.descriptionAria")} content={t("connectors.users.description")} className="settings-heading-tooltip connector-users-description-tooltip" /></div><span className="connector-users-summary">2 / 3 selected</span><button type="button" className="connector-mapping-expand-toggle" aria-label="Toggle analyzed-user list" aria-expanded="true"><ChevronDown aria-hidden="true" className="nav-icon" /></button></div>
                   <div className="connector-users-body">
                     <div className="jellyfin-user-selection">
-                      <div className="jellyfin-user-selection-toolbar"><label className="jellyfin-user-search"><Search aria-hidden="true" /><span className="sr-only">Search analyzed users</span><input type="search" placeholder="Search users…" /></label><div className="jellyfin-user-bulk-actions"><button type="button" className="secondary small jellyfin-user-bulk-button">Select all</button><button type="button" className="secondary small jellyfin-user-bulk-button">Select none</button></div></div>
+                      <div className="jellyfin-user-selection-toolbar"><label className="settings-navigation-search connector-user-search"><Search aria-hidden="true" className="nav-icon" /><span className="sr-only">Search analyzed users</span><input type="search" placeholder="Search users…" /></label><div className="jellyfin-user-bulk-actions"><button type="button" className="secondary small jellyfin-user-bulk-button">Select all</button><button type="button" className="secondary small jellyfin-user-bulk-button">Select none</button></div></div>
                       <div className="jellyfin-user-groups"><section className="jellyfin-user-group"><div className="jellyfin-user-group-heading"><h5>Selected</h5><span className="badge">2</span></div><div className="jellyfin-user-list"><label><input type="checkbox" defaultChecked /><span>Alice</span></label><label><input type="checkbox" defaultChecked /><span>Bob</span></label></div></section><section className="jellyfin-user-group"><div className="jellyfin-user-group-heading"><h5>Not selected</h5><span className="badge">1</span></div><div className="jellyfin-user-list"><label><input type="checkbox" /><span>Guest</span></label></div></section></div>
                     </div>
                   </div>
-                </section>
+                  </section>
+                </div>
               </VariantCard>
               <VariantCard title="Shared connector accordion · collapsed connection" source={`${settings} > Connectors`} classes={["connector-connection-card", "is-collapsed", "connector-connection-header", "connector-connection-header-main", "connector-connection-toggle", "connector-connection-url", "toggle-switch", "connector-enabled-switch", "connector-enabled-switch-track", "connector-enabled-switch-thumb", "connector-status"]}>
                 <article className="media-card library-settings-card connector-connection-card is-collapsed"><header className="connector-connection-header"><div className="connector-connection-header-main"><label className="toggle-switch connector-enabled-switch" title="Enable"><input type="checkbox" role="switch" aria-label="Enable" /><span className="toggle-switch-track connector-enabled-switch-track" aria-hidden="true"><span className="toggle-switch-thumb connector-enabled-switch-thumb" /></span></label><button type="button" className="connector-connection-toggle" aria-expanded="false"><span className="connector-connection-chevron" aria-hidden="true"><ChevronRight className="nav-icon" /></span><span className="connector-connection-identity"><span className="connector-connection-title"><span className="connector-provider-icon" data-provider="plex" title="Plex"><ConnectorProviderIcon provider="plex" aria-hidden="true" /><span className="sr-only">Plex</span></span><strong>Archive</strong><span className="connector-connection-url">https://archive.example</span></span></span></button></div><span className="connector-status status-success">Synchronized</span></header></article>
@@ -1928,17 +2152,27 @@ export function UiElementsPage() {
                   <div className="progress library-scan-progress"><span style={{ width: "42%" }} /></div>
                 </article>
               </VariantCard>
-              <VariantCard title="Expanded MediaLyze library settings" status="Media source uses compact 12px vertical insets." source={`${settings} > Libraries`} classes={["library-settings-card", "is-expanded", "library-settings-body", "library-connector-inline-list", "connector-library-status-row", "library-settings-section", "library-source-section", "library-source-section-heading", "library-root-alias-input", "library-change-path-button", "settings-choice-input"]} wide>
+              <VariantCard title="Expanded MediaLyze library settings" status="Media source uses compact 12px vertical insets." source={`${settings} > Libraries`} classes={["library-settings-card", "is-expanded", "library-settings-body", "library-connector-inline-list", "connector-library-status-row", "library-settings-section", "library-source-section", "library-source-section-heading", "settings-heading-tooltip", "library-root-alias-input", "library-change-path-button", "settings-choice-input"]} wide>
                 <article className="media-card library-settings-card is-expanded">
                   <div className="library-settings-header">
                     <div className="item-meta"><div className="library-title-row"><div className="library-title-meta"><div className="library-title-main"><div className="library-title-heading"><button type="button" className="library-settings-chevron" aria-label="Hide settings for Movies" aria-expanded="true"><ChevronDown aria-hidden="true" className="nav-icon" /></button><h3>Movies</h3></div><div className="meta-tags library-title-tags"><span className="badge">Movies</span><span className="badge">Manual</span></div></div></div><div className="library-title-actions"><button type="button" className="small library-scan-button">Manual scan</button></div></div></div>
                   </div>
                   <div className="library-settings-body">
                     <div className="library-connector-inline-list"><div className="connector-library-status-row"><div><strong>Jellyfin</strong><span>jellyfin · Movies</span></div><span className="badge">derived</span><a href="#connector" className="secondary small settings-panel-header-action connector-action-button" onClick={preventCatalogNavigation}>Open connector<SquareArrowOutUpRight aria-hidden="true" size={16} /></a></div></div>
-                    <section className="library-settings-section library-source-section"><div className="library-settings-section-heading library-source-section-heading"><div className="library-settings-section-title"><h4>Media source</h4><TooltipTrigger ariaLabel="Explain the media source settings" content="Manage the local folders MediaLyze scans. Changing paths keeps existing library configuration and history.">?</TooltipTrigger></div><button type="button" className="secondary small settings-panel-header-action library-change-path-button"><SquarePenIcon aria-hidden="true" className="nav-icon" size={16} />Change path</button></div><div className="library-settings-section-grid is-single-column"><div className="field library-source-field"><div className="library-source-paths"><div className="library-root-row"><div className="library-root-alias-control"><label className="library-root-alias-field"><span>Root alias</span><input className="library-root-alias-input" defaultValue="Movies" /></label><label className="library-root-path-field"><span>MediaLyze paths</span><input className="library-root-path-input" value="/media/movies" readOnly /></label></div></div></div></div></div></section>
-                    <section className="library-settings-section"><div className="library-settings-section-heading"><div className="library-settings-section-title"><h4>Scanning and analysis</h4><TooltipTrigger ariaLabel="Explain the scanning and analysis settings" content="Configure scan scheduling, duplicate detection, historical dates, and the quality profile used for this library.">?</TooltipTrigger></div></div><div className="library-settings-form"><div className="field"><label htmlFor="catalog-library-scan-mode">Scan mode</label><select id="catalog-library-scan-mode" className="settings-choice-input" defaultValue="manual"><option value="manual">Manual</option></select></div><div className="field"><label htmlFor="catalog-library-duplicates">Duplicate detection</label><select id="catalog-library-duplicates" className="settings-choice-input" defaultValue="off"><option value="off">Off</option></select></div></div></section>
+                    <section className="library-settings-section library-source-section"><div className="library-settings-section-heading library-source-section-heading"><div className="library-settings-section-title"><h4>Media source</h4><TooltipTrigger ariaLabel="Explain the media source settings" content="Manage the local folders MediaLyze scans. Changing paths keeps existing library configuration and history." className="settings-heading-tooltip">?</TooltipTrigger></div><button type="button" className="secondary small settings-panel-header-action library-change-path-button"><SquarePenIcon aria-hidden="true" className="nav-icon" size={16} />Change path</button></div><div className="library-settings-section-grid is-single-column"><div className="field library-source-field"><div className="library-source-paths"><div className="library-root-row"><div className="library-root-alias-control"><label className="library-root-alias-field"><span>Root alias</span><input className="library-root-alias-input" defaultValue="Movies" /></label><label className="library-root-path-field"><span>MediaLyze paths</span><input className="library-root-path-input" value="/media/movies" readOnly /></label></div></div></div></div></div></section>
+                    <section className="library-settings-section"><div className="library-settings-section-heading"><div className="library-settings-section-title"><h4>Scanning and analysis</h4><TooltipTrigger ariaLabel="Explain the scanning and analysis settings" content="Configure scan scheduling, duplicate detection, historical dates, and the quality profile used for this library." className="settings-heading-tooltip">?</TooltipTrigger></div></div><div className="library-settings-form"><div className="field"><label htmlFor="catalog-library-scan-mode">Scan mode</label><select id="catalog-library-scan-mode" className="settings-choice-input" defaultValue="manual"><option value="manual">Manual</option></select></div><div className="field"><label htmlFor="catalog-library-duplicates">Duplicate detection</label><select id="catalog-library-duplicates" className="settings-choice-input" defaultValue="off"><option value="off">Off</option></select></div></div></section>
                   </div>
                 </article>
+              </VariantCard>
+              <VariantCard title="Library path-mapping heading help" source={`${settings} > Libraries > Path mappings`} classes={["library-jellyfin-path-mappings-heading", "library-jellyfin-path-mappings-title", "settings-heading-tooltip"]}>
+                <div className="library-jellyfin-path-mappings">
+                  <div className="library-jellyfin-path-mappings-heading">
+                    <div className="library-jellyfin-path-mappings-title">
+                      <h5>Path mappings</h5>
+                      <TooltipTrigger ariaLabel="Explain library path mappings" content="Control whether this library is assigned to the Jellyfin connection and how its paths are matched." className="settings-heading-tooltip">?</TooltipTrigger>
+                    </div>
+                  </div>
+                </div>
               </VariantCard>
               <VariantCard title="Create library from detected Jellyfin catalog" source={`${settings} > Libraries > Add library`} classes={["jellyfin-create-library-options", "jellyfin-create-library-option"]} wide>
                 <section className="jellyfin-create-library-options"><div><h3>Add a detected Jellyfin library</h3><p className="field-hint">Select a catalog, then choose its local media path.</p></div><div className="jellyfin-create-library-option-list"><button type="button" className="jellyfin-create-library-option is-selected" aria-pressed="true"><strong>Archive</strong><span>420 Jellyfin items</span></button><button type="button" className="jellyfin-create-library-option" aria-pressed="false"><strong>Concerts</strong><span>88 Jellyfin items</span></button></div><div className="notice success">The Jellyfin library will be linked automatically after creation.</div></section>
@@ -2051,7 +2285,7 @@ export function UiElementsPage() {
               <VariantCard title="Ignore pattern rows" source={`${settings} > Ignore patterns`} classes={["ignore-pattern-section", "ignore-pattern-row", "settings-choice-input", "ignore-pattern-action-button"]} wide>
                 <IgnorePatternFixture />
               </VariantCard>
-              <VariantCard title="Quality profiles list and metric accordions" source={`${settings} > Quality profiles`} classes={["compatibility-profile-list", "compatibility-profile-list-item", "compatibility-profile-list-trigger", "quality-profile-toggle-row", "quality-profile-list-row", "transcode-automation-tab-list", "transcode-automation-tab-button", "quality-profile-details", "quality-profile-action-button", "quality-profile-metric-list", "quality-profile-metric-item", "quality-profile-metric-toggle", "quality-profile-weight-input"]} wide>
+              <VariantCard title="Quality profiles list and metric accordions" source={`${settings} > Quality profiles`} classes={["compatibility-profile-list", "compatibility-profile-list-item", "compatibility-profile-list-trigger", "quality-profile-toggle-row", "quality-profile-list-row", "transcode-automation-tab-list", "transcode-automation-tab-button", "quality-profile-details", "quality-profile-action-button", "quality-profile-metric-list", "quality-profile-metric-item", "quality-profile-metric-toggle", "quality-profile-weight-input", "quality-profile-resolution-categories"]} wide>
                 <QualityProfileFixture />
               </VariantCard>
             </VariantGroup>
@@ -2068,7 +2302,7 @@ export function UiElementsPage() {
                   <button type="button" disabled>Disabled</button>
                 </div>
               </VariantCard>
-              <VariantCard title="Statistic layout actions" source={`${dashboard} / ${libraryDetail}`} classes={["statistic-layout-controls", "statistic-layout-action-button", "statistic-layout-menu"]}>
+              <VariantCard title="Statistic layout actions" source={`${dashboard} / ${libraryDetail}`} status="The add-panel menu uses the approved midpoint shadow." classes={["statistic-layout-controls", "statistic-layout-action-button", "statistic-layout-menu"]}>
                 <div className="page-heading-row"><House aria-hidden="true" className="page-heading-icon" /><h2>Dashboard</h2></div>
                 <StatisticPanelLayoutControls
                   availableDefinitions={availablePanelDefinitions}
@@ -2091,6 +2325,7 @@ export function UiElementsPage() {
               </VariantCard>
               <VariantCard
                 title="Page-specific icon buttons"
+                status="Cover display and image download both follow metadata read access; media preview/download permissions add no cover restriction."
                 source={`${scanLogs} / ${fileDetail} / ${libraryDetail}`}
                 classes={[
                   "icon-button",
@@ -2196,31 +2431,50 @@ export function UiElementsPage() {
                 </div></div>
               </VariantCard>
               <VariantCard
-                title="Resolution category title actions"
-                source={`${settings} > Resolution categories`}
-                classes={["resolution-categories-async-panel", "panel-title-row", "async-panel-toggle-actions", "resolution-category-restore-button", "resolution-category-add"]}
+                title="Quality profiles Resolutions tab"
+                source={`${settings} > Quality profiles > Resolutions tab`}
+                classes={["compatibility-profile-list", "quality-profile-toggle-row", "transcode-automation-tab-list", "transcode-automation-tab-button", "tooltip-trigger", "settings-profile-toggle-actions", "quality-profile-resolution-categories", "resolution-category-list", "resolution-category-list-row", "resolution-category-list-copy", "resolution-category-restore-button", "resolution-category-add"]}
                 wide
               >
-                <div className="resolution-categories-async-panel">
-                  <div className="panel-title-row">
-                    <h2>Resolution categories</h2>
-                    <TooltipTrigger
-                      ariaLabel="Explain reduced default resolution thresholds"
-                      content={[
-                        "Use shared buckets for statistics, metadata search, file detail, and quality-score resolution rules.",
-                        "",
-                        "Default buckets intentionally use 5% lower minimum width and height thresholds so cropped and cinema-scope encodes still land in the expected format bucket.",
-                        "Reference dimensions:",
-                        "8k: 7680x4320",
-                        "4k / UHD: 3840x2160",
-                        "1080p / Full HD: 1920x1080",
-                        "720p / HD: 1280x720",
-                      ].join("\n")}
-                      preserveLineBreaks
-                    >
-                      ?
-                    </TooltipTrigger>
-                    <div className="async-panel-toggle-actions">
+                <div className="compatibility-profile-list quality-profile-list">
+                  <div className="settings-profile-toggle-row transcode-automation-toggle-row quality-profile-toggle-row">
+                    <div className="transcode-automation-tab-controls">
+                      <div className="transcode-automation-tab-list" role="tablist" aria-label="Quality profiles" aria-orientation="horizontal">
+                        {["Video", "Music", "Audiobook"].map((label) => (
+                          <button key={label} type="button" role="tab" className="transcode-automation-tab-button" aria-selected="false" tabIndex={-1}>
+                            <span className="transcode-automation-tab-label">{label}</span>
+                          </button>
+                        ))}
+                        <TooltipTrigger
+                          as="button"
+                          id="quality-profile-media-tab-resolution-categories-active"
+                          role="tab"
+                          className="transcode-automation-tab-button active"
+                          ariaLabel="Resolutions"
+                          ariaExpanded={null}
+                          ariaSelected
+                          tabIndex={0}
+                          dataToggleKey="resolution-categories"
+                          dataSettingsSearchTarget="quality-profile-media-tab-resolution-categories"
+                          content={[
+                            "Use shared buckets for statistics, metadata search, file detail, and quality-score resolution rules.",
+                            "",
+                            "Default buckets intentionally use 5% lower minimum width and height thresholds so cropped and cinema-scope encodes still land in the expected format bucket.",
+                            "Reference dimensions:",
+                            "8k: 7680x4320",
+                            "4k / UHD: 3840x2160",
+                            "1080p / Full HD: 1920x1080",
+                            "720p / HD: 1280x720",
+                          ].join("\n")}
+                          hoverOpenDelay={350}
+                          preserveLineBreaks
+                          pinOnClick={false}
+                        >
+                          <span className="transcode-automation-tab-label">Resolutions</span>
+                        </TooltipTrigger>
+                      </div>
+                    </div>
+                    <div className="settings-profile-toggle-actions">
                       <TooltipTrigger
                         ariaLabel="Restore defaults"
                         content="Restore defaults"
@@ -2234,37 +2488,71 @@ export function UiElementsPage() {
                       </button>
                     </div>
                   </div>
-                </div>
-              </VariantCard>
-              <VariantCard
-                title="Resolution category table actions"
-                source={`${settings} > Resolution categories`}
-                classes={["resolution-category-table-shell", "resolution-category-table", "resolution-category-action-button"]}
-                wide
-              >
-                <div className="settings-sidebar-stack">
-                  <div className="resolution-category-table-shell">
-                    <table className="resolution-category-table">
-                      <thead>
-                        <tr><th>Label</th><th>Min width</th><th>Min height</th><th><span className="sr-only">Actions</span></th></tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td><input className="settings-choice-input" value="4k" readOnly aria-label="Label" /></td>
-                          <td><input className="settings-choice-input" value="3648" readOnly aria-label="Min width" /></td>
-                          <td><input className="settings-choice-input" value="1520" readOnly aria-label="Min height" /></td>
-                          <td>
-                            <button type="button" className="secondary icon-only-button resolution-category-action-button" aria-label="Remove resolution category 4k">
-                              <DeleteIcon size={18} aria-hidden="true" className="nav-icon" />
-                            </button>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
+                  <div className="quality-profile-resolution-categories">
+                    <div className="compatibility-profile-list quality-profile-list resolution-category-list">
+                      <article className="compatibility-profile-list-item">
+                        <div className="compatibility-profile-list-row quality-profile-list-row resolution-category-list-row">
+                          <div className="transcode-automation-list-copy quality-profile-list-copy resolution-category-list-copy">
+                            <strong>8k</strong><small>Min width: 7296</small><small>Min height: 3040</small>
+                          </div>
+                          <div className="compatibility-profile-quick-actions quality-profile-quick-actions resolution-category-quick-actions">
+                            <button type="button" className="quality-profile-action-button" title="Edit" aria-label="Edit"><SquarePenIcon aria-hidden="true" size={17} /></button>
+                            <button type="button" className="quality-profile-action-button" title="Clone" aria-label="Clone"><CopyIcon aria-hidden="true" /></button>
+                            <button type="button" className="quality-profile-action-button" title="Delete" aria-label="Delete"><DeleteIcon aria-hidden="true" size={18} /></button>
+                          </div>
+                        </div>
+                      </article>
+                    </div>
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="Settings table" source={`${settings} > Resolution categories`} classes={["settings-table-shell", "settings-data-table"]}>
+              <VariantCard
+                title="Resolutions list and actions"
+                source={`${settings} > Quality profiles > Resolutions tab`}
+                classes={["compatibility-profile-list", "compatibility-profile-list-item", "compatibility-profile-list-row", "quality-profile-list-row", "quality-profile-list-copy", "resolution-category-list", "resolution-category-list-row", "resolution-category-list-copy", "resolution-category-quick-actions", "resolution-category-edit-fields", "settings-inline-label-field", "settings-inline-label-field-label", "compatibility-profile-quick-actions", "quality-profile-action-button"]}
+                wide
+              >
+                <div className="quality-profile-resolution-categories">
+                  <div className="compatibility-profile-list quality-profile-list resolution-category-list">
+                    <article className="compatibility-profile-list-item">
+                      <div className="compatibility-profile-list-row quality-profile-list-row resolution-category-list-row">
+                        <div className="transcode-automation-list-copy quality-profile-list-copy resolution-category-list-copy">
+                          <strong>4k</strong><small>Min width: 3648</small><small>Min height: 1520</small>
+                        </div>
+                        <div className="compatibility-profile-quick-actions quality-profile-quick-actions resolution-category-quick-actions">
+                          <button type="button" className="quality-profile-action-button" title="Edit" aria-label="Edit">
+                            <SquarePenIcon aria-hidden="true" className="nav-icon" size={17} />
+                          </button>
+                          <button type="button" className="quality-profile-action-button" title="Clone" aria-label="Clone">
+                            <CopyIcon aria-hidden="true" className="nav-icon" />
+                          </button>
+                          <button type="button" className="quality-profile-action-button" title="Delete" aria-label="Delete">
+                            <DeleteIcon size={18} aria-hidden="true" className="nav-icon" />
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                    <article className="compatibility-profile-list-item is-editing">
+                      <div className="compatibility-profile-list-row quality-profile-list-row resolution-category-list-row is-editing">
+                        <div className="resolution-category-edit-fields">
+                          <SettingsInlineLabelInput id="catalog-resolution-category-label" label="Label" wrapperClassName="is-label" value="1080p" readOnly />
+                          <SettingsInlineLabelInput id="catalog-resolution-category-width" label="Min width" type="number" value="1824" readOnly />
+                          <SettingsInlineLabelInput id="catalog-resolution-category-height" label="Min height" type="number" value="760" readOnly />
+                        </div>
+                        <div className="compatibility-profile-quick-actions quality-profile-quick-actions resolution-category-quick-actions">
+                          <button type="button" className="quality-profile-action-button is-save" title="Save" aria-label="Save">
+                            <Save aria-hidden="true" className="nav-icon" />
+                          </button>
+                          <button type="button" className="quality-profile-action-button" title="Cancel" aria-label="Cancel">
+                            <X aria-hidden="true" className="nav-icon" />
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  </div>
+                </div>
+              </VariantCard>
+              <VariantCard title="Settings table" source={`${settings} > Generic settings table`} classes={["settings-table-shell", "settings-data-table"]}>
                 <div className="settings-table-shell">
                   <table className="settings-data-table">
                     <thead><tr><th>Name</th><th>Minimum</th><th>Actions</th></tr></thead>
@@ -2291,7 +2579,7 @@ export function UiElementsPage() {
 
           <CatalogSection definition={catalogSections[7]}>
             <VariantGroup title="Statistics and charts">
-              <VariantCard title="Dashboard heading with summary metrics" source={dashboard} classes={["dashboard-statistic-title-row", "dashboard-statistic-metrics", "summary-metrics", "summary-metric", "summary-metric-libraries", "summary-metric-files", "summary-metric-storage", "summary-metric-duration", "summary-metric-icon", "summary-metric-value", "summary-metric-tooltip"]} wide>
+              <VariantCard title="Dashboard heading with summary metrics" source={dashboard} status="Summary metrics and layout actions flow according to the space available in the heading, not the viewport breakpoint." classes={["dashboard-statistic-title-row", "dashboard-statistic-metrics", "summary-metrics", "summary-metric", "summary-metric-libraries", "summary-metric-files", "summary-metric-storage", "summary-metric-duration", "summary-metric-icon", "summary-metric-value", "summary-metric-tooltip"]} wide>
                 <section className="panel stack statistic-layout-header-panel">
                   <div className="panel-title-row panel-title-row-with-actions dashboard-statistic-title-row">
                     <div className="page-heading-row"><House aria-hidden="true" className="page-heading-icon" /><h2>Dashboard</h2></div>
@@ -2325,10 +2613,10 @@ export function UiElementsPage() {
                   />
                 </AsyncPanel>
               </VariantCard>
-              <VariantCard title="Distribution chart panel" status="The shared modular chart mounts within 300px of the viewport; its existing panel and controls remain visible while deferred; min-width: 0 allows the mounted canvas to shrink with the panel" source={`${libraryDetail} > Numeric panel`} classes={["async-panel", "distribution-chart-mode-toggle", "distribution-chart-canvas"]} wide>
+              <VariantCard title="Distribution chart panel" status="The shared modular chart mounts within 300px of the viewport; its panel, segmented controls and selected pill use the approved midpoint shadow; min-width: 0 allows the mounted canvas to shrink with the panel" source={`${libraryDetail} > Numeric panel`} classes={["async-panel", "distribution-chart-mode-toggle", "distribution-chart-canvas"]} wide>
                 <DistributionChartPanel title="Quality score" distribution={numericDistribution} metricId="quality_score" />
               </VariantCard>
-              <VariantCard title="Connected library history controls · separate groups" source={`${libraryDetail} > Media library history`} classes={["library-history-panel", "library-history-actions", "library-history-range-toggle", "library-history-range-button", "distribution-chart-mode-toggle", "distribution-chart-mode-button", "distribution-chart-mode-pill", "library-history-toolbar", "library-history-picker-button"]} wide>
+              <VariantCard title="Connected library history controls · separate groups" source={`${libraryDetail} > Media library history`} status="Toggle groups, selected range pills and filter popovers use the approved midpoint shadow." classes={["library-history-panel", "library-history-actions", "library-history-range-toggle", "library-history-range-button", "distribution-chart-mode-toggle", "distribution-chart-mode-button", "distribution-chart-mode-pill", "library-history-toolbar", "library-history-picker-button"]} wide>
                 <section className="panel library-history-panel">
                   <div className="panel-title-row panel-title-row-with-actions">
                     <h2>Media library history</h2>
@@ -2358,7 +2646,7 @@ export function UiElementsPage() {
                   </div>
                 </section>
               </VariantCard>
-              <VariantCard title="Comparison chart panel with connected rectangular controls" status="Heatmap, scatter and bar use modular ECharts and mount within 300px of the viewport; existing controls remain available; min-width: 0 keeps canvas resizing responsive" source={`${dashboard} / ${libraryDetail} > Metric comparison`} classes={["async-panel", "comparison-chart-toolbar", "comparison-chart-select-shell", "comparison-chart-select", "comparison-chart-swap-button", "comparison-chart-renderer-button", "comparison-chart-content"]} wide>
+              <VariantCard title="Comparison chart panel with connected rectangular controls" status="Heatmap, scatter and bar use modular ECharts and mount within 300px of the viewport; toolbar, renderer menu and selected pill use the approved midpoint shadow; min-width: 0 keeps canvas resizing responsive" source={`${dashboard} / ${libraryDetail} > Metric comparison`} classes={["async-panel", "comparison-chart-toolbar", "comparison-chart-select-shell", "comparison-chart-select", "comparison-chart-swap-button", "comparison-chart-renderer-button", "comparison-chart-content"]} wide>
                 <ComparisonChartFixture />
               </VariantCard>
             </VariantGroup>
@@ -2366,10 +2654,10 @@ export function UiElementsPage() {
 
           <CatalogSection definition={catalogSections[8]}>
             <VariantGroup title="Runtime and scan logs">
-              <VariantCard title="Active scan cards" source={`${source}: Header scan banner`} classes={["scan-job-card", "is-indeterminate", "is-determinate"]} wide>
+              <VariantCard title="Active scan cards" status="Real shared cards: scan permission shows Stop; metadata-only access keeps progress and metrics without Stop." source={`${source}: Header scan banner`} classes={["scan-job-card", "is-indeterminate", "is-determinate"]} wide>
                 <div className="scan-banner-list">
                   <ScanJobFixture />
-                  <ScanJobFixture determinate />
+                  <ScanJobFixture determinate canStop={false} />
                 </div>
               </VariantCard>
               <VariantCard title="Active connector synchronization" source={`${source}: Header scan banner`} classes={["scan-banner", "scan-job-card", "connector-sync-job-card", "scan-job-metrics"]} wide>
@@ -2433,8 +2721,17 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="Recent scan log card" source={`${settings} > Scan logs`} classes={["scan-log-card", "scan-log-summary", "scan-log-detail-section"]} wide>
+              <VariantCard title="Library-scoped history reconstruction" source="HistoryReconstructionControl.tsx · Library detail" status="The single-library action and bulk scan action use the existing scan permission. This fixture never submits API work." classes={["history-retention-title-actions", "history-retention-reconstruct-button", "field-hint"]} wide>
+                <HistoryReconstructionControl libraryId={1} fixture={{ ...emptyHistoryStatus(), status: "running", phase: "reconstructing_file_history", libraries_total: 1, libraries_processed: 0, progress_percent: 40 }} />
+              </VariantCard>
+              <VariantCard title="Recent scan log card" source={`${settings} > Logs > Scan logs`} classes={["scan-log-card", "scan-log-summary", "scan-log-detail-section"]} wide>
                 <ScanLogFixture />
+                <div className="scan-log-card">
+                  <div className="scan-log-detail">
+                    <span className="badge">{t("scanLogs.jobTypeQuality")}</span>
+                    <div className="notice">{t("scanLogs.qualityProgress", { processed: 82, total: 100 })}</div>
+                  </div>
+                </div>
               </VariantCard>
               <VariantCard title="Scan badges and outcomes" source={`${scanLogs} > Recent scans`} classes={["scan-badge", "scan-log-outcome", "badge-successful"]}>
                 <div className="ui-elements-badge-row">
@@ -2764,10 +3061,11 @@ export function UiElementsPage() {
 
           <CatalogSection definition={catalogSections[10]}>
             <VariantGroup title="Duplicates, paths, telemetry">
-              <VariantCard title="Duplicate group cards" source={`${libraryDetail} > Duplicates`} classes={["duplicate-group-card", "duplicate-group-item-card", "duplicate-group-action"]} wide>
+              <VariantCard title="Duplicate group cards" source={`${libraryDetail} > Duplicates`} status="Hide/restore actions require library edit permission. The third card represents metadata-only access, with no suppression action." classes={["duplicate-group-card", "duplicate-group-item-card", "duplicate-group-action"]} wide>
                 <div className="duplicate-group-list">
                   <DuplicateGroupFixture />
                   <DuplicateGroupFixture suppressed />
+                  <DuplicateGroupFixture canEdit={false} />
                 </div>
               </VariantCard>
               <VariantCard title="Duplicate detection availability and view filters" source={`${libraryDetail} > Duplications`} classes={["library-layout-panel-duplicates"]} wide>
@@ -2846,7 +3144,7 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="File comparison rows and search results" source="FileComparePage" classes={["file-compare-search-card", "file-compare-search-results", "file-compare-search-result", "file-compare-search-result-main", "file-compare-search-result-meta", "file-compare-row", "has-difference", "is-identical"]} wide>
+              <VariantCard title="File comparison rows and search results" source="FileComparePage" status="The file-search result menu uses the approved midpoint shadow." classes={["file-compare-search-card", "file-compare-search-results", "file-compare-search-result", "file-compare-search-result-main", "file-compare-search-result-meta", "file-compare-row", "has-difference", "is-identical"]} wide>
                 <div className="file-compare-page">
                   <div className="panel-title-row panel-title-row-with-actions">
                     <div className="page-heading-row">
@@ -3260,7 +3558,7 @@ export function UiElementsPage() {
                    <div className="transcode-replacement-warning"><div className="notice warning">Replacing the original writes in place without a byte-for-byte backup.</div><p className="field-hint">This feature is still being tested; errors are possible and it is not recommended for normal use.</p><label className="transcode-filename-option"><input type="checkbox" /><span>I understand and confirm replacing the original file</span></label></div>
                 </div>
               </VariantCard>
-              <VariantCard title="Transcoding presets submenu with profile-catalog formatting" source={`${settings} > Transcoding Presets`} status="The New preset action wraps above search with equal spacing above and below; default formatting presets use the same filled, borderless active action as stream defaults and profile favorites" classes={["panel-header", "panel-title-row", "settings-sidebar-stack", "transcode-presets-settings-panel", "app-settings-section", "compatibility-profile-panel", "compatibility-profile-list", "compatibility-profile-catalog-list", "settings-profile-toggle-row", "transcode-automation-toggle-row", "transcode-automation-tab-controls", "transcode-automation-tab-list", "transcode-automation-tab-button", "transcode-automation-tab-label", "settings-profile-toggle-actions", "transcode-automation-section", "transcode-automation-content", "compatibility-profile-search", "compatibility-profile-search-icon", "compatibility-profile-search-clear", "compatibility-profile-list-item", "compatibility-profile-list-row", "quality-profile-list-row", "compatibility-profile-list-trigger", "compatibility-profile-list-copy", "transcode-automation-list-copy", "compatibility-profile-quick-actions", "compatibility-profile-quick-action", "settings-panel-header-action"]} wide>
+              <VariantCard title="Transcoding presets submenu with profile-catalog formatting" source={`${settings} > Transcoding Presets`} status="The New preset action wraps above search with equal spacing above and below; default formatting presets use the same filled, borderless active action as stream defaults and profile favorites. The profile list and its controls use the approved midpoint shadow." classes={["panel-header", "panel-title-row", "settings-sidebar-stack", "transcode-presets-settings-panel", "app-settings-section", "compatibility-profile-panel", "compatibility-profile-list", "compatibility-profile-catalog-list", "settings-profile-toggle-row", "transcode-automation-toggle-row", "transcode-automation-tab-controls", "transcode-automation-tab-list", "transcode-automation-tab-button", "transcode-automation-tab-label", "settings-profile-toggle-actions", "transcode-automation-section", "transcode-automation-content", "compatibility-profile-search", "compatibility-profile-search-icon", "compatibility-profile-search-clear", "compatibility-profile-list-item", "compatibility-profile-list-row", "quality-profile-list-row", "compatibility-profile-list-trigger", "compatibility-profile-list-copy", "transcode-automation-list-copy", "compatibility-profile-quick-actions", "compatibility-profile-quick-action", "settings-panel-header-action"]} wide>
                 <div className="panel-header"><div className="panel-title-row"><h2>Transcoding Presets</h2><TooltipTrigger ariaLabel="Explain transcoding presets" content="Manage reusable stream, filename, and foldername presets.">?</TooltipTrigger></div></div>
                 <div className="settings-sidebar-stack transcode-presets-settings-panel">
                   <section className="app-settings-section transcode-automation-section">
@@ -3442,7 +3740,7 @@ export function UiElementsPage() {
                    </section>
                </VariantCard>
               ) : null}
-              <VariantCard title="Preview with synchronized comparison" source="FileDetailPage > Preview > automatic linked-variant comparison" classes={["file-detail-preview-stack", "file-detail-preview-comparison-panel", "video-wipe-compare", "video-wipe-stage", "video-wipe-divider", "video-wipe-handle", "video-wipe-label", "video-wipe-controls", "video-wipe-audio-mix", "video-wipe-audio-mix-label", "video-wipe-audio-mix-value"]} wide>
+              <VariantCard title="Synchronized video wipe comparison" status="The first selected video appears on the left and the second on the right; the slider controls the visible share of the second video." source="Compare files and FileDetailPage > Preview > linked-variant comparison" classes={["file-detail-preview-stack", "file-detail-preview-comparison-panel", "video-wipe-compare", "video-wipe-stage", "video-wipe-divider", "video-wipe-handle", "video-wipe-label", "video-wipe-controls", "video-wipe-audio-mix", "video-wipe-audio-mix-label", "video-wipe-audio-mix-value"]} wide>
                 <div className="file-detail-preview-stack">
                   <div className="file-detail-preview-panel">
                     <div className="file-detail-preview-player-shell">
@@ -3485,7 +3783,7 @@ export function UiElementsPage() {
               <VariantCard title="Path browser missing folder recovery" source={`${settings} > Libraries > Change path`} classes={["path-browser", "alert", "path-browser-selected-item"]}>
                 <MissingPathBrowserFixture />
               </VariantCard>
-              <VariantCard title="Telemetry controls" source={`${settings} > Telemetry / Release notes`} status="Preview view selector reuses the compact history-range style; telemetry consent remains pill-shaped" classes={["telemetry-mode-toggle", "telemetry-mode-card", "telemetry-preview-actions", "telemetry-preview-view-button", "library-history-range-toggle", "library-history-range-button", "library-history-range-button-content", "library-history-range-pill", "nav-active-pill"]}>
+              <VariantCard title="Telemetry controls" source={`${settings} > Telemetry / Release notes`} status="Preview view selector reuses the compact history-range style; toggle groups and selected pills use the approved midpoint shadow; telemetry consent remains pill-shaped." classes={["telemetry-mode-toggle", "telemetry-mode-card", "telemetry-preview-actions", "telemetry-preview-view-button", "library-history-range-toggle", "library-history-range-button", "library-history-range-button-content", "library-history-range-pill", "nav-active-pill"]}>
                 <div className="stack">
                   <div className="telemetry-preview-actions">
                     <SlidingTogglePill activeKey="minimal" className="nav-active-pill library-history-range-pill" />
@@ -3494,6 +3792,8 @@ export function UiElementsPage() {
                     <button type="button" data-toggle-key="enabled" className="library-history-range-button telemetry-preview-view-button"><span className="library-history-range-button-content"><span>Enabled metrics</span></span></button>
                   </div>
                   <TelemetryModeToggle mode="enabled" highlightEnabledOption onChange={() => undefined} />
+                  <TelemetryModeToggle mode="enabled" disabled onChange={() => undefined} />
+                  <p className="muted">Global settings readers can inspect installation-wide payloads; changing modes and manual sending require global settings editing.</p>
                   <div className="telemetry-mode-card-grid">
                     <div className="telemetry-mode-card telemetry-mode-card-off"><strong>Off</strong><span>No payloads.</span></div>
                     <div className="telemetry-mode-card telemetry-mode-card-minimal"><strong>Minimal</strong><span>Runtime/system only.</span></div>
@@ -3629,7 +3929,7 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="Search and quality popovers" source={`${libraryDetail} / ${settings}`} classes={["search-filter-picker-popover", "quality-picker-popover", "search-filter-picker-item"]}>
+              <VariantCard title="Search and quality popovers" source={`${libraryDetail} / ${settings}`} status="Search and picker popovers use the approved midpoint shadow." classes={["search-filter-picker-popover", "quality-picker-popover", "search-filter-picker-item"]}>
                 <div className="ui-elements-popover-row">
                   <div className="search-filter-picker-popover ui-elements-static-popover">
                     <button type="button" className="search-filter-picker-item is-selected">Container</button>

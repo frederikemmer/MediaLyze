@@ -23,6 +23,10 @@ services:
     environment:
       # change to your timezone, e.g. "Europe/Berlin" or "America/New_York"
       TZ: ${TZ:-UTC}
+      # Unset owner variables stay absent; no empty default credentials.
+      MEDIALYZE_OWNER_USERNAME:
+      MEDIALYZE_OWNER_PASSWORD:
+      MEDIALYZE_TRUSTED_PROXY_IPS: ${MEDIALYZE_TRUSTED_PROXY_IPS:-}
       CONFIG_PATH: /config
       MEDIA_ROOT: /media
       MEDIALYZE_TRANSCODE_OUTPUT_ROOT: /transcode-output

@@ -160,7 +160,7 @@ def test_list_active_scan_jobs_prefers_running_scan_over_queued_quality_recomput
     assert jobs[0].phase_label == "Processing queued files"
 
 
-def test_list_recent_scan_jobs_filters_quality_recompute_and_serializes_summary() -> None:
+def test_list_recent_scan_jobs_includes_quality_progress_and_serializes_summary() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -208,15 +208,20 @@ def test_list_recent_scan_jobs_filters_quality_recompute_and_serializes_summary(
 
         page = list_recent_scan_jobs(db)
 
-    assert len(page.items) == 1
+    assert len(page.items) == 2
     assert page.has_more is False
-    assert page.items[0].trigger_source == ScanTriggerSource.watchdog
-    assert page.items[0].duration_seconds == 120.0
-    assert page.items[0].discovered_files == 12
-    assert page.items[0].new_files == 2
-    assert page.items[0].modified_files == 1
-    assert page.items[0].deleted_files == 1
-    assert page.items[0].outcome == "successful"
+    quality, scan = page.items
+    assert quality.job_type == "quality_recompute"
+    assert quality.quality_progress is not None
+    assert quality.quality_progress.job_type == "quality_recompute"
+    assert scan.quality_progress is None
+    assert scan.trigger_source == ScanTriggerSource.watchdog
+    assert scan.duration_seconds == 120.0
+    assert scan.discovered_files == 12
+    assert scan.new_files == 2
+    assert scan.modified_files == 1
+    assert scan.deleted_files == 1
+    assert scan.outcome == "successful"
 
 
 def test_list_recent_scan_jobs_marks_completed_scan_with_file_issues() -> None:

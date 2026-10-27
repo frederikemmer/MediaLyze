@@ -1,3 +1,4 @@
+import { preferenceStorage } from "./lib/preference-storage";
 import i18n, { type BackendModule } from "i18next";
 import { initReactI18next } from "react-i18next";
 import commonEn from "../locales/en/common.json";
@@ -15,7 +16,7 @@ export function getStoredInterfaceLanguage(): SupportedInterfaceLanguage | null 
     return null;
   }
 
-  const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  const stored = preferenceStorage.getItem(LANGUAGE_STORAGE_KEY);
   return stored && isSupportedInterfaceLanguage(stored) ? stored : null;
 }
 
@@ -73,7 +74,7 @@ i18n.on("languageChanged", (language) => {
 
   if (typeof window !== "undefined") {
     if (isSupportedInterfaceLanguage(language)) {
-      window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+      preferenceStorage.setItem(LANGUAGE_STORAGE_KEY, language);
     }
   }
 });

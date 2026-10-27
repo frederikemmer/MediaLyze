@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict, StrictInt
 
 from backend.app.schemas._time import UtcDateTime
 
@@ -11,6 +11,7 @@ class HistoryReconstructionJobStatus(str, Enum):
     running = "running"
     completed = "completed"
     failed = "failed"
+    canceled = "canceled"
 
 
 class HistoryReconstructionPhase(str, Enum):
@@ -21,6 +22,7 @@ class HistoryReconstructionPhase(str, Enum):
     reconstructing_library_history = "reconstructing_library_history"
     completed = "completed"
     failed = "failed"
+    canceled = "canceled"
 
 
 class HistoryStorageCategoryRead(BaseModel):
@@ -63,6 +65,9 @@ class HistoryReconstructionRead(BaseModel):
 
 
 class HistoryReconstructionStatusRead(BaseModel):
+    job_id: str | None = None
+    library_ids: list[int] = Field(default_factory=list)
+    origin: dict[str, str] | None = None
     status: HistoryReconstructionJobStatus = HistoryReconstructionJobStatus.idle
     phase: HistoryReconstructionPhase = HistoryReconstructionPhase.idle
     started_at: UtcDateTime | None = None
@@ -79,3 +84,8 @@ class HistoryReconstructionStatusRead(BaseModel):
     updated_library_history_entries: int = 0
     result: HistoryReconstructionRead | None = None
     error: str | None = None
+
+
+class HistoryReconstructionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    library_ids: list[StrictInt] | None = Field(default=None, max_length=10000)

@@ -99,8 +99,8 @@ def test_federation_listener_starts_on_distinct_port() -> None:
             "error": None,
         }
         response = httpx.get(f"http://127.0.0.1:{port}/openapi.json", timeout=5, trust_env=False)
-        assert response.status_code == 200
-        assert response.json()["info"]["title"] == "MediaLyze Transcode Federation Protocol"
+        # The machine listener does not publish framework documentation.
+        assert response.status_code == 404
         assert httpx.get(
             f"http://127.0.0.1:{port}/missing", timeout=5, trust_env=False,
         ).status_code == 404

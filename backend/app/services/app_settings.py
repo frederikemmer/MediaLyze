@@ -22,6 +22,7 @@ from backend.app.schemas.app_settings import (
     TranscodingSettingsRead,
     TelemetrySettingsRead,
     UiPreferencesRead,
+    NotificationSettings,
 )
 from backend.app.services.pattern_recognition import (
     default_pattern_recognition_settings,
@@ -275,6 +276,7 @@ def _deserialize_history_retention(payload: Any) -> HistoryRetentionRead:
     candidate = payload if isinstance(payload, dict) else {}
     defaults = _default_history_retention()
     return HistoryRetentionRead(
+        notification_history_days=candidate.get("notification_history_days", defaults.notification_history_days),
         file_history=_deserialize_history_retention_bucket(candidate.get("file_history"), defaults.file_history),
         library_history=_deserialize_history_retention_bucket(candidate.get("library_history"), defaults.library_history),
         scan_history=_deserialize_history_retention_bucket(candidate.get("scan_history"), defaults.scan_history),
@@ -288,7 +290,12 @@ def _deserialize_ui_preferences(payload: Any) -> UiPreferencesRead:
     candidate = payload if isinstance(payload, dict) else {}
     language = candidate.get("interface_language")
     color_theme = candidate.get("color_theme")
+    try:
+        notifications = NotificationSettings.model_validate(candidate.get("notifications") or {})
+    except ValueError:
+        notifications = NotificationSettings()
     return UiPreferencesRead(
+        notifications=notifications,
         interface_language=language if language in ("en", "de", "es", "uk") else "en",
         color_theme=color_theme if color_theme in ("system", "light", "dark") else "system",
     )
@@ -502,9 +509,10 @@ def update_app_settings(
     next_transcoding = current.transcoding.model_copy(
         update=payload.transcoding.model_dump(exclude_none=True) if payload.transcoding is not None else {}
     )
-    next_ui_preferences = current.ui_preferences.model_copy(
-        update=payload.ui_preferences.model_dump(exclude_none=True) if payload.ui_preferences is not None else {}
-    )
+    next_ui_preferences = UiPreferencesRead.model_validate({
+        **current.ui_preferences.model_dump(),
+        **(payload.ui_preferences.model_dump(exclude_none=True) if payload.ui_preferences is not None else {}),
+    })
     next_telemetry = current.telemetry.model_copy(
         update=payload.telemetry.model_dump(exclude_none=True) if payload.telemetry is not None else {}
     )
@@ -572,6 +580,8 @@ def update_app_settings(
             history_retention_updates[key] = getattr(current.history_retention, key).model_copy(
                 update=bucket_update.model_dump(exclude_none=True)
             )
+    if payload.history_retention is not None and payload.history_retention.notification_history_days is not None:
+        history_retention_updates["notification_history_days"] = payload.history_retention.notification_history_days
     next_history_retention = current.history_retention.model_copy(
         update=history_retention_updates
     )

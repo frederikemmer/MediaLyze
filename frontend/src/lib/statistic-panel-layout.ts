@@ -1,3 +1,4 @@
+import { preferenceStorage } from "./preference-storage";
 import {
   LIBRARY_STATISTIC_DEFINITIONS,
   type LibraryStatisticDefinition,
@@ -581,7 +582,7 @@ export function getStatisticPanelLayoutReadResult(
     return { layout: buildDefaultStatisticPanelLayout(scope, options), issues: [] };
   }
 
-  const raw = window.localStorage.getItem(buildStorageKey(scope, pageKey));
+  const raw = preferenceStorage.getItem(buildStorageKey(scope, pageKey));
   if (!raw) {
     return { layout: buildDefaultStatisticPanelLayout(scope, options), issues: [] };
   }
@@ -601,7 +602,7 @@ export function saveStatisticPanelLayout(
 ): StatisticPanelLayout {
   const normalized = normalizeStatisticPanelLayout(scope, layout, options);
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(buildStorageKey(scope, pageKey), JSON.stringify(normalized));
+    preferenceStorage.setItem(buildStorageKey(scope, pageKey), JSON.stringify(normalized));
   }
   return normalized;
 }

@@ -8,6 +8,145 @@ All notable changes to this project will be documented in this file.
 
 - Fix the server error when a library gets a second folder with the same name as an existing one; the new folder's alias gets a numbered suffix ([#197](https://github.com/frederikemmer/MediaLyze/issues/197)).
 
+- Apply a saved notification duration change to visible cards by restarting their timers with the new duration.
+
+- Keep redacted technical diagnoses for failed connector tests, including tests with unsaved server addresses, in browser-local storage across tab and browser restarts; label unsaved-address results and show only a safe summary in notifications.
+
+- Discard unconfirmed notification-history writes when the app session ends; retry them only while the original identity session remains open.
+
+- Keep transient notifications in the tab where their action was triggered; server-backed personal history remains available across tabs.
+
+- Reorganize global account rights into Settings and Presets & Profiles, and move Library access guidance into a heading tooltip.
+
+- Clarify preset permission labels as View/Edit Transcoding presets.
+
+- Align Hardware decode toggles with their labels, give video codec controls half-row width, place number steppers after inline labels, and render capability removal actions as borderless icons.
+
+- Send one-time terminal notifications for explicitly started scans, transcodes, connector syncs and history reconstruction, with links to their results.
+
+- Prune personal notification history entries when an account or Guest session loses access to the referenced target; remove all history when an account is disabled or deleted.
+
+- Restore locally saved language and theme preferences when a Guest session starts.
+
+- Send History Retention save failures and history reconstruction start failures and terminal results as notifications while keeping in-progress details beside the action.
+
+- Group duplicate filename matching and show/season recognition into pattern subpanels; keep suffix rules inline and place the runtime field at the right.
+
+- Shift numeric inline labels aside for native steppers and add chevron-adjacent inline labels to profile capability dropdowns.
+
+- Reuse the Resolution Categories inset-label input in compatible Hardware and Software profile text and number fields.
+
+- Clarify in the access tree that notification preferences are account-scoped and require no app-settings permission.
+
+- Let Guest customize notification palette, style, duration and grouping from App settings, stored locally in the current browser.
+
+- Replace notification preview selectors and helper copy with actions to send one or ten random previews or clear active notifications.
+
+- Organize App settings into compact collapsible sections for appearance, notifications, scan settings, plots/charts and feature flags.
+
+- Keep history reconstruction and its accuracy hint in History Retention instead of Recent scan logs.
+
+- Keep notification preferences in App settings for every signed-in account, saving and showing that account’s own values without exposing global controls; report preference-save results as notifications.
+
+- Place retention first in Logs, simplify helper copy, match empty notification history to scan logs, and exclude preview notifications from saved history.
+
+- Match Logs to the shared settings panel frame and spacing, and place notification retention in the existing compact retention table.
+
+- Move connector library-assignment and path-mapping explanations into compact tooltips beside their headings.
+
+- Move analyzed-user guidance into a tooltip, compact the connector sections, remove the nested user-selector surface, and match both connector user searches to the settings search.
+
+- Tighten the connector mapping and analyzed-user rows further and remove the divider above the first mapping section.
+
+- Add a subtle divider below the connector settings and tighten the three mapping and analyzed-user rows vertically.
+
+- Reduce the size of heading help icons across settings and add a library path-mapping heading example to the UI catalog.
+
+- Use smaller help icons beside settings headings across libraries, quality profiles, connectors, pattern recognition, and transcoding.
+
+- Place the analyzed-user help icon directly beside its heading in the connector settings.
+
+- Show analyzed-user counts before expanding the list and separate the counts with a slash.
+
+- Group scan logs, transcoding history, personal searchable notification history and retention under one “Logs” settings entry with collapsible sub-panels; retain old links and add configurable notification-history retention.
+
+- Reduce panel, menu, segmented-control and selected-navigation shadows to the approved midpoint.
+
+- Move connector connection-action results into transient notifications instead of inline panels, with links to the affected connection and separate request/refresh outcomes.
+
+- Match account-list and rights-tree search fields to the settings navigation search, including its leading search icon and compact sizing.
+
+- Keep local account and rights management out of Desktop navigation and APIs, including direct settings links.
+
+- Add configurable UI notification cards with persistent app settings, grouped stacks, globally paused timers and a targeted preview; remaining product flows are being integrated in stages.
+
+- Match Hardware, Software / Player and Combination profile expanders to the User Permissions tree chevron and indentation.
+
+- Group personal account access and sign-out in the primary navigation under the Lucide User icon, with compact separator spacing.
+
+- Place account editor tabs beside the selected username and use the Lucide User icon for Users & access navigation.
+
+- Put the owner’s current-password confirmation beside the username with a show/hide control, and keep equal-size Save and Sign out actions while removing the duplicate password-change section from the owner account view.
+
+- Show the history-retention editor only with global app-settings edit permission, keep storage forecasts available to settings viewers, and hide reconstruction without read and scan rights for a library.
+
+- Scope legacy Jellyfin path mappings to readable library roots, require all affected path rights for global mapping changes, and use connector management for legacy sync controls.
+
+- Add a global Transcoding rights group between Connectors and Users & access, grouping the existing preset and app-settings rights used by automation while keeping job permissions library-scoped.
+
+- Move resolution category settings into a dedicated “Resolutions” tab in Quality profiles and keep existing links working.
+
+- Move resolution actions into the Quality profiles tab row.
+
+- Show the resolution guidance from the active Resolutions tab after a brief hover delay.
+
+- Present resolution categories in a compact profile-style list with inline editing, separate fields and right-aligned overlay labels, clone and delete actions.
+
+- Let the Resolutions list fill the Quality profiles panel without a duplicate section heading or nested border.
+
+- Keep dashboard and library summary metrics and layout actions inline until their actual heading width requires wrapping.
+
+- Allow installation-wide performance, history-storage and telemetry diagnostics with global settings viewing; require global settings editing for manual telemetry sends and disable telemetry writes for read-only users.
+
+- Clarify shared Guest job ownership in the rights editor: canceling Guest jobs requires the library’s other/system-job cancellation permission.
+
+- Scope history reconstruction to library scan permissions, with single/bulk controls, execution-time checks and private progress/results; preserve queued scans for selected libraries.
+
+- Include embedded cover viewing and image downloads in library metadata access without requiring media preview/download permissions.
+
+- Keep the account overview focused on selection: open rows with initials and Guest last without a subtitle; manage account status on the selected account page.
+
+- Require library editing permission to hide or restore duplicate groups; retain duplicate viewing for metadata readers.
+
+- Align synchronized video wipe sides with the selected file order in Compare files and linked-variant previews.
+
+- Apply common compatibility-profile view/edit permissions to hardware, software and combination profiles, with read-only UI and library-scoped file evaluations.
+
+- Replace the user-management overview heading with the selected account header while editing, restoring it on close.
+
+- Allow the full external connector catalog with connector-view permission while retaining local-library and playback privacy boundaries; fix provider metadata details.
+
+- Move personal settings into Users & access → the signed-in account’s Account tab, retaining access without management rights; fix the account tab switcher width.
+
+- Keep permission-group toggles checked for fully granted read-only accounts, including Owner.
+
+- Present Owner permissions as a clearly marked read-only view without account-editing or save controls.
+
+- Start permission groups collapsed, return to the account list from the active Users & access navigation item, and tighten account-list spacing.
+
+- Move account-right explanations into compact inline tooltips beside their related permissions.
+
+- Show scan and quality-job progress, history and diagnostics for readable libraries; keep scan cancellation separately protected.
+
+- Fix overlapping labels and visible tooltip-button backgrounds in protected account permission trees.
+
+- Preserve the browser host in the local development proxy so protected setup/login requests pass the origin check.
+
+- Require passwords to contain at least 5 characters and a number or special character; show the rule only on invalid input during setup, account creation and password changes.
+
+- Add local owner/account setup, protected sessions, explicit library/action permissions, guest opt-in and personal preferences with a compact account editor in all four interface languages.
+- Gate server/desktop/Federation access paths centrally; scope media/statistics/jobs and keep unresolved permission mappings restricted to Owner until reviewed.
+
 ## v0.19.2
 
 This patch release expands video and subtitle recognition, improves metadata parsing, and resolves several dashboard, library, and file comparison issues.

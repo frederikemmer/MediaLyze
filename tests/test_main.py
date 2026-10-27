@@ -76,7 +76,12 @@ def test_large_responses_are_gzip_compressed(tmp_path: Path, monkeypatch) -> Non
         media_root=tmp_path / "media",
         frontend_dist_path=tmp_path / "missing-dist",
     )
-    app = create_app(settings)
+    # Compression is tested independently of authentication; the access suite
+    # separately verifies that dynamically added routes are denied.
+    from fastapi import FastAPI
+    from backend.app.main import JsonGZipMiddleware
+    app = FastAPI()
+    app.add_middleware(JsonGZipMiddleware, minimum_size=1024)
 
     @app.get("/large-test-payload")
     def large_test_payload():

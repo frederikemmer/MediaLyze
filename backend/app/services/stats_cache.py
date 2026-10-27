@@ -10,6 +10,7 @@ from sys import getsizeof
 from pydantic import BaseModel
 
 from backend.app.services.performance import performance_metrics
+from backend.app.services.access_context import restricted_request
 from backend.app.schemas.comparison import ComparisonFieldId, ComparisonRendererId, ComparisonResponse
 from backend.app.schemas.library import LibraryStatistics, LibrarySummary
 from backend.app.schemas.library_history import DashboardHistoryResponse, LibraryHistoryResponse
@@ -58,6 +59,8 @@ def _payload_weight(value, seen=None):
 
 
 def _get_cached(cache: OrderedDict, key):
+    if restricted_request():
+        return None
     entry = cache.get(key)
     if entry is None:
         if performance_metrics.enabled:
@@ -75,6 +78,8 @@ def _get_cached(cache: OrderedDict, key):
 
 
 def _set_cached(cache: OrderedDict, key, value, *, limit: int, ttl_seconds: float, weight: int | None = None) -> None:
+    if restricted_request():
+        return
     now = monotonic()
     for expired_key, entry in list(cache.items()):
         if entry.expires_at <= now:
@@ -146,6 +151,8 @@ class StatsCache:
         epoch_key: str,
         compute: Callable[[], CacheValue],
     ) -> CacheValue:
+        if restricted_request():
+            return compute()
         with self._lock:
             cached = _get_cached(cache, key)
             if cached is not None:

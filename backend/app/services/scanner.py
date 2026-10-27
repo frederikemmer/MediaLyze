@@ -18,7 +18,7 @@ from time import monotonic
 from backend.app.utils.cancellation import WorkCanceled, cancellation_scope, cancel_workers_on_exit
 from backend.app.services.scan_capacity import analysis_slot, memory_worker_limit
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, defer, selectinload
 
@@ -1133,6 +1133,7 @@ def execute_scan_job(
 ) -> None:
     db = SessionLocal()
     try:
+        db.execute(text("BEGIN IMMEDIATE"))
         _run_scan_job(db, settings, job_id, is_cancel_requested=is_cancel_requested)
     except ScanCanceled:
         job = db.get(ScanJob, job_id)
@@ -1176,6 +1177,9 @@ def _run_scan_job(
         db.commit()
         return job
 
+    from backend.app.services.access_jobs import admit_job
+    if not admit_job(db, "scan", job_id):
+        return job
     job.status = JobStatus.running
     job.started_at = utc_now()
     job.finished_at = None

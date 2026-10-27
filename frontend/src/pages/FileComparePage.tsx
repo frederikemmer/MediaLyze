@@ -1,3 +1,4 @@
+import { preferenceStorage } from "../lib/preference-storage";
 import {
   ChevronDown,
   ChevronRight,
@@ -201,7 +202,7 @@ function getSlotLabel(slotKey: CompareSlotKey, t: (key: string, options?: Record
 
 function readStoredCompareColumnCount(searchParams: URLSearchParams): CompareColumnCount {
   const stored = typeof window !== "undefined"
-    ? Number(window.localStorage.getItem(COMPARE_COLUMN_COUNT_STORAGE_KEY))
+    ? Number(preferenceStorage.getItem(COMPARE_COLUMN_COUNT_STORAGE_KEY))
     : 2;
   const highestParamCount = searchParams.get("fourth") ? 4 : searchParams.get("third") ? 3 : 2;
   const storedCount = stored === 3 || stored === 4 ? stored : 2;
@@ -854,7 +855,7 @@ export function FileComparePage() {
   }, [librariesLoaded, loadLibraries]);
 
   useEffect(() => {
-    window.localStorage.setItem(COMPARE_COLUMN_COUNT_STORAGE_KEY, String(columnCount));
+    preferenceStorage.setItem(COMPARE_COLUMN_COUNT_STORAGE_KEY, String(columnCount));
   }, [columnCount]);
 
   useEffect(() => {

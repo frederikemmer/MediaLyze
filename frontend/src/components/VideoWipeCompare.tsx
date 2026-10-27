@@ -60,7 +60,7 @@ export function VideoWipeCompare({
     if (!stage) return;
     const rect = stage.getBoundingClientRect();
     if (!rect.width) return;
-    setWipePosition(((clientX - rect.left) / rect.width) * 100);
+    setWipePosition(100 - ((clientX - rect.left) / rect.width) * 100);
   }, [setWipePosition]);
 
   const handleWipePointerDown = useCallback((event: PointerEvent<HTMLButtonElement>) => {
@@ -200,6 +200,7 @@ export function VideoWipeCompare({
   }, []);
 
   const durationsDiffer = duration > 0 && secondDuration > 0 && Math.abs(duration - secondDuration) > 0.5;
+  const dividerPosition = 100 - wipe;
   const firstAudioShare = 100 - Math.round(audioMix);
   const secondAudioShare = Math.round(audioMix);
   const audioMixValue = t("videoWipe.audioMixValue", { first: firstAudioShare, second: secondAudioShare });
@@ -224,7 +225,7 @@ export function VideoWipeCompare({
           }}
           onError={() => setUnsupported(true)}
         />
-        <div className="video-wipe-second" style={{ clipPath: `inset(0 ${100 - wipe}% 0 0)` }}>
+        <div className="video-wipe-second" style={{ clipPath: `inset(0 0 0 ${dividerPosition}%)` }}>
           <video
             ref={secondRef}
             src={second.src}
@@ -235,11 +236,11 @@ export function VideoWipeCompare({
             onError={() => setUnsupported(true)}
           />
         </div>
-        <div className="video-wipe-divider" style={{ left: `${wipe}%` }} aria-hidden="true" />
+        <div className="video-wipe-divider" style={{ left: `${dividerPosition}%` }} aria-hidden="true" />
         <button
           type="button"
           className={`video-wipe-handle${dragging ? " is-dragging" : ""}`}
-          style={{ left: `${wipe}%` }}
+          style={{ left: `${dividerPosition}%` }}
           role="slider"
           aria-label={t("videoWipe.wipe")}
           aria-orientation="horizontal"

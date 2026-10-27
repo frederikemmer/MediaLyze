@@ -1,3 +1,4 @@
+import { preferenceStorage } from "./preference-storage";
 import type {
   ComparisonBucket,
   ComparisonFieldId,
@@ -153,7 +154,7 @@ export function getComparisonSelection(scope: ComparisonScope): ComparisonSelect
   if (typeof window === "undefined") {
     return DEFAULT_SELECTION;
   }
-  const raw = window.localStorage.getItem(STORAGE_KEYS[scope]);
+  const raw = preferenceStorage.getItem(STORAGE_KEYS[scope]);
   if (!raw) {
     return DEFAULT_SELECTION;
   }
@@ -167,7 +168,7 @@ export function getComparisonSelection(scope: ComparisonScope): ComparisonSelect
 export function saveComparisonSelection(scope: ComparisonScope, selection: ComparisonSelection): ComparisonSelection {
   const normalized = normalizeSelection(selection);
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(STORAGE_KEYS[scope], JSON.stringify(normalized));
+    preferenceStorage.setItem(STORAGE_KEYS[scope], JSON.stringify(normalized));
   }
   return normalized;
 }

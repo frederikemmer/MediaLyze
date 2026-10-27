@@ -1,3 +1,4 @@
+import { preferenceStorage } from "./preference-storage";
 import type { MediaFileSortKey } from "./api";
 
 export const LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY = "medialyze-library-file-column-widths";
@@ -49,7 +50,7 @@ export function getLibraryFileColumnWidths(): LibraryFileColumnWidths {
     return {};
   }
 
-  const raw = window.localStorage.getItem(LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY);
+  const raw = preferenceStorage.getItem(LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY);
   if (!raw) {
     return {};
   }
@@ -66,7 +67,7 @@ export function saveLibraryFileColumnWidths(
 ): LibraryFileColumnWidths {
   const normalized = normalizeLibraryFileColumnWidths(widths);
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify(normalized));
+    preferenceStorage.setItem(LIBRARY_FILE_COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify(normalized));
   }
   return normalized;
 }

@@ -6,7 +6,7 @@ import { ChevronRight } from "lucide-react";
 import { api, type LibrarySummary, type TranscodeJob } from "../lib/api";
 import { formatDate } from "../lib/format";
 
-export function TranscodeHistorySettingsPanel({ libraries }: { libraries: LibrarySummary[] }) {
+export function TranscodeHistorySettingsPanel({ libraries, showHeading = true }: { libraries: LibrarySummary[]; showHeading?: boolean }) {
   const { t } = useTranslation();
   const [libraryId, setLibraryId] = useState("");
   const [status, setStatus] = useState<"" | TranscodeJob["status"]>("");
@@ -33,7 +33,7 @@ export function TranscodeHistorySettingsPanel({ libraries }: { libraries: Librar
   return (
     <section className="global-transcode-history">
       <div>
-        <h3>{t("transcoding.globalHistory")}</h3>
+        {showHeading ? <h3>{t("transcoding.globalHistory")}</h3> : null}
         <p className="field-hint">{t("transcoding.globalHistoryHint")}</p>
       </div>
       <div className="global-transcode-history-filters">

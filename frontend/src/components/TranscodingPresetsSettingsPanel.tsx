@@ -73,6 +73,7 @@ export function TranscodingPresetsSettingsPanel({ searchFocus = null }: Transcod
         <TooltipTrigger
           ariaLabel={t("transcoding.presetsSettingsDescriptionAria")}
           content={t("transcoding.presetsSettingsDescription")}
+          className="settings-heading-tooltip"
           preserveLineBreaks
         >
           ?
