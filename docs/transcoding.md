@@ -86,7 +86,7 @@ The `/transcoding` page separates Active jobs from History, with library/status/
 
 File Detail exposes linked versions below Preview, including separate `Transcode_Output` files, with left/right version selection when several versions exist. `VideoWipeCompare` synchronizes playback, seeking, volume, and mute state and provides a keyboard-operable wipe slider. The `/files/{file_id}/preview?compare={variant_id}` route remains available; metadata comparison uses `/files/compare?left={id}&right={id}`. Preview warns about duration differences and browser playback failures. Playback is an experimental inspection aid and depends on browser codec support.
 
-Direct transcode Federation is retained in the backend but hidden in the shipped frontend by `release-visibility.ts`. Its contract, enablement gates, and API are documented in [internal implementation notes](internal/unreleased-transcoding.md), rather than presented as an available user workflow.
+Direct transcode Federation is retained in the backend but hidden in the shipped frontend by `release-visibility.ts`. Its contract, enablement gates, and API are documented in [internal implementation notes](prototyping/unreleased-transcoding.md), rather than presented as an available user workflow.
 
 ## Runtime paths
 
@@ -180,3 +180,22 @@ keeps Apple hardware encoders unavailable. CPU encoding requires the explicit
 `cpu_only` execution mode. Docker hardware acceleration remains available on
 supported Linux hosts (NVIDIA CUDA or Intel VAAPI/QSV) when the host runtime
 and device mounts are configured.
+
+### Hardware selection and ranking
+
+Automatic codec plans select one available device whose runtime encoder probes
+cover every encoded video stream. Explicit encoder and device choices remain
+constraints. NVIDIA preferences use the actual `*_nvenc` encoder names.
+
+A completed hardware-test matrix refines device ranking only when its capability
+fingerprint matches the current FFmpeg and device inventory. Matching measured
+source/target codec pairs rank by normalized benchmark duration; without a
+complete comparable measurement, platform backend preferences and stable device
+IDs provide deterministic selection. These small decode/encode benchmarks are a
+ranking signal, not a guarantee of the fastest full-resolution job with filters.
+Actual job plans currently accelerate encoding; decoding and ordinary filters
+may still run on the CPU. Hardware-required mode reports unsupported output
+codecs rather than silently switching to software; CPU-only remains explicit.
+
+Inherited display profiles such as HEVC `Main` and `Main 10` are emitted as
+FFmpeg `main` and `main10`, including VAAPI, NVENC, QSV and VideoToolbox.

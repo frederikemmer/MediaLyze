@@ -1,6 +1,6 @@
 # Local users and access on dev
 
-This describes the implementation on the current development branch. The endpoint proposal and audit snapshots in `docs/prototyping/nutzerverwaltung/` remain historical inventories. The consolidated concept records subsequent explicit product confirmations. These documents are not evidence that every proposed permission mapping has shipped.
+This describes the implementation on the current development branch.
 
 ## Entering the application
 
@@ -22,11 +22,51 @@ Alternatively set both `OWNER_USERNAME` and `OWNER_PASSWORD` in the process/Comp
 
 For an existing owner, each supplied variable is reconciled separately on every startup. Invalid values or a username collision stop startup. Identical credentials retain sessions; a changed username/password revokes them. Remove a variable and restart to unlock that field in the UI; its last value remains stored. No default password is generated or logged. The owner cannot be deleted, disabled, reset or assigned a restricted policy through account administration. Its own credentials can be changed under **Settings → Users & access → your account → Account**, subject to environment locks.
 
-No application data directory was used for the implementation tests: all test databases/media paths and the browser QA server used temporary directories.
-
 ## Passkeys
 
-Local accounts can add named passkeys, rename them and delete them under their own Account tab. The collapsible panel stays visible but disabled until `PUBLIC_URL` supplies the exact external HTTPS origin; its tooltip explains configuration. Adding requires the current password. Passkey login supplements passwords; removing a credential revokes its linked sessions. See [Passkeys](passkeys.md) for the security boundary and Docker setup.
+Passkeys provide an additional login method for local MediaLyze accounts. Password login and password-based recovery remain available. Guest, Desktop and `NO_USERS` operation have no personal passkey management.
+
+### Enable in Docker Compose
+
+Configure the exact external HTTPS origin, without a path:
+
+```yaml
+services:
+  medialyze:
+    environment:
+      PUBLIC_URL: https://medialyze.example.com
+```
+
+The supplied Compose file also accepts `PUBLIC_URL` from its environment/`.env` interpolation. Recreate the container after changing the value. `PUBLIC_URL` is the public browser address, not the container's `hostname:`. A hostname without the scheme, an IP address, embedded credentials, a path, query or fragment is rejected. Empty/unset disables passkeys. `http://localhost:<port>` is allowed only for local development.
+
+The reverse proxy must preserve Host, terminate HTTPS correctly and have its explicit address configured in `MEDIALYZE_TRUSTED_PROXY_IPS`; see [Environment](environment.md#local-accounts-and-trusted-proxies). Do not trust arbitrary forwarded headers. Requests must use exactly the configured origin, including a non-default port. Passkeys use its hostname as the relying-party ID. Moving to a different hostname requires creating new passkeys; changing the port still requires the newly configured exact origin.
+
+Without this configuration, the own Account tab still shows the collapsed Passkeys panel, grayed out. Its header tooltip explains `PUBLIC_URL`. Access through a different origin or an unsupported/insecure browser also disables its actions.
+
+### Manage your own passkeys
+
+Open **Settings → Users & access → your account → Account → Passkeys**. Every fully signed-in local account can manage its own passkeys without account-management rights. Other people's account editors never expose them.
+
+**+ Passkey** opens fields for a name and the current password. After password verification, the browser asks the authenticator to create a discoverable credential with user verification (for example a device PIN or biometrics). MediaLyze stores only the public credential and metadata. Private keys remain with the authenticator/password manager.
+
+Each entry shows its name, creation date and last use. Rename edits that entry inline. Deleting requires confirmation and revokes sessions originally authenticated with that passkey; deleting the key used for the current session therefore signs that session out. Password-authenticated sessions and sessions using other keys remain active. Each account can register at most 20 passkeys. Removing a server record does not remove its copy from the device's password manager.
+
+At login, **Login with passkey** opens the browser's credential picker; no username is required. Disabled/deleted accounts and accounts with a mandatory temporary-password change cannot use passkeys to bypass that state.
+
+### Verification boundary
+
+Registration requires a full own-account session and its current password. All writes retain exact Origin and CSRF checks. Five-minute challenges are browser-bound, registration additionally binds the account, its revision and exact session. Challenges are consumed before validation, including failed attempts. The server checks the fixed configured origin/RP ID, signature, user presence/verification, user handle and signature counter. Cross-origin iframe ceremonies are rejected. Session changes discard browser responses from earlier identities; pending registration is aborted when its panel unmounts. Authentication attempts use the existing throttling infrastructure.
+
+`account_passkeys` and `passkey_challenges` are additive SQLite tables. `login_sessions.passkey_id` is nullable for existing/password sessions and records which passkey authenticated a new session. Account deletion cascades credentials/challenges; credential deletion revokes its linked sessions. Existing account/library/media records are retained.
+
+The explicitly inventoried endpoints are:
+
+- `GET /api/me/passkeys`
+- `POST /api/me/passkeys/options`, `POST /api/me/passkeys/verify`
+- `PATCH /api/me/passkeys/{passkey_id}`, `DELETE /api/me/passkeys/{passkey_id}`
+- `POST /api/auth/passkeys/options`, `POST /api/auth/passkeys/verify`
+
+The implementation uses [py_webauthn](https://duo-labs.github.io/py_webauthn/) and [SimpleWebAuthn Browser](https://simplewebauthn.dev/docs/packages/browser), following the [WebAuthn standard](https://www.w3.org/TR/webauthn-3/).
 
 ## Sessions and browser boundary
 
@@ -42,7 +82,7 @@ The supported launcher trusts **no proxy by default**. For a TLS reverse proxy, 
 
 Other accounts receive explicit global rights and library/action pairs. `per_library` stores individual trees. `all` stores a reviewed snapshot of concrete IDs and rejects a changed inventory on save. `future` stores a symbolic shared scope. Delegation compares sets, including symbolic future scope and the complete target account's existing policy, rather than counts. A subsequent change at the granting account does not cascade to other accounts. Inaccessible target policies are redacted in account lists. Guest cannot administer accounts/access even if such permissions are submitted manually.
 
-As a conservative technical prerequisite, file/library operations require `library.read`; delegated shared edits require the corresponding view right, and connector management requires connector view. Creation requires future scope plus read/edit/paths. These are restrictive implementation prerequisites, not additional confirmed product decisions or implicit grants. The exact dependency graph remains subject to product acceptance.
+As a conservative technical prerequisite, file/library operations require `library.read`; delegated shared edits require the corresponding view right, and connector management requires connector view. Creation requires future scope plus read/edit/paths. These are restrictive implementation prerequisites, not implicit grants.
 
 Supported restricted-account operations include:
 
@@ -63,7 +103,7 @@ Unknown IDs outside the action's permitted resource scope return 404; missing gl
 
 Electron generates a random per-start process proof and passes it only to its backend subprocess. An ephemeral Electron session injects it only into requests from the app window to the exact backend origin/port, covering images/video/Range. Headers are removed for other destinations, and external top-level navigation is blocked. Node health/update-status calls carry the proof. Loopback, a desktop mode flag and browser cookies alone do not grant native access. Browser account setup on the desktop listener is intentionally unavailable; unproved browser access stays closed.
 
-The Federation protocol keeps its existing member-envelope/pairing authentication and opt-in gates. Neither browser cookies, Origin-bearing requests nor the desktop proof grant machine authority. Framework documentation and unknown routes are closed on its separate listener. Actual two-machine execution and packaged Electron redirects/streaming have not been end-to-end verified in this change.
+The Federation protocol keeps its existing member-envelope/pairing authentication and opt-in gates. Neither browser cookies, Origin-bearing requests nor the desktop proof grant machine authority. Framework documentation and unknown routes are closed on its separate listener.
 
 ## UI and personal preferences
 
@@ -77,118 +117,14 @@ The Settings panel uses shared profile rows, `toggle-switch`, `SlidingTogglePill
 
 History-retention forecasts remain visible with `settings.app.view`, while the editable retention table is rendered only with `settings.app.edit`. The bulk reconstruction action is rendered only when the account can both read and scan at least one library; the API resolves the authorized library set again at request time.
 
-Account language/theme/layout serializers use one account-scoped storage adapter and `/api/me/preferences`. New accounts start empty, without importing old browser layouts. Guest preferences remain browser-local. Identity changes clear session caches, abort old API/download requests, remount data providers and load account preferences before exposing views. An identity response header detects cross-tab identity/revision changes. Expired sessions return to login; Guest requires an explicit action. Status is refreshed every 15 seconds on visible tabs and on focus. Unsaved editor changes are discarded by an identity/revision remount.
+Account language/theme/layout serializers use one account-scoped storage adapter and `/api/me/preferences`. New accounts start empty, without importing old browser layouts. Guest preferences remain browser-local. Identity changes clear session caches, abort old API/download requests, remount data providers and load account preferences before exposing views. An identity response header detects cross-tab identity/revision changes. Expired sessions return to Guest when enabled, otherwise to login. Status is refreshed every 15 seconds on visible tabs and on focus. Unsaved editor changes are discarded by an identity/revision remount.
 
-## Still restricted and awaiting decisions
+## Current access details and restrictions
 
-These restrictions apply to ordinary accounts and Guest even when every current permission is explicitly selected. Owner/native desktop retain existing inventoried functionality. They are not treated as approved endpoint mappings:
-
-- **O-03 resolved, scan views and Guest defaults confirmed:** Scan/quality active lists, recent history and details including technical diagnostics follow `library.read`, including explicitly granted Guest library access. SQL scopes jobs before deduplication and pagination; hidden or missing job/library IDs return 404. Start/cancel still requires `library.scan`. Recent history now includes quality jobs with a separate quality progress projection. The shared UI shows progress without a Stop action for metadata-only readers. **Shared-configuration guest default confirmed:** quality/hardware profiles, presets, connector configuration and global app settings are excluded by default; explicit grants remain possible. **Transcoding-job guest default confirmed:** off by default, with explicit `transcode.view` grants per library possible; running/canceling remains separately protected.
-- **O-04 resolved:** `connector.view` includes complete external/unmatched catalogs, external titles/paths, generic mapping inventories and sanitized provider metadata. Local links, roots, matches and file overlays remain library-scoped. Catalog authority does not grant personal playback access, and playback remains restricted to readable matched local media. The legacy Jellyfin path-mapping list now returns only mappings wholly contained by readable roots; a mapping overlapping a hidden or out-of-scope root is omitted. Changes through legacy mapping endpoints require `connector.manage` plus `library.read` and `library.paths` for every installed library because the rewrite can rematch across the installation. Legacy sync progress/diagnostic endpoints remain Owner-only. Mutation rights elsewhere are unchanged.
-- **O-05 deferred until official Federation introduction:** The user assigned future Federation permissions to the Transcoding area and explicitly deferred adding them while the feature is hidden. Global app-settings rights are not its future permission category. No visible Federation permissions or new grants are added now; current Owner-only interactive restrictions and separate machine authentication remain. Define individual view/manage/pairing/remote-start permissions and complete their security validation before official introduction.
-- **O-06 resolved:** Hardware/software/combination profile catalogs and CRUD share the confirmed compatibility-profile view/edit permissions. Existing `settings.hardware.view/edit` keys remain stable. File evaluations require profile view plus metadata access to the target library, including body-carried file IDs. Duplicate-group hide/restore follows the confirmed `library.edit` permission within a metadata-readable library. Embedded cover display and download both follow the confirmed metadata-read permission; media preview/download rights add no cover restriction. History reconstruction follows the confirmed per-library scan permission, with scoped single/bulk actions and metadata-safe status responses; global app-settings rights confer no reconstruction authority. Global performance/history-storage/telemetry diagnostics now follow the confirmed global app-settings view right, including installation-wide aggregates, stored payloads and installation ID. Manual telemetry sending additionally requires global app-settings editing.
-- **O-07 resolved (2026-10-23):** All Guest jobs belong to the shared guest profile. `cancel_own` never confers anonymous ownership; Guest needs explicit `cancel_other`, plus metadata/job viewing in the relevant library. Separate Guest sessions do not establish personal job ownership.
-- **Technical gaps, not open product decisions:** manual automation preview/inventory/run views/cancel and partial rule reordering remain Owner-only until scoped projections and multi-library run control are finished. Jellyfin sync diagnostics remain Owner-only; remote catalog users can see library-filtered path mappings and manage them only when every affected local path is in scope. Some existing page controls can still offer actions rejected by the backend; the main navigation, personal settings and file preview/transcoding tabs already honor rights. These gaps prevent claiming complete feature/release readiness.
-
-## Validation scope
-
-The integration suite in `tests/test_access.py` uses the actual `create_app` gate and isolated SQLite files. It covers setup races, uniqueness, migration retention, environment reconciliation, session hashes/revocation/expiry, temporary passwords, rate limiting, Origin/CSRF, owner protection/delegation, guest opt-in, scopes/counts/caches/history, media Range/download aliases, job provenance/revocation, route coverage and separate listener boundaries. Frontend tests cover account interactions, scope intersection, search hierarchy, disabled rights, identity request cancellation and storage separation; existing suites also run.
-
-This is not a penetration-test attestation. Remaining useful coverage includes independent-process startup/setup contention, a real reverse-proxy HTTPS deployment, packaged Windows/macOS/Linux Electron header/redirect/Range behavior, two-machine Federation execution, larger mixed connector playback fixtures, interrupted preference synchronization across devices and a complete accessibility audit. No production data was migrated or inspected.
-
-### Executed verification, 2026-10-22
-
-- Final full backend run: **872 passed**, including **25** real-gate access/security tests, with isolated temporary `CONFIG_PATH`/`MEDIA_ROOT`.
-- Final full frontend run: **545 passed in 54 files**. Targeted post-change runs also passed (55 backend, 32 security/main/performance, and 97 frontend tests); these overlap the full-suite totals and are not additional test counts.
-- Production TypeScript/Vite build passed. `uv lock --check`, Node syntax checks for both changed desktop scripts, and `git diff --check` passed.
-- Docker Compose configuration was resolved with an isolated dummy env file: absent owner fields stay unset, explicit fixture credentials/proxy IPs pass through. No container was started or changed.
-- Real Edge browser QA covered setup/login, the actual account list and inline editor at 390px in Dark, desktop Light at 1280px, keyboard Enter navigation and rights search retaining Movies/Music parent rows in the real catalog fixture. Browser viewport overrides were reset and the temporary server/tabs were stopped. The primary T3 preview timed out; Edge supplied the actual visual checks.
-- No packaged desktop build, real TLS reverse-proxy deployment, two-host Federation execution, independent-process startup race test, full assistive-technology audit or interrupted cross-device preference-sync test was run. Those require their own integration environments/fixtures; unit and API checks are not claimed as substitutes.
-
-### Follow-up decision: scan and quality visibility
-
-The user confirmed the proposed metadata-to-job mapping with “klingt gut”. This resolves only the scan-view part of O-03. It does not confirm guest shared-configuration/transcoding defaults or any O-04–O-07 mapping. Technical job diagnostics and paths follow the existing metadata contract, with no new visible permission. Original endpoint-matrix and Prüfstand files remain historical policy/audit snapshots; this confirmation and current code describe the implemented follow-up.
-
-Follow-up validation: 46 backend tests (`test_access.py`, `test_scan_jobs.py`) passed with isolated temporary data paths; 114 frontend tests across scan context, AppShell and Settings passed. TypeScript/Vite production build and `git diff --check` passed. This follow-up did not rerun the complete suites or repeat real-browser visual QA; the earlier full-suite/browser results above predate this change.
-
-### Follow-up decision: shared configuration in the Guest default
-
-The user confirmed “ja” to excluding quality/hardware profiles, presets, connector configuration and global app settings from the Guest default, with explicit opt-in view grants available. The existing activation code already grants no such rights; no runtime change was necessary. This does not remove the safe app-settings projection needed for the application shell and personal display options. It does not decide the separate transcoding-job default.
-
-Validation for this decision: four targeted Guest API/security tests passed with isolated temporary data paths, including shared-configuration denial by default and successful explicit quality-profile view opt-in. `git diff --check` passed. No runtime/UI code changed, so no new frontend build or full-suite rerun was required.
-
-### Follow-up decision: transcoding jobs in the Guest default
-
-The user confirmed “ja” to no transcoding-job viewing in the Guest default, while permitting explicit per-library view grants and keeping start/cancel separate. Existing runtime policy already implements this standard. O-03 is now resolved; O-04–O-07 remain open. A new integration test uses real visible/hidden jobs to verify empty default/metadata-only results, per-library opt-in with scoped totals, hidden detail IDs and rejection of cancellation without the additional action right.
-
-Validation for the transcoding Guest-default decision: five targeted Guest API/security tests passed with isolated temporary data paths; `git diff --check` passed. No runtime/UI code changed; full-suite/build/browser reruns were not required for this documentation and regression-test addition.
-
-### Follow-up decision: full external catalog
-
-The user confirmed “ja” to global external catalog viewing under connector configuration view. This enables generic catalog lists/counts/location and mapping reads, sanitized provider payloads, the legacy Jellyfin catalog/overview/item/unmatched/image reads, and locally scoped file source/overlay reads. SQL keeps local matches, links and root bindings scoped before joining; only the external Jellyfin item scope is lifted for explicit catalog endpoints. Personal playback rows retain matched readable local-media scope even with the global playback right; playback filters require that right. Provider payloads never become an alternate playback channel. Hidden legacy local mapping paths/IDs are suppressed; creation suggestions are withheld in restricted mapping projections. The permission editor explains the global scope in all four languages, using the shared catalog component.
-
-Local match status, attention filters and mapping counts describe only visible local matches; they cannot expose a hidden local match through an external catalog row. Restricted legacy local mapped paths remain suppressed. The existing legacy catalog-summary endpoint retains its unlinked-library semantics; per-library inventories still show all external items. The unmatched list projects status in its main SQL query rather than adding one permission query per item. The provider-detail endpoint also now builds its normalized `core_payload` from the real DTO rather than referencing a removed ORM attribute.
-
-Validation for O-04: the full backend suite passed (890 tests). After batching unmatched-item status in the main query and strengthening assertions for hidden match counters and zero local grants, the final focused access/connector/Jellyfin suites passed again (122 tests, overlapping the full count). The account/scan-context/AppShell frontend suites passed (39 tests), TypeScript/Vite production build and `git diff --check` passed. All API tests used isolated temporary data paths. No real-browser or packaged desktop validation was repeated for this follow-up. No commit or push was performed.
-
-### Follow-up decision: defer Federation permissions
-
-The user corrected the proposed app-settings mapping: Federation belongs under Transcoding rights and should be added only with its eventual official introduction, as it is currently hidden. This defers O-05 for the present scope; it is not authorization to expose Federation or broaden existing grants. `releaseVisibility.federation` was verified false; runtime authorization remains unchanged. Only decision documentation changed, verified with `git diff --check`; no test/build rerun was required. Detailed Federation action mapping and cross-host security tests remain release prerequisites.
-
-### Follow-up decision: shared compatibility-profile permissions
-
-The user confirmed “ja klingt gut” to a common “View/edit compatibility profiles” area covering hardware, software and combination profiles. Existing internal policy keys remain stable, avoiding migrations or discarded grants. API catalog/CRUD policies cover all three kinds, while saved-profile evaluations and file profile projections additionally resolve metadata-readable local files (including body IDs) before evaluating. The profile UI shows all three kinds read-only without global edit permission, retaining expansion and personal favorites while hiding shared creation/edit/clone/delete actions; combination fields become read-only/disabled. Labels are updated in all four languages and the UI catalog includes the read-only combination state.
-
-Validation for the shared profile decision: 71 focused backend access/compatibility/main tests and 32 frontend profile/account tests passed. TypeScript/Vite production build and `git diff --check` passed. Backend tests used isolated temporary settings/data paths and exercised all three catalog/CRUD kinds, read-only denial, visible/hidden path and body file IDs, and grant removal. Profile deletion also exposed and fixed JSON projection of empty HTTP 204 replies; HEAD/304 remain bodyless. No new complete-suite or real-browser run was performed for this follow-up.
-
-### Follow-up decision: duplicate-group suppression
-
-The user confirmed “finde ich gut.” to persistent duplicate-group hide/restore under library editing. Both suppression endpoints require `library.edit` on the resolved readable library; denied or hidden library IDs return 404, and signature/query values cannot escape that library namespace. Metadata readers retain duplicate viewing, including already suppressed groups. The frontend hides suppression actions for readers, guards its mutation handler, and retains existing EN/DE/ES/UK action copy. The UI catalog shows editable, suppressed and metadata-only cards. Existing cache invalidation remains in place after authorized changes. No separate permission or data migration was added.
-
-Validation for duplicate suppression: 61 focused backend access/duplicate tests and all 80 LibraryDetailPage frontend tests passed; TypeScript/Vite production build and `git diff --check` passed. API tests used isolated temporary data paths and real filename/hash groups, covering account/Guest grants, hide/restore, hidden-library protection, empty 204 replies and grant removal. A new UI assertion initially selected hidden tooltip text; it was corrected to the visible file-detail action and the complete page suite rerun successfully. No new full backend/full frontend or real-browser run was performed for this follow-up.
-
-### Follow-up decision: covers are metadata
-
-The user explicitly rejected separate cover display/download gates: both are part of metadata access. `file_cover` now follows the same resolved file/library read check for every download-flag form. `library.preview` and `library.download` still separately protect the actual media bytes, but do not protect cover-image bytes. Account/Guest metadata readers can view the image, download it through the attachment response and save the already displayed browser blob. Existing cover UI already matches this behavior, so no runtime frontend restriction was introduced. The actual FileDetailPage cover test now runs as a metadata-only account, and the UI catalog documents the shared metadata scope. Matched external images retain local metadata scope; complete external catalog images retain the separately confirmed global catalog view scope.
-
-Validation for cover metadata access: 111 focused backend access/API-route tests and all 30 FileDetailPage frontend tests passed; TypeScript/Vite production build and `git diff --check` passed. The protected API tests cover account/Guest metadata-only access, attachment-flag aliases, invalid values, hidden/missing IDs, Range-bearing denied requests, no extraction for denied requests, ordinary media preview/download denial and later read-right removal. Existing API-route tests also cover actual extraction/cache/error behavior with isolated fixtures. No new complete-suite or browser visual run was required for this permission-only change.
-
-### Follow-up decision: reconstruction under library scan rights (2026-10-23)
-
-The user corrected the proposed global-app-settings mapping and confirmed per-library scan authority with “Ja”. Existing `library.scan` now includes reconstruction; bulk work resolves only currently readable scan-authorized libraries. `POST /api/history/reconstruct` accepts an optional explicit `library_ids` selection (strict integer IDs); omission means the authorized current set, never future libraries. The single-library GET/POST routes are `/api/libraries/{library_id}/history/reconstruct`. GET status uses metadata-read scope: mixed/unreadable job scopes and unmatched single-library scopes yield an empty idle status, without names, IDs, origin, counts or results. Reconstruction remains single-flight; conflicting scopes return a generic 409 rather than another scope’s status.
-
-Runtime persists immutable origin plus read/scan requirements for every admitted library and passes frozen IDs and a distinct authority key directly to the worker. Waiting jobs lose admission after account deactivation/deletion/reset or permission removal; their status is canceled. Running admitted work may finish, consistent with the existing job contract. Queue failures do not leave history in a permanently blocking queued state. The service filters libraries before loading files/history or computing counts. New scans/quality work in selected libraries remain queued and dispatch afterward; unrelated library work proceeds. Source media files are untouched.
-
-The shared compact HistoryReconstructionControl is available in each library header and in recent scan logs for bulk work. The existing retention-settings shortcut also requires scan authority and uses the same scoped API. Controls reuse shared button, tooltip and status primitives; hidden pages pause polling and stale responses cannot replace a newer request. The catalog embeds non-mutating fixtures of the real component. English/German/Spanish/Ukrainian scope and cancellation copy is maintained.
-
-Validation: the complete backend suite passed (906 tests), the complete frontend suite passed (567 tests in 57 files), and the TypeScript/Vite production build passed. `git diff --check` passed. Backend execution and the browser smoke check used isolated temporary data paths. A real-browser desktop dark-theme check verified login and placement of the library reconstruction control; it did not exercise mobile/light-theme layouts or trigger reconstruction through the browser. API/service tests cover actual reconstruction, scope, revocation, conflicts, queue failure and scan dispatch. The collaborative preview snapshot timed out twice; the visual check used a separate Edge test tab, which was closed afterward. The temporary backend was stopped. No production data, commit or push was involved.
-
-### Follow-up decision: shared Guest job ownership (2026-10-23)
-
-The user confirmed “Ja”: Guest jobs belong to the common Guest profile and require explicit other/system-job cancellation authority. The existing server gate already distinguishes personal ownership only for matching account IDs; Guest, system and legacy jobs use `transcode.cancel_other`, additionally bounded by library read and job-view rights. Durable provenance remains shared across Guest sessions. The Guest rights editor now explains this rule in English/German/Spanish/Ukrainian using the existing muted hint pattern; the UI catalog documents the real component state.
-
-Validation: all 63 access/security integration tests passed with isolated temporary CONFIG_PATH/MEDIA_ROOT, including four new Guest-cancellation origin cases (Guest/account/system/legacy). After extending assertions for missing metadata/job-view grants, those four cases passed again. Both independent Guest sessions are denied by own-job authority alone; explicit other-job authority dispatches actual cancellation only inside the granted library, and revocation denies further requests. All nine AccountsPanel tests and the TypeScript/Vite production build passed; `git diff --check` passed. The first backend invocation stopped during collection because the default `/config` path was read-only; it was rerun with explicit temporary paths. No full-suite, browser/mobile/theme or packaged-desktop run was repeated for this follow-up; this change adds explanatory copy and regression coverage without changing the existing authorization gate. No commit or push was performed.
-
-### Follow-up decision: global operational diagnostics (2026-10-23)
-
-The user confirmed “Ja”: `settings.app.view` grants installation-wide performance observations, history-storage aggregates and telemetry previews/stored payloads/installation ID; `settings.app.edit` plus view grants manual sending. No new permission is introduced. Only the explicitly inventoried history-storage and telemetry DTO routes lift local-library SQL scope after authorization; general media/catalog responses remain scoped. Performance stays absent when its runtime feature is disabled. Session/Origin/CSRF checks, telemetry opt-out/environment disablement and existing secret-free payload builders remain in force. Sending returns the personal-safe app-settings projection. Telemetry mode changes and the existing manual-send shortcut are disabled/guarded for view-only accounts. The rights editor explains the installation-wide scope in EN/DE/ES/UK; the catalog includes the disabled telemetry toggle.
-
-Validation: 120 focused backend tests passed (access, telemetry, history services, performance). After extending stored-payload/installation-ID, Guest/performance and revocation assertions and preserving performance metric labels independently of playback permission, the final access/main/performance run passed all 78 tests; these counts overlap. All 94 LibrariesPage/AccountsPanel tests and the final TypeScript/Vite build passed, as did `git diff --check`. Backend tests used explicit temporary data paths. Outbound telemetry was mocked; no real snapshot was sent. The initial combined backend run had 10 telemetry failures because the test command forced environment-wide telemetry disablement, contradicting those suites’ enabled-mode fixtures; rerunning with that switch false passed. Earlier new test assertions were corrected for live timestamps, empty-category cache normalization and the actual translated button label. No full-suite, migration, real-browser/mobile/theme, reverse-proxy or packaged-desktop validation was repeated for this follow-up; there is no schema change or new layout primitive. Existing technical automation/scoped-diagnostic/UI gaps remain listed above, and Federation rights remain deferred. No commit or push was performed.
-
-### Follow-up presentation: automation listed under Transcoding (2026-10-23)
-
-The user requested Transcoding automation in the Transcoding rights area and explicitly chose “Nur dort aufführen; bisherige Rechte behalten”. The library-right rows now group transcoding actions under the existing compact heading pattern and list automation with an explanatory note. It remains governed by existing global app-settings view/edit plus the target-library transcoding/replacement rights; no permission key, grant, backend gate or existing policy changes. Rights search finds automation while keeping library parents visible. EN/DE/ES/UK and the real-component UI catalog are updated. This presentation change does not resolve the previously documented scoped automation endpoint limitations.
-
-Validation: all 11 AccountsPanel tests, the TypeScript/Vite production build and `git diff --check` passed. The new test checks placement, the unchanged permission inventory and search hierarchy without mutating grants. Backend, migration and full frontend suites were not rerun because authorization/persistence are unchanged. No real-browser/mobile/theme run was repeated; the change reuses existing headings and muted hint classes. No commit or push was performed.
-
-### Follow-up layout: central Transcoding rights group (2026-10-23)
-
-The user requested a dedicated global Transcoding group between Connectors and Users & access. It groups the existing `settings.presets.view/edit` and `settings.app.view/edit` controls, so preset and automation decisions are easy to find without introducing new permission keys or changing stored grants. Automation still uses global app-settings view/edit plus the relevant target-library transcoding rights; replacing originals still requires the target library's replacement right. The global app-settings rights retain their installation-wide scope, explained by the existing tooltip. Per-library job controls remain under each library's Transcoding subsection, whose tooltip points to the global group. Rights search matches the tooltip guidance.
-
-### Follow-up: legacy Jellyfin scope and retention editor visibility (2026-10-23)
-
-The legacy `/jellyfin/path-mappings` read now exposes only mappings fully contained by readable local library roots. Mappings touching a hidden or out-of-scope local root are omitted; external Jellyfin libraries remain viewable under the previously confirmed connector catalog scope. Legacy path-mapping writes require `connector.manage`, `library.read`, and `library.paths` for every installed library because a global mapping rewrite can rematch across those paths. Jellyfin sync progress and diagnostics remain Owner-only until they can be projected without leaking job or library scope.
-
-The history-retention editor table is rendered only with `settings.app.edit`; users with `settings.app.view` retain storage forecasts. The bulk reconstruction action is rendered only if at least one library is both readable and scan-authorized. Its API continues to resolve and enforce the current authorized library set. UI tests assert the forecast-only state, hidden editing fields, and hidden unauthorized reconstruction action.
-
-Validation: the full backend suite passed (**919 tests**) with isolated temporary `CONFIG_PATH` and `MEDIA_ROOT`; the full frontend suite passed (**573 tests in 57 files**); the TypeScript/Vite production build and `git diff --check` passed. A real browser session against a temporary local database verified the settings-view-only state, where forecasts remained and the edit inputs/reconstruction action were absent. The preview snapshot timed out, so this was verified through the page DOM. A requested 390px viewport remained 1280×800 in the preview host; mobile rendering was not validated. The bundled Playwright CLI wrapper could not find its `playwright-cli` binary, and no package was installed. The isolated server, tabs and test database were stopped/closed; no production data, commit or push was involved.
+- Scan and quality job progress, history and diagnostics follow `library.read`; starting or canceling scans requires `library.scan`. Guest receives no shared configuration or transcode-job viewing by default; explicit grants are possible.
+- Guest jobs belong to the shared Guest profile. Canceling them requires `transcode.cancel_other`, library read and job-view rights; separate Guest sessions do not establish personal job ownership.
+- Connector viewing includes the external catalog and sanitized provider metadata. Local matches and playback remain scoped to readable libraries; playback also requires `connector.playback`. Legacy Jellyfin mappings are shown only when fully within readable roots; writes require connector management and read/path rights for every installed library. Legacy sync diagnostics remain Owner-only.
+- Compatibility profile catalogs use `settings.hardware.view/edit`; file evaluation also requires access to the file's library. Hiding or restoring duplicate groups requires `library.edit`; embedded cover display and download require metadata read access.
+- History reconstruction requires per-library scan access. Global app-settings view permits installation-wide performance, history-storage and telemetry diagnostics; manual telemetry sending also requires app-settings edit.
+- Manual automation preview, inventory, run views, cancellation and partial rule reordering remain Owner-only. Some page controls may still offer actions rejected by the backend.
+- Federation is hidden and its interactive operations remain Owner-only; its machine protocol uses separate authentication. Federation-specific account permissions remain deferred.

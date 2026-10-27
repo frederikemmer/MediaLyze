@@ -134,4 +134,4 @@ See [Users and access](user-access.md) for setup, upgrade, sessions and current 
 
 `NO_USERS=true` explicitly disables server accounts and grants every visitor full Owner-equivalent access; it defaults to `false`. See [account-free operation](user-access.md#entering-the-application) for restart and network implications.
 
-`PUBLIC_URL=https://medialyze.example.com` enables passkeys for that exact external origin. Leave it unset to keep the own-account Passkeys panel visible but disabled. It must be an HTTPS origin with a hostname and no path; HTTP localhost is supported for local development. Recreate the container after changes. See [Passkeys](passkeys.md) for setup, naming, login and revocation.
+`PUBLIC_URL=https://medialyze.example.com` enables passkeys for that exact external origin. Leave it unset to keep the own-account Passkeys panel visible but disabled. It must be an HTTPS origin with a hostname and no path; HTTP localhost is supported for local development. Recreate the container after changes. See [Passkeys](user-access.md#passkeys) for setup, naming, login and revocation.

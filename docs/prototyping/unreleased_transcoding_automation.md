@@ -82,7 +82,7 @@ a new version and clears approval. Editing a referenced preset definition also
 disables replace-original rules and requires renewed approval. Reordering rules
 can change which rule wins, but preserves an existing replacement approval.
 Original replacement has the same no-byte-for-byte-backup limitation described
-in [Transcoding](../transcoding.md#output-policies).
+in [Transcoding](../transcoding.md#execution-safety).
 
 ## Matching and inventory runs
 
