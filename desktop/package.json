@@ -15,7 +15,7 @@
     "build:backend": "node ./scripts/build-backend.mjs"
   },
   "devDependencies": {
-    "electron": "^41.10.6",
+    "electron": "^45.0.0",
     "electron-builder": "^26.15.0",
     "ffmpeg-static": "5.3.0",
     "icon-gen": "^5.0.0"
