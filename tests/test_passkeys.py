@@ -10,7 +10,6 @@ import pytest
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi.testclient import TestClient
-from pydantic import ValidationError
 from sqlalchemy import select, text
 from sqlalchemy.orm import sessionmaker
 from webauthn.helpers import bytes_to_base64url as b64, base64url_to_bytes
@@ -20,6 +19,7 @@ from backend.app.db.session import create_engine_for_settings, init_db
 from backend.app.main import create_app
 from backend.app.models.access import AccountPasskey, LocalAccount, LoginSession, PasskeyChallenge
 from backend.app.services.access import COOKIE, EMPTY_POLICY, digest
+from backend.app.services.passkeys import passkey_origin
 
 ORIGIN = "https://medialyze.test"
 PASSWORD = "Test-secret-123!"
@@ -28,7 +28,7 @@ PASSWORD = "Test-secret-123!"
 @pytest.fixture
 def env(tmp_path):
     settings = Settings(_env_file=None, config_path=tmp_path / "config", media_root=tmp_path / "media",
-                        public_url=ORIGIN, no_users=False, owner_username=None, owner_password=None)
+                        no_users=False, owner_username=None, owner_password=None)
     settings.config_path.mkdir(); settings.media_root.mkdir()
     engine = create_engine_for_settings(settings)
     init_db(engine)
@@ -216,30 +216,82 @@ def test_unusable_accounts_cannot_login_via_passkeys(env, change):
                  "credential": device.assertion(options["options"])}).status_code == 400
 
 
-def test_unconfigured_and_mismatched_public_url_are_disabled(env):
-    app, _, owner, settings = env
-    settings.public_url = None
-    assert owner.get("/api/me/passkeys").json()["reason"] == "not_configured"
-    assert owner.get("/api/auth/status").json()["passkeys"]["enabled"] is False
-    assert write(owner, "/me/passkeys/options", {"name": "key", "password": PASSWORD}).status_code == 403
-    settings.public_url = "https://another.test"
-    assert owner.get("/api/me/passkeys").json()["reason"] == "wrong_origin"
-    assert write(owner, "/auth/passkeys/options").status_code == 403
+def test_multiple_hosts_create_and_use_separate_passkeys(env, monkeypatch):
+    monkeypatch.setenv("PUBLIC_URL", "https://unrelated.test")
+    assert not hasattr(Settings(_env_file=None), "public_url")
+    app, _, owner, _ = env
+    first, first_device = register(owner)
+    other_origin = "https://other.test"
+    other = TestClient(app, base_url=other_origin)
+    assert write(other, "/auth/login", {"username": "owner", "password": PASSWORD}).status_code == 200
+    options, second_device = registration_start(other, "Other host")
+    result = write(other, "/me/passkeys/verify", {"challenge_id": options["challenge_id"],
+                   "credential": second_device.registration(options["options"], origin=other_origin)})
+    assert result.status_code == 201, result.text
+    assert first["rp_id"] == "medialyze.test"
+    assert result.json()["rp_id"] == "other.test"
+
+    browser = TestClient(app, base_url=other_origin)
+    options = write(browser, "/auth/passkeys/options").json()
+    rejected = write(browser, "/auth/passkeys/verify", {"challenge_id": options["challenge_id"],
+                     "credential": first_device.assertion(options["options"], origin=other_origin)})
+    assert rejected.status_code == 400
+    options = write(browser, "/auth/passkeys/options").json()
+    accepted = write(browser, "/auth/passkeys/verify", {"challenge_id": options["challenge_id"],
+                     "credential": second_device.assertion(options["options"], origin=other_origin)})
+    assert accepted.status_code == 200, accepted.text
+    browser = TestClient(app, base_url=ORIGIN)
+    options = write(browser, "/auth/passkeys/options").json()
+    accepted = write(browser, "/auth/passkeys/verify", {"challenge_id": options["challenge_id"],
+                     "credential": first_device.assertion(options["options"])})
+    assert accepted.status_code == 200, accepted.text
+
+
+def test_passkey_ceremony_through_unconfigured_tls_proxy(env):
+    app, _, _, _ = env
+
+    async def tls_proxy(scope, receive, send):
+        if scope["type"] == "http":
+            scope = dict(scope, scheme="http")
+        await app(scope, receive, send)
+
+    owner = TestClient(tls_proxy, base_url=ORIGIN, headers={"X-MediaLyze-Origin": ORIGIN})
+    status = owner.get("/api/auth/status")
+    assert status.json()["passkeys"]["enabled"] is True
+    assert "secure" in status.headers["set-cookie"].lower()
+    assert write(owner, "/auth/login", {"username": "owner", "password": PASSWORD}).status_code == 200
+    assert owner.cookies.get(COOKIE)
+    _, device = register(owner)
+    browser = TestClient(tls_proxy, base_url=ORIGIN, headers={"X-MediaLyze-Origin": ORIGIN})
+    options = write(browser, "/auth/passkeys/options").json()
+    result = write(browser, "/auth/passkeys/verify", {"challenge_id": options["challenge_id"],
+                   "credential": device.assertion(options["options"])})
+    assert result.status_code == 200, result.text
+    assert "secure" in result.headers["set-cookie"].lower()
+
+
+def test_passkey_origin_cannot_be_chosen_using_another_host(env):
+    app, _, owner, _ = env
+    status = owner.get("/api/auth/status", headers={"X-MediaLyze-Origin": "https://evil.test"})
+    assert status.json()["passkeys"]["enabled"] is True
+    response = owner.post("/api/auth/passkeys/options", headers={
+        "Origin": "https://evil.test", "X-CSRF-Token": status.json()["csrf"],
+    })
+    assert response.status_code == 403
 
 
 @pytest.mark.parametrize("url", ["example.com", "http://example.com", "https://192.168.1.1", "https://example.com/path", "https://user:secret@example.com", "https://example.com?q=1"])
-def test_invalid_public_urls_fail_configuration(url):
-    with pytest.raises(ValidationError): Settings(_env_file=None, public_url=url)
+def test_invalid_passkey_origins(url):
+    with pytest.raises(ValueError): passkey_origin(url)
 
 
-def test_public_url_normalization():
-    assert Settings(_env_file=None, public_url="https://MediaLyze.Test:443/").public_url == ORIGIN
-    assert Settings(_env_file=None, public_url="").public_url is None
-    assert Settings(_env_file=None, public_url="http://localhost:8080").public_url == "http://localhost:8080"
+def test_passkey_origin_normalization():
+    assert passkey_origin("https://MediaLyze.Test:443") == ORIGIN
+    assert passkey_origin("http://localhost:8080") == "http://localhost:8080"
 
 
 def test_session_schema_upgrade_preserves_existing_sessions(tmp_path):
-    settings = Settings(_env_file=None, config_path=tmp_path, media_root=tmp_path, public_url=None)
+    settings = Settings(_env_file=None, config_path=tmp_path, media_root=tmp_path)
     engine = create_engine_for_settings(settings)
     with engine.begin() as connection:
         connection.execute(text("CREATE TABLE login_sessions (token_hash VARCHAR(64) PRIMARY KEY, account_id VARCHAR(36), kind VARCHAR(16) NOT NULL, created_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL)"))

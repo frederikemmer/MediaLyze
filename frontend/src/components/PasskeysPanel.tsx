@@ -35,7 +35,7 @@ export function PasskeysPanel({ fixture }: { fixture?: PasskeyList }) {
   const supported = fixture ? true : supportsPasskeys();
   const enabled = data.enabled && supported;
   const hint = error && !data.enabled ? t("passkeys.loadError") : !data.enabled
-    ? t(data.reason === "wrong_origin" ? "passkeys.wrongOrigin" : "passkeys.configure")
+    ? t("passkeys.configure")
     : !supported ? t("passkeys.unsupported") : t("passkeys.help");
   const disabled = !enabled || busy || loading || Boolean(fixture);
   const date = (value: number | null) => value ? new Date(value * 1000).toLocaleDateString(i18n.language) : t("passkeys.neverUsed");

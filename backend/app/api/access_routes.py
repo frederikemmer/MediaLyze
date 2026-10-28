@@ -36,6 +36,7 @@ from backend.app.services.notification_access import (
     prune_guest_notification_history,
     prune_notification_history,
 )
+from backend.app.services.request_origin import secure_cookie
 
 router = APIRouter()
 
@@ -74,7 +75,7 @@ def cookie(response, request, token):
         COOKIE,
         token,
         httponly=True,
-        secure=request.url.scheme == "https",
+        secure=secure_cookie(request),
         samesite="strict",
         max_age=7 * 86400,
         path="/",
@@ -143,7 +144,7 @@ def auth_status(request: Request, response: Response, db=Depends(db_session)):
             CSRF_COOKIE,
             csrf,
             httponly=True,
-            secure=request.url.scheme == "https",
+            secure=secure_cookie(request),
             samesite="strict",
             path="/",
         )

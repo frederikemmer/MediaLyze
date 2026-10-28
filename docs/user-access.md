@@ -26,22 +26,13 @@ For an existing owner, each supplied variable is reconciled separately on every 
 
 Passkeys provide an additional login method for local MediaLyze accounts. Password login and password-based recovery remain available. Guest, Desktop and `NO_USERS` operation have no personal passkey management.
 
-### Enable in Docker Compose
+### Address and proxy setup
 
-Configure the exact external HTTPS origin, without a path:
+Passkeys automatically use the HTTPS hostname and port shown in the browser. An HTTPS reverse proxy must preserve the original Host. No proxy IP or `PUBLIC_URL` configuration is needed for account actions, secure cookies or passkeys; the former `PUBLIC_URL` setting is ignored. HTTP on `localhost` is also supported for local development. Ordinary HTTP on other hosts and IP addresses cannot be used for passkeys.
 
-```yaml
-services:
-  medialyze:
-    environment:
-      PUBLIC_URL: https://medialyze.example.com
-```
+Passkeys use the browser hostname as their relying-party ID. Different hostnames can be used with the same installation, but each requires its own passkeys. Each registration and login checks the exact browser origin, including any non-default port.
 
-The supplied Compose file also accepts `PUBLIC_URL` from its environment/`.env` interpolation. Recreate the container after changing the value. `PUBLIC_URL` is the public browser address, not the container's `hostname:`. A hostname without the scheme, an IP address, embedded credentials, a path, query or fragment is rejected. Empty/unset disables passkeys. `http://localhost:<port>` is allowed only for local development.
-
-The reverse proxy must preserve Host, terminate HTTPS correctly and have its explicit address configured in `MEDIALYZE_TRUSTED_PROXY_IPS`; see [Environment](environment.md#local-accounts-and-trusted-proxies). Do not trust arbitrary forwarded headers. Requests must use exactly the configured origin, including a non-default port. Passkeys use its hostname as the relying-party ID. Moving to a different hostname requires creating new passkeys; changing the port still requires the newly configured exact origin.
-
-Without this configuration, the own Account tab still shows the collapsed Passkeys panel, grayed out. Its header tooltip explains `PUBLIC_URL`. Access through a different origin or an unsupported/insecure browser also disables its actions.
+On an unsupported origin or browser, the own Account tab still shows the collapsed Passkeys panel with disabled actions and an explanatory tooltip.
 
 ### Manage your own passkeys
 
@@ -74,7 +65,7 @@ Passwords use Argon2id through `argon2-cffi`. Sessions use random 384-bit bearer
 
 State-changing browser requests require an exact same-origin `Origin` and `X-CSRF-Token`. `/api/auth/status` supplies the CSRF value; anonymous requests also require the matching HttpOnly pre-authentication cookie. Login/setup/logout and guest writes use the same boundary. There is no wildcard CORS or cross-origin credential allowlist. Login limits are stored in SQLite and shared across application processes (15-minute buckets: 40 attempts per client IP, 20 per normalized username, 500 installation-wide). Setup has an IP/global throttle too. Validation errors omit submitted values.
 
-The supported launcher trusts **no proxy by default**. For a TLS reverse proxy, set `MEDIALYZE_TRUSTED_PROXY_IPS` to the explicit proxy IPs accepted by Uvicorn and preserve the original Host and HTTPS scheme. Do not set `*` on a publicly reachable backend. Without that configuration a proxy HTTPS origin will fail the exact-origin check. Direct local HTTP remains supported. The Docker command uses the same launcher. TLS termination and deployment-specific proxy behavior still require deployment verification.
+The supported launcher trusts **no proxy by default**. A TLS reverse proxy must preserve the original Host; account actions, secure cookies and passkeys use the browser-facing origin even when the proxy connects over HTTP. `MEDIALYZE_TRUSTED_PROXY_IPS` optionally enables Uvicorn's trusted proxy handling for other uses, such as the client address; set it only to explicit proxy addresses and do not set `*` on a publicly reachable backend. Direct local HTTP remains supported. TLS termination and deployment-specific proxy behavior still require deployment verification.
 
 ## Permissions and supported projections
 

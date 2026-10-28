@@ -29,7 +29,6 @@ services:
       GUEST_ENABLED:
       NO_USERS:
       # Canonical HTTPS address; required to enable passkeys.
-      PUBLIC_URL: ${PUBLIC_URL:-}
       MEDIALYZE_TRUSTED_PROXY_IPS: ${MEDIALYZE_TRUSTED_PROXY_IPS:-}
       CONFIG_PATH: /config
       MEDIA_ROOT: /media

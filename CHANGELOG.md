@@ -4,11 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+- Automatically enable passkeys and secure authentication cookies for HTTPS browser access through a reverse proxy, without requiring proxy IPs or a public URL. Passkeys are bound to each browser hostname, and the former `PUBLIC_URL` setting is ignored.
+
 - Use compact Accelerator-style rows without raised card shadows for personal passkeys, retaining inline rename and delete actions.
 
 - Show live password requirement checks below managed-account password fields and report invalid passwords only through the field's native validation bubble.
 
-- Add named personal passkeys with registration, inline renaming, deletion and passkey login; enable them through PUBLIC_URL, with a disabled own-account panel and configuration tooltip when unset.
+- Add named personal passkeys with registration, inline renaming, deletion and passkey login, with guidance on unsupported origins.
 
 - Automatically save Notification preferences after a brief idle delay, remove the manual Save button, and keep the `/ui-elements` specimen read-only.
 - Shorten the notification test controls to “1 test notification”, “10 test notifications” and “clear”, using the flask icon for both test actions.
@@ -24,6 +26,8 @@ All notable changes to this project will be documented in this file.
 - Use `OWNER_USERNAME` and `OWNER_PASSWORD` for owner environment configuration, replacing the earlier development-only prefixed names.
 
 ### 🐛 Bug fixes
+
+- Allow owner setup and other protected actions behind an HTTPS reverse proxy without requiring trusted proxy IP configuration when the original Host is preserved.
 
 - Give each user and the Guest entry its own compact panel in the account overview, using the shared MediaLyze card styling.
 

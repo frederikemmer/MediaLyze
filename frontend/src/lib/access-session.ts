@@ -23,6 +23,7 @@ export async function sessionFetch(
 ): Promise<Response> {
   const current = generation;
   const headers = new Headers(init.headers);
+  headers.set("X-MediaLyze-Origin", window.location.origin);
   if (init.method && !["GET", "HEAD"].includes(init.method.toUpperCase()))
     headers.set("X-CSRF-Token", csrf);
   const response = await fetch(path, {

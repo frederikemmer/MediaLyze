@@ -182,6 +182,27 @@ def test_origin_csrf_unknown_and_framework_gate(env):
     assert owner.get("/api/performance").status_code == 404
 
 
+def test_https_proxy_origin_without_forwarded_header_trust(env):
+    app, _, _ = env
+    client = TestClient(app)
+    csrf = client.get("/api/auth/status").json()["csrf"]
+    payload = {"username": "owner", "password": SECRET}
+    for origin, token, fetch_site in (
+        ("https://evil.example", csrf, "same-origin"),
+        ("https://testserver:8443", csrf, "same-origin"),
+        ("https://testserver", "wrong", "same-origin"),
+        ("https://testserver", csrf, "cross-site"),
+    ):
+        response = client.post("/api/auth/setup", json=payload, headers={
+            "Origin": origin, "X-CSRF-Token": token, "Sec-Fetch-Site": fetch_site,
+        })
+        assert response.status_code == 403
+    response = client.post("/api/auth/setup", json=payload, headers={
+        "Origin": "https://testserver", "X-CSRF-Token": csrf, "Sec-Fetch-Site": "same-origin",
+    })
+    assert response.status_code == 201
+
+
 def test_invalid_password_validation_does_not_echo_input(env):
     app, _, _ = env
     client = TestClient(app)

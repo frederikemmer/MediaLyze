@@ -17,14 +17,14 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); refresh.mockClear(); });
 function open() { fireEvent.click(screen.getByRole("button", { name: "Expand Passkeys" })); }
 
 describe("Own-account passkeys", () => {
-  it("always shows a disabled panel with PUBLIC_URL setup guidance when unconfigured", async () => {
+  it("always shows a disabled panel with HTTPS guidance on an unsupported origin", async () => {
     vi.spyOn(access, "accessRequest").mockResolvedValue({ enabled: false, reason: "not_configured", items: [] });
     const { container } = render(<PasskeysPanel />);
     expect(await screen.findByRole("heading", { name: "Passkeys" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Passkey" })).toBeDisabled();
     expect(container.querySelector(".passkeys-panel")).toHaveClass("is-disabled");
     fireEvent.click(screen.getByRole("button", { name: "Passkey setup requirements" }));
-    expect(await screen.findByRole("tooltip")).toHaveTextContent(/PUBLIC_URL.*Docker Compose/);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(/HTTPS hostname/);
   });
   it("opens named registration from the header and clears the password after registration", async () => {
     vi.spyOn(access, "accessRequest").mockResolvedValue({ enabled: true, reason: "ready", items: [] });

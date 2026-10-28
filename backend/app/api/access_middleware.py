@@ -237,11 +237,15 @@ class AccessMiddleware:
         if method not in {"GET", "HEAD", "OPTIONS"} and not (
             principal and principal.kind == "desktop" and settings.is_desktop
         ):
-            # Forwarded headers are deliberately not trusted here. The deployment
-            # proxy must preserve Host and establish the request's HTTPS scheme.
+            # A TLS proxy can forward plain HTTP without trusted forwarded headers.
+            # Accept the external HTTPS origin for the same Host, while retaining
+            # the CSRF token and Fetch Metadata checks and never trusting headers
+            # supplied by a client to rewrite the request scheme.
             origin = request.headers.get("origin")
-            expected = f"{request.url.scheme}://{request.url.netloc}"
-            if origin != expected or request.headers.get("sec-fetch-site") in {
+            allowed_origins = {f"{request.url.scheme}://{request.url.netloc}"}
+            if request.url.scheme == "http":
+                allowed_origins.add(f"https://{request.url.netloc}")
+            if origin not in allowed_origins or request.headers.get("sec-fetch-site") in {
                 "cross-site",
                 "same-site",
             }:
