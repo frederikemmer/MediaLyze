@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+- Reduce history reconstruction, connector matching and automation preview resource contention while preserving atomic history writes.
+- Show reconstruction progress and status errors, dashboard loading dots and Storage Map loading states; apply file searches immediately on Enter.
+
 - Automatically enable passkeys and secure authentication cookies for HTTPS browser access through a reverse proxy, without requiring proxy IPs or a public URL. Passkeys are bound to each browser hostname, and the former `PUBLIC_URL` setting is ignored.
 
 - Use compact Accelerator-style rows without raised card shadows for personal passkeys, retaining inline rename and delete actions.

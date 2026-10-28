@@ -14,11 +14,12 @@ export type SummaryMetricItem = {
 type SummaryMetricsProps = {
   items: SummaryMetricItem[];
   className?: string;
+  loading?: boolean;
 };
 
-export function SummaryMetrics({ items, className }: SummaryMetricsProps) {
+export function SummaryMetrics({ items, className, loading = false }: SummaryMetricsProps) {
   return (
-    <div className={`summary-metrics${className ? ` ${className}` : ""}`}>
+    <div className={`summary-metrics${className ? ` ${className}` : ""}`} aria-busy={loading || undefined}>
       {items.map(({ id, label, value, description, detail, Icon }) => (
         <TooltipTrigger
           key={id}
@@ -35,7 +36,13 @@ export function SummaryMetrics({ items, className }: SummaryMetricsProps) {
           pinOnClick={false}
         >
           <Icon className="summary-metric-icon" size={14} aria-hidden="true" />
-          <span className="summary-metric-value">{value}</span>
+          <span className="summary-metric-value">
+            {loading ? (
+              <span className="summary-metric-loading" aria-hidden="true">
+                <span>.</span><span>.</span><span>.</span>
+              </span>
+            ) : value}
+          </span>
         </TooltipTrigger>
       ))}
     </div>

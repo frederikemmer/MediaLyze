@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-from collections import defaultdict
 from dataclasses import dataclass
+from collections.abc import Iterable, Iterator
 from datetime import datetime, timedelta
 from pathlib import Path
 from threading import Lock
@@ -98,48 +98,46 @@ def _storage_limit_bytes_for_bucket(app_settings, bucket_name: str) -> int:
 
 
 def _forecast_from_records(
-    records: list[HistoryStorageRecord],
+    records: Iterable[HistoryStorageRecord],
     *,
     days_limit: int,
     storage_limit_bytes: int,
 ) -> HistoryStorageCategoryRead:
-    if not records:
-        return HistoryStorageCategoryRead(
-            days_limit=days_limit,
-            storage_limit_bytes=storage_limit_bytes,
-        )
-
-    sorted_records = sorted(records, key=lambda item: (item.recorded_at, item.estimated_bytes))
-    current_estimated_bytes = sum(item.estimated_bytes for item in sorted_records)
-    newest_recorded_at = sorted_records[-1].recorded_at
-    oldest_recorded_at = sorted_records[0].recorded_at
-
+    count = total = recent_total = 0
+    oldest = newest = recent_oldest = recent_newest = None
     recent_cutoff = utc_now() - timedelta(days=30)
-    sample_records = [item for item in sorted_records if item.recorded_at >= recent_cutoff]
-    if not sample_records:
-        sample_records = sorted_records
+    for item in records:
+        count += 1
+        total += item.estimated_bytes
+        oldest = item.recorded_at if oldest is None else min(oldest, item.recorded_at)
+        newest = item.recorded_at if newest is None else max(newest, item.recorded_at)
+        if item.recorded_at >= recent_cutoff:
+            recent_total += item.estimated_bytes
+            recent_oldest = item.recorded_at if recent_oldest is None else min(recent_oldest, item.recorded_at)
+            recent_newest = item.recorded_at if recent_newest is None else max(recent_newest, item.recorded_at)
+    if not count:
+        return HistoryStorageCategoryRead(days_limit=days_limit, storage_limit_bytes=storage_limit_bytes)
 
-    per_day_bytes: dict[datetime.date, int] = defaultdict(int)
-    for item in sample_records:
-        per_day_bytes[item.recorded_at.date()] += item.estimated_bytes
-
-    observed_days = max(1, (max(per_day_bytes) - min(per_day_bytes)).days + 1)
-    average_daily_bytes = sum(per_day_bytes.values()) / observed_days
+    sample_oldest = recent_oldest if recent_oldest is not None else oldest
+    sample_newest = recent_newest if recent_newest is not None else newest
+    sample_total = recent_total if recent_oldest is not None else total
+    observed_days = max(1, (sample_newest.date() - sample_oldest.date()).days + 1)
+    average_daily_bytes = sample_total / observed_days
 
     return HistoryStorageCategoryRead(
-        entry_count=len(sorted_records),
-        current_estimated_bytes=current_estimated_bytes,
+        entry_count=count,
+        current_estimated_bytes=total,
         average_daily_bytes=average_daily_bytes,
         projected_bytes_30d=average_daily_bytes * 30,
         projected_bytes_for_configured_days=average_daily_bytes * days_limit if days_limit > 0 else None,
         days_limit=days_limit,
         storage_limit_bytes=storage_limit_bytes,
-        oldest_recorded_at=oldest_recorded_at,
-        newest_recorded_at=newest_recorded_at,
+        oldest_recorded_at=oldest,
+        newest_recorded_at=newest,
     )
 
 
-def _media_file_history_records(db: Session) -> list[HistoryStorageRecord]:
+def _media_file_history_records(db: Session) -> Iterator[HistoryStorageRecord]:
     estimated_bytes = (
         _stored_length_expression(MediaFileHistory.relative_path)
         + _stored_length_expression(MediaFileHistory.filename)
@@ -151,32 +149,32 @@ def _media_file_history_records(db: Session) -> list[HistoryStorageRecord]:
             MediaFileHistory.captured_at,
             estimated_bytes.label("estimated_bytes"),
         )
-    ).all()
-    return [
+    ).yield_per(500)
+    yield from (
         HistoryStorageRecord(
             recorded_at=captured_at,
             estimated_bytes=int(estimated_bytes or 0),
         )
         for captured_at, estimated_bytes in rows
         if captured_at is not None
-    ]
+    )
 
 
-def _library_history_records(db: Session) -> list[HistoryStorageRecord]:
+def _library_history_records(db: Session) -> Iterator[HistoryStorageRecord]:
     rows = db.execute(
         select(
             LibraryHistory.captured_at,
             _stored_length_expression(LibraryHistory.snapshot).label("estimated_bytes"),
         )
-    ).all()
-    return [
+    ).yield_per(500)
+    yield from (
         HistoryStorageRecord(recorded_at=captured_at, estimated_bytes=int(estimated_bytes or 0))
         for captured_at, estimated_bytes in rows
         if captured_at is not None
-    ]
+    )
 
 
-def _scan_history_records(db: Session) -> list[HistoryStorageRecord]:
+def _scan_history_records(db: Session) -> Iterator[HistoryStorageRecord]:
     estimated_bytes = (
         _stored_length_expression(ScanJob.job_type)
         + _stored_length_expression(ScanJob.status)
@@ -189,18 +187,18 @@ def _scan_history_records(db: Session) -> list[HistoryStorageRecord]:
             ScanJob.finished_at,
             estimated_bytes.label("estimated_bytes"),
         ).where(ScanJob.status.in_(TERMINAL_SCAN_JOB_STATUSES))
-    ).all()
-    return [
+    ).yield_per(500)
+    yield from (
         HistoryStorageRecord(
             recorded_at=finished_at,
             estimated_bytes=int(estimated_bytes or 0),
         )
         for finished_at, estimated_bytes in rows
         if finished_at is not None
-    ]
+    )
 
 
-def _transcode_history_records(db: Session) -> list[HistoryStorageRecord]:
+def _transcode_history_records(db: Session) -> Iterator[HistoryStorageRecord]:
     estimated_bytes = (
         _stored_length_expression(TranscodeJob.profile)
         + _stored_length_expression(TranscodeJob.plan)
@@ -217,12 +215,12 @@ def _transcode_history_records(db: Session) -> list[HistoryStorageRecord]:
         select(TranscodeJob.finished_at, estimated_bytes.label("estimated_bytes")).where(
             TranscodeJob.status.in_(TERMINAL_SCAN_JOB_STATUSES)
         )
-    ).all()
-    records = [
+    ).yield_per(500)
+    yield from (
         HistoryStorageRecord(recorded_at=finished_at, estimated_bytes=int(estimated_bytes or 0))
         for finished_at, estimated_bytes in rows
         if finished_at is not None
-    ]
+    )
     run_rows = db.execute(
         select(
             TranscodeAutomationRun.finished_at,
@@ -234,8 +232,8 @@ def _transcode_history_records(db: Session) -> list[HistoryStorageRecord]:
                 + _stored_length_expression(TranscodeAutomationRun.error)
             ).label("estimated_bytes"),
         ).where(TranscodeAutomationRun.status.in_(("completed", "failed", "canceled")))
-    ).all()
-    records.extend(
+    ).yield_per(500)
+    yield from (
         HistoryStorageRecord(recorded_at=finished_at, estimated_bytes=int(estimated_bytes or 0))
         for finished_at, estimated_bytes in run_rows
         if finished_at is not None
@@ -252,13 +250,12 @@ def _transcode_history_records(db: Session) -> list[HistoryStorageRecord]:
                 + _stored_length_expression(TranscodeAutomationRecord.error)
             ).label("estimated_bytes"),
         )
-    ).all()
-    records.extend(
+    ).yield_per(500)
+    yield from (
         HistoryStorageRecord(recorded_at=recorded_at, estimated_bytes=int(estimated_bytes or 0))
         for recorded_at, estimated_bytes in record_rows
         if recorded_at is not None
     )
-    return records
 
 
 def _database_file_bytes(database_path: Path) -> int:

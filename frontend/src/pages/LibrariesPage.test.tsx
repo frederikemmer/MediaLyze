@@ -465,6 +465,9 @@ function renderPage({
   activePanel?: SettingsPanelId;
   initialEntry?: string;
 } = {}) {
+  if (activePanel === "historyRetention" && initialEntry === "/settings") {
+    initialEntry = "/settings?section=history-retention";
+  }
   if (activePanel) {
     window.localStorage.setItem("medialyze-settings-active-panel", activePanel);
   }
@@ -1483,6 +1486,19 @@ describe("LibrariesPage ignore patterns", () => {
     expect(screen.getByText("50 of 200 media files")).toBeInTheDocument();
     expect(screen.getByText("1 of 4 libraries")).toBeInTheDocument();
     expect(screen.getByText("Current library: Movies")).toBeInTheDocument();
+  });
+
+  it("shows history status query errors and retries the status request", async () => {
+    const statusSpy = vi.spyOn(api, "historyReconstructionStatus")
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(createHistoryReconstructionStatus());
+    renderPage({ activePanel: "historyRetention" });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("History status could not be refreshed.");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText(/Last successful status update:/)).toBeInTheDocument();
+    expect(statusSpy).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("reconstructs approximate history and refreshes the storage forecast", async () => {

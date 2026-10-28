@@ -20,6 +20,7 @@ class HistoryReconstructionPhase(str, Enum):
     loading_library = "loading_library"
     reconstructing_file_history = "reconstructing_file_history"
     reconstructing_library_history = "reconstructing_library_history"
+    saving_history = "saving_history"
     completed = "completed"
     failed = "failed"
     canceled = "canceled"

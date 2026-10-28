@@ -52,3 +52,20 @@ it("does not let an older status response overwrite a new request", async () => 
   await act(async () => { finish?.(emptyHistoryStatus()); });
   expect(screen.getByRole("button", { name: "Reconstructing…" })).toBeDisabled();
 });
+
+it("shows failed status refreshes and lets the user retry", async () => {
+  vi.mocked(api.historyReconstructionStatus)
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockResolvedValueOnce(emptyHistoryStatus());
+  render(<HistoryReconstructionControl libraryId={7} />);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("History status could not be refreshed.");
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  expect(await screen.findByText(/Last successful status update:/)).toBeInTheDocument();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+it("explains when reconstructed history is being saved", () => {
+  render(<HistoryReconstructionControl fixture={{ ...emptyHistoryStatus(), status: "running", phase: "saving_history", progress_percent: 99 }} />);
+  expect(screen.getByText("Saving reconstructed history")).toBeInTheDocument();
+});

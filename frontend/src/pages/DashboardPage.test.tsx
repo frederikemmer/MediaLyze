@@ -265,6 +265,25 @@ afterEach(() => {
 });
 
 describe("DashboardPage", () => {
+  it("shows loading beside each metric until real dashboard totals arrive", async () => {
+    let resolveDashboard!: (payload: DashboardResponse) => void;
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "dashboard").mockReturnValue(new Promise((resolve) => { resolveDashboard = resolve; }));
+    vi.spyOn(api, "dashboardHistory").mockResolvedValue(createDashboardHistory());
+    vi.spyOn(api, "dashboardComparison").mockResolvedValue(createComparisonResponse());
+    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
+    renderPage();
+    const metrics = document.querySelector(".dashboard-statistic-metrics")!;
+    expect(metrics).toHaveAttribute("aria-busy", "true");
+    expect(metrics.querySelectorAll(".summary-metric-value")).toHaveLength(4);
+    expect(Array.from(metrics.querySelectorAll(".summary-metric-value"), (item) => item.textContent)).toEqual(Array(4).fill("..."));
+    expect(metrics.querySelectorAll(".summary-metric-loading[aria-hidden='true']")).toHaveLength(4);
+    expect(metrics.querySelector("[aria-label='Libraries: Loading…']")).toBeInTheDocument();
+    resolveDashboard(createDashboard());
+    await waitFor(() => expect(metrics).not.toHaveAttribute("aria-busy"));
+    expect(metrics).toHaveTextContent("10");
+  });
+
   it("shows loading rather than an empty state until dashboard history resolves", async () => {
     window.localStorage.setItem(
       "medialyze-statistic-panel-layout-dashboard-main",

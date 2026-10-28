@@ -191,6 +191,13 @@ class ScanRuntimeManager:
         self.scheduler = BackgroundScheduler(timezone=resolve_scheduler_timezone())
         self.executor_max_workers = max(1, settings.scan_runtime_worker_count)
         self.executor = self._build_executor(self.executor_max_workers)
+        # History reconstruction is a single-flight, write-heavy task. Keep it
+        # off the scan workers so it cannot compete with per-file scan work.
+        self.history_executor = self._build_history_executor()
+        # Serialize reconstruction with retention, compression and VACUUM.
+        # The lock is held only while one operation is actively using SQLite.
+        self.history_maintenance_lock = Lock()
+        self.history_retention_deferred = False
         self.connector_executor_max_workers = 2
         self.connector_executor = self._build_connector_executor(
             self.connector_executor_max_workers
@@ -295,6 +302,7 @@ class ScanRuntimeManager:
         if self.scheduler.running:
             self.scheduler.shutdown(wait=False)
         self._shutdown_executor(self.executor, cancel_futures=True)
+        self._shutdown_executor(self.history_executor, cancel_futures=True)
         self._shutdown_executor(self.connector_executor, cancel_futures=True)
         if self.transcode_executor is not None:
             self._shutdown_executor(self.transcode_executor, cancel_futures=True)
@@ -1164,7 +1172,7 @@ class ScanRuntimeManager:
             )
             accepted = self.history_reconstruction_status.model_copy(deep=True)
         try:
-            self.executor.submit(self._run_history_reconstruction, targets, key)
+            self.history_executor.submit(self._run_history_reconstruction, targets, key)
         except RuntimeError:
             self._update_history_reconstruction_status(
                 status=HistoryReconstructionJobStatus.failed, phase=HistoryReconstructionPhase.failed,
@@ -1853,6 +1861,20 @@ class ScanRuntimeManager:
                 self.run_pending_history_compaction()
 
     def _run_history_reconstruction(self, library_ids: tuple[int, ...], authority_key: str) -> None:
+        self.history_maintenance_lock.acquire()
+        try:
+            self._run_history_reconstruction_serialized(library_ids, authority_key)
+        finally:
+            self._release_history_maintenance()
+            with self.lock:
+                retry_compaction = self.started and self.history_compaction_pending and not self.active_library_ids
+            if retry_compaction:
+                try:
+                    self.maintenance_executor.submit(self.run_pending_history_compaction)
+                except RuntimeError:
+                    pass
+
+    def _run_history_reconstruction_serialized(self, library_ids: tuple[int, ...], authority_key: str) -> None:
         from backend.app.models.access import JobAuthority
         from backend.app.services.access_jobs import job_allowed
         with SessionLocal() as authority_db:
@@ -2307,7 +2329,26 @@ class ScanRuntimeManager:
     def _scheduled_job_id(library_id: int) -> str:
         return f"library-schedule-{library_id}"
 
+    def _release_history_maintenance(self) -> None:
+        # Coordinate release with a failed non-blocking retention attempt so
+        # a deferred pass cannot be missed between checking and unlocking.
+        with self.lock:
+            self.history_maintenance_lock.release()
+            retry = self.history_retention_deferred and self.started
+            if retry:
+                self.history_retention_deferred = False
+        if retry:
+            try:
+                self.maintenance_executor.submit(self.run_history_retention)
+            except RuntimeError:
+                with self.lock:
+                    self.history_retention_deferred = True
+
     def run_history_retention(self) -> HistoryRetentionResult:
+        with self.lock:
+            if not self.history_maintenance_lock.acquire(blocking=False):
+                self.history_retention_deferred = True
+                return HistoryRetentionResult(compaction_deferred=True)
         db = SessionLocal()
         try:
             logging.getLogger("uvicorn.error").info("History retention: checking age and storage budgets")
@@ -2318,6 +2359,7 @@ class ScanRuntimeManager:
             raise
         finally:
             db.close()
+            self._release_history_maintenance()
 
         with self.lock:
             self.history_compaction_pending = result.compaction_deferred
@@ -2343,8 +2385,12 @@ class ScanRuntimeManager:
         try:
             def idle():
                 return self.started and not has_active_scan_jobs(db)
-            if idle():
-                compress_file_history_batch(db, should_continue=idle)
+            if self.history_maintenance_lock.acquire(blocking=False):
+                try:
+                    if idle():
+                        compress_file_history_batch(db, should_continue=idle)
+                finally:
+                    self._release_history_maintenance()
         except Exception:
             db.rollback()
             logging.getLogger("uvicorn.error").exception("File-history compression failed")
@@ -2438,11 +2484,14 @@ class ScanRuntimeManager:
             self.history_reconstruction_status = next_status
 
     def run_pending_history_compaction(self) -> bool:
+        if not self.history_maintenance_lock.acquire(blocking=False):
+            return False
         db = SessionLocal()
         try:
             completed = run_pending_history_compaction(db)
         finally:
             db.close()
+            self._release_history_maintenance()
 
         if completed:
             with self.lock:
@@ -2541,6 +2590,13 @@ class ScanRuntimeManager:
             max_workers=1,
             thread_name_prefix="medialyze-maintenance",
         ), "maintenance")
+
+    @staticmethod
+    def _build_history_executor() -> ThreadPoolExecutor:
+        return observe_executor(ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="medialyze-history",
+        ), "history")
 
     @staticmethod
     def _build_automation_executor() -> ThreadPoolExecutor:

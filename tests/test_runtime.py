@@ -549,7 +549,7 @@ def test_refresh_worker_settings_uses_persisted_parallel_scan_limit(monkeypatch,
 
     assert refreshed is True
     assert runtime.executor_max_workers == 6
-    assert created_worker_counts == [2, 2, 1, 6]
+    assert created_worker_counts == [2, 1, 2, 1, 6]
     assert runtime.connector_executor_max_workers == 2
     assert shutdown_calls == [(2, False, False)]
 
@@ -1007,3 +1007,27 @@ def test_sync_library_skips_watch_observer_for_desktop_network_paths(monkeypatch
     runtime.sync_library(library_id)
 
     assert runtime.watch_observers == {}
+
+
+def test_history_retention_defers_without_blocking_maintenance_and_retries():
+    runtime = runtime_module.ScanRuntimeManager(Settings())
+    submitted = []
+    class ExecutorStub:
+        def submit(self, fn, *args):
+            submitted.append((fn, args))
+
+    runtime.maintenance_executor.shutdown(wait=False)
+    runtime.maintenance_executor = ExecutorStub()
+    runtime.started = True
+    runtime.history_maintenance_lock.acquire()
+    result = runtime.run_history_retention()
+    assert result.compaction_deferred
+    assert runtime.history_retention_deferred
+    assert submitted == []
+    runtime._release_history_maintenance()
+    assert not runtime.history_retention_deferred
+    assert submitted == [(runtime.run_history_retention, ())]
+    runtime.started = False
+    runtime.executor.shutdown(wait=False)
+    runtime.history_executor.shutdown(wait=False)
+    runtime.connector_executor.shutdown(wait=False)

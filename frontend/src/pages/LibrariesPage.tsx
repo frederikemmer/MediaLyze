@@ -1260,6 +1260,9 @@ export function LibrariesPage() {
   );
   const [historyStorage, setHistoryStorage] = useState<HistoryStorage | null>(null);
   const [historyReconstruction, setHistoryReconstruction] = useState<HistoryReconstructionStatus | null>(null);
+  const [historyReconstructionStatusError, setHistoryReconstructionStatusError] = useState(false);
+  const [lastHistoryReconstructionStatusUpdate, setLastHistoryReconstructionStatusUpdate] = useState<number | null>(null);
+  const [isRetryingHistoryReconstructionStatus, setIsRetryingHistoryReconstructionStatus] = useState(false);
   const [historyStorageError, setHistoryStorageError] = useState<string | null>(null);
   const [isLoadingHistoryStorage, setIsLoadingHistoryStorage] = useState(true);
   const [resolutionCategoryDrafts, setResolutionCategoryDrafts] = useState<ResolutionCategoryDraft[]>([]);
@@ -1695,11 +1698,27 @@ export function LibrariesPage() {
       .historyReconstructionStatus()
       .then((payload) => {
         setHistoryReconstruction(payload);
+        setHistoryReconstructionStatusError(false);
+        setLastHistoryReconstructionStatusUpdate(Date.now());
         return payload;
       })
       .catch((reason: Error) => {
+        setHistoryReconstructionStatusError(true);
         throw reason;
       });
+  };
+
+  const retryHistoryReconstructionStatus = async () => {
+    if (isRetryingHistoryReconstructionStatus) return;
+    setIsRetryingHistoryReconstructionStatus(true);
+    try {
+      await refreshHistoryReconstructionStatus();
+      historyReconstructionLoadedRef.current = true;
+    } catch {
+      historyReconstructionLoadedRef.current = false;
+    } finally {
+      setIsRetryingHistoryReconstructionStatus(false);
+    }
   };
 
   const refreshRecentScanJobs = (showLoading = false) => {
@@ -4369,6 +4388,8 @@ export function LibrariesPage() {
         return t("libraries.historyRetention.progressFileHistory");
       case "reconstructing_library_history":
         return t("libraries.historyRetention.progressLibraryHistory");
+      case "saving_history":
+        return t("libraries.historyRetention.progressSavingHistory");
       case "completed":
         return t("libraries.historyRetention.progressCompleted");
       case "failed":
@@ -4380,7 +4401,7 @@ export function LibrariesPage() {
 
   function formatHistoryReconstructionPhaseDetail(status: HistoryReconstructionStatus) {
     if (status.status === "queued") {
-      return null;
+      return t("libraries.historyRetention.progressQueuedDetail");
     }
     if (status.phase === "loading_libraries") {
       return t("libraries.historyRetention.progressLibraries", {
@@ -7665,6 +7686,18 @@ export function LibrariesPage() {
           >
             <div className="settings-sidebar-stack history-retention-panel-content">
               {!canEditAppSettings ? <p className="muted">{t("libraries.historyRetention.editPermissionRequired")}</p> : null}
+              {historyReconstructionStatusError ? <div className="alert" role="alert">
+                {t("libraries.historyRetention.statusLoadFailed")}
+                <button type="button" className="secondary small" disabled={isRetryingHistoryReconstructionStatus}
+                  onClick={() => void retryHistoryReconstructionStatus()}>
+                  {isRetryingHistoryReconstructionStatus ? t("libraries.historyRetention.retryingStatus") : t("libraries.historyRetention.retryStatus")}
+                </button>
+              </div> : null}
+              {lastHistoryReconstructionStatusUpdate !== null ? <p className="field-hint">
+                {t("libraries.historyRetention.lastStatusUpdate", {
+                  time: new Date(lastHistoryReconstructionStatusUpdate).toLocaleString(),
+                })}
+              </p> : null}
               {isLoadingHistoryStorage ? <p className="field-hint">{t("libraries.historyRetention.loading")}</p> : null}
               {historyStorageError ? <div className="alert">{historyStorageError}</div> : null}
               <div className="history-retention-tables">

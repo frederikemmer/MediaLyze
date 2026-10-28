@@ -1908,6 +1908,10 @@ def test_library_storage_map_groups_folders_and_drills_into_files() -> None:
         {"value": 96.0, "size_bytes": 100},
         {"value": 84.0, "size_bytes": 20},
     ]
+    assert root_payload["items"][0]["color_distributions"]["size"] == [
+        {"value": 100, "size_bytes": 100},
+        {"value": 20, "size_bytes": 20},
+    ]
     assert root_payload["items"][0]["color_distributions"]["hdr"] == [
         {"value": "dolby_vision", "size_bytes": 100},
         {"value": "SDR", "size_bytes": 20},

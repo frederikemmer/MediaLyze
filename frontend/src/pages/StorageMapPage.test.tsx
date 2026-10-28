@@ -1,6 +1,6 @@
 import "../i18n";
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
 
@@ -109,6 +109,37 @@ afterEach(() => {
 });
 
 describe("StorageMapPage", () => {
+  it("ignores an old folder response after navigating back", async () => {
+    let resolveFolder!: (value: LibraryStorageMap) => void;
+    vi.spyOn(api, "libraryStorageMap").mockImplementation((_id, params) => params?.path === "Folder"
+      ? new Promise((resolve) => { resolveFolder = resolve; })
+      : Promise.resolve(storageMap({ items: [storageNode({ kind: "folder", file_id: null, name: "Folder", path: "Folder" })] })));
+    render(<MemoryRouter initialEntries={["/storage-map?library=1"]}><Routes>
+      <Route path="/storage-map" element={<StorageMapPage />} />
+    </Routes></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: /Open folder Folder/i }));
+    expect(await screen.findByText("Loading storage map…")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Up one level" }));
+    expect(await screen.findByRole("button", { name: /Open folder Folder/i })).toBeInTheDocument();
+    await act(async () => resolveFolder(storageMap({ path: "Folder", items: [] })));
+    expect(screen.getByRole("button", { name: /Open folder Folder/i })).toBeInTheDocument();
+  });
+
+  it("shows a loading state while opening an uncached folder", async () => {
+    let resolveFolder!: (value: LibraryStorageMap) => void;
+    vi.spyOn(api, "libraryStorageMap").mockImplementation((_id, params) => params?.path === "Folder"
+      ? new Promise((resolve) => { resolveFolder = resolve; })
+      : Promise.resolve(storageMap({ items: [storageNode({ kind: "folder", file_id: null, name: "Folder", path: "Folder" })] })));
+    render(<MemoryRouter initialEntries={["/storage-map?library=1"]}><Routes>
+      <Route path="/storage-map" element={<StorageMapPage />} />
+    </Routes></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: /Open folder Folder/i }));
+    expect(await screen.findByText("Loading storage map…")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Open folder Folder/i })).not.toBeInTheDocument();
+    resolveFolder(storageMap({ path: "Folder", items: [storageNode({ name: "Movie.mkv", path: "Folder/Movie.mkv" })] }));
+    expect(await screen.findByRole("button", { name: /Open file details for Movie/i })).toBeInTheDocument();
+  });
+
   it("uses every available pixel in proportion to node size", () => {
     const rects = layoutStorageMapNodes([
       storageNode({ path: "large", size_bytes: 60 }),

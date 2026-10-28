@@ -1627,6 +1627,7 @@ def history_runtime(env, monkeypatch):
     monkeypatch.setattr(runtime_module, "SessionLocal", factory)
     runtime = runtime_module.ScanRuntimeManager(settings)
     runtime.executor.shutdown(wait=True)
+    runtime.history_executor.shutdown(wait=True)
     class Deferred:
         def __init__(self):
             self.tasks = []
@@ -1638,6 +1639,7 @@ def history_runtime(env, monkeypatch):
             return fn(*args)
     executor = Deferred()
     runtime.executor = executor
+    runtime.history_executor = executor
     monkeypatch.setattr(runtime, "request_history_storage_refresh", lambda: False)
     app.dependency_overrides[get_scan_runtime] = lambda: runtime
     yield runtime, executor

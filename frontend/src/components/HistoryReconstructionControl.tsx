@@ -23,8 +23,12 @@ export function HistoryReconstructionControl({ libraryId, blocked = false, fixtu
   const visible = usePageVisibility();
   const [status, setStatus] = useState<HistoryReconstructionStatus | null>(fixture ?? null);
   const [pending, setPending] = useState(false);
+  const [statusError, setStatusError] = useState(false);
+  const [retryingStatus, setRetryingStatus] = useState(false);
+  const [lastStatusUpdate, setLastStatusUpdate] = useState<number | null>(null);
   const [error, setError] = useState(false);
   const epoch = useRef(0);
+  const retryEpoch = useRef(0);
   const allowed = Boolean(fixture || !auth.identity || (libraryId === undefined
     ? hasLibraryPermission(auth.identity, "library.scan") : auth.has("library.scan", libraryId)));
   const active = status?.status === "queued" || status?.status === "running";
@@ -32,12 +36,22 @@ export function HistoryReconstructionControl({ libraryId, blocked = false, fixtu
   useEffect(() => {
     setStatus(fixture ?? null);
     setPending(false);
+    setStatusError(false);
+    setRetryingStatus(false);
+    retryEpoch.current++;
+    setLastStatusUpdate(null);
     setError(false);
     if (!allowed || fixture || !auth.identity || !visible) return;
     const request = ++epoch.current;
     void api.historyReconstructionStatus(libraryId).then(value => {
-      if (request === epoch.current) setStatus(value);
-    }).catch(() => {});
+      if (request === epoch.current) {
+        setStatus(value);
+        setStatusError(false);
+        setLastStatusUpdate(Date.now());
+      }
+    }).catch(() => {
+      if (request === epoch.current) setStatusError(true);
+    });
     return () => { epoch.current++; };
   }, [libraryId, allowed, fixture, visible, auth.identity?.id, auth.identity?.revision]);
 
@@ -46,13 +60,37 @@ export function HistoryReconstructionControl({ libraryId, blocked = false, fixtu
     const timer = window.setInterval(() => {
       const request = ++epoch.current;
       void api.historyReconstructionStatus(libraryId).then(value => {
-        if (request === epoch.current) setStatus(value);
-      }).catch(() => {});
+        if (request === epoch.current) {
+          setStatus(value);
+          setStatusError(false);
+          setLastStatusUpdate(Date.now());
+        }
+      }).catch(() => {
+        if (request === epoch.current) setStatusError(true);
+      });
     }, 2000);
     return () => window.clearInterval(timer);
   }, [active, visible, fixture, libraryId]);
 
   if (!allowed) return null;
+  async function retryStatus() {
+    if (retryingStatus) return;
+    const request = ++epoch.current;
+    const retryRequest = ++retryEpoch.current;
+    setRetryingStatus(true);
+    try {
+      const value = await api.historyReconstructionStatus(libraryId);
+      if (request === epoch.current) {
+        setStatus(value);
+        setStatusError(false);
+        setLastStatusUpdate(Date.now());
+      }
+    } catch {
+      if (request === epoch.current) setStatusError(true);
+    } finally {
+      if (retryRequest === retryEpoch.current) setRetryingStatus(false);
+    }
+  }
   async function start() {
     if (pending || active || blocked || fixture) return;
     const request = ++epoch.current;
@@ -86,7 +124,11 @@ export function HistoryReconstructionControl({ libraryId, blocked = false, fixtu
   }
   let message = "";
   if (active && status) {
-    message = `${t("libraries.historyRetention.progressLibraries", {
+    message = status.status === "queued"
+      ? t("libraries.historyRetention.progressQueuedDetail")
+      : status.phase === "saving_history"
+        ? t("libraries.historyRetention.progressSavingHistory")
+      : `${t("libraries.historyRetention.progressLibraries", {
       completed: status.libraries_processed, total: status.libraries_total,
     })} · ${Math.round(status.progress_percent)}%`;
   } else if (error) {
@@ -99,6 +141,15 @@ export function HistoryReconstructionControl({ libraryId, blocked = false, fixtu
     </button>
     <TooltipTrigger ariaLabel={t("libraries.historyRetention.reconstructTooltipAria")}
       content={`${t("libraries.historyRetention.reconstructScopeHint")}\n\n${t("libraries.historyRetention.reconstructTooltip")}`} preserveLineBreaks />
+    {statusError ? <span className="alert" role="alert">
+      {t("libraries.historyRetention.statusLoadFailed")}
+      <button type="button" className="secondary small" disabled={retryingStatus} onClick={() => void retryStatus()}>
+        {retryingStatus ? t("libraries.historyRetention.retryingStatus") : t("libraries.historyRetention.retryStatus")}
+      </button>
+    </span> : null}
+    {lastStatusUpdate !== null ? <span className="field-hint">
+      {t("libraries.historyRetention.lastStatusUpdate", { time: new Date(lastStatusUpdate).toLocaleString() })}
+    </span> : null}
     {message ? <span className="field-hint" role="status" aria-live="polite">{message}</span> : null}
   </div>;
 }

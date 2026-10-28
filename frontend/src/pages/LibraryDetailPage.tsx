@@ -22,7 +22,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import type { CSSProperties, InputHTMLAttributes, PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import type { CSSProperties, InputHTMLAttributes, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import {
   startTransition,
   useDeferredValue,
@@ -2875,6 +2875,13 @@ export function LibraryDetailPage() {
     setAppliedSearchFilters(nextSearchFilters);
   }, [hasInvalidSearchField, nextSearchFilters]);
 
+  function applySearchImmediately(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing || hasInvalidSearchField) return;
+    event.preventDefault();
+    setAppliedSearchFilters(nextSearchFilters);
+    setDebouncedAppliedSearchFilterKey(serializeLibraryFileSearchFilters(nextSearchFilters));
+  }
+
   useEffect(() => {
     filesRef.current = files;
   }, [files]);
@@ -4251,6 +4258,7 @@ export function LibraryDetailPage() {
                             id="library-file-search"
                             value={baseSearch}
                             onValueChange={setBaseSearch}
+                            onKeyDown={applySearchImmediately}
                             placeholder={t("libraryDetail.searchFields.file.placeholder")}
                             autoComplete="off"
                           />
@@ -4303,6 +4311,7 @@ export function LibraryDetailPage() {
                                         id={`library-metadata-search-${field}`}
                                         value={fieldValues[field] ?? ""}
                                         onValueChange={(nextValue) => updateMetadataFieldValue(field, nextValue)}
+                                        onKeyDown={applySearchImmediately}
                                         placeholder={t(config.placeholderKey)}
                                         autoComplete="off"
                                       />

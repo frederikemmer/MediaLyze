@@ -2206,6 +2206,7 @@ export type HistoryReconstructionStatus = {
     | "loading_library"
     | "reconstructing_file_history"
     | "reconstructing_library_history"
+    | "saving_history"
     | "completed"
     | "canceled"
     | "failed";

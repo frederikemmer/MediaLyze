@@ -4,6 +4,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from math import isfinite
+import pickle
+from tempfile import TemporaryFile
 from typing import Callable
 
 from sqlalchemy import func, insert, select
@@ -64,7 +66,7 @@ _RECONSTRUCTED_NUMERIC_KEYS = {
 
 @dataclass(slots=True)
 class _PreparedMediaFile:
-    media_file: MediaFile
+    media_file: MediaFile | None
     inferred_added_at: datetime
     inferred_snapshot_day: date
     size_bytes: int
@@ -421,6 +423,8 @@ def _progress_percent(libraries_total: int, libraries_processed: int, library_ph
 def _emit_progress(progress_callback: ProgressCallback | None, **payload) -> None:
     if progress_callback is None:
         return
+    if "progress_percent" in payload:
+        payload["progress_percent"] = min(payload["progress_percent"], 99.0)
     progress_callback(**payload)
 
 
@@ -430,8 +434,25 @@ def _progress_update_step(total: int) -> int:
     return max(1, total // 100)
 
 
+RECONSTRUCTION_BATCH_SIZE = 200
+RECONSTRUCTION_WRITE_BATCH_BYTES = 8 * 1024 * 1024
+
+
 def reconstruct_history_from_media_files(
     db: Session,
+    *,
+    progress_callback: ProgressCallback | None = None,
+    library_ids: tuple[int, ...] | None = None,
+) -> HistoryReconstructionRead:
+    # Keep large prepared snapshots off the Python heap and delay writes until
+    # all expensive computation is complete. The final transaction remains atomic.
+    with TemporaryFile() as staged_history, db.no_autoflush:
+        return _reconstruct_history(db, staged_history, progress_callback=progress_callback, library_ids=library_ids)
+
+
+def _reconstruct_history(
+    db: Session,
+    staged_history,
     *,
     progress_callback: ProgressCallback | None = None,
     library_ids: tuple[int, ...] | None = None,
@@ -491,23 +512,12 @@ def reconstruct_history_from_media_files(
             created_library_history_entries=created_library_history_entries,
             updated_library_history_entries=updated_library_history_entries,
         )
-        media_files = db.scalars(
-            select(MediaFile)
-            .where(MediaFile.library_id == library.id, MediaFile.is_transcode_variant.is_(False))
-            .order_by(MediaFile.id.asc())
-            .options(
-                defer(MediaFile.raw_ffprobe_json),
-                defer(MediaFile.quality_score_breakdown),
-                defer(MediaFile.analysis_failure_detail),
-                selectinload(MediaFile.media_format),
-                selectinload(MediaFile.video_streams),
-                selectinload(MediaFile.audio_streams),
-                selectinload(MediaFile.subtitle_streams),
-                selectinload(MediaFile.external_subtitles),
-                selectinload(MediaFile.library_root),
+        media_count = int(db.scalar(
+            select(func.count(MediaFile.id)).where(
+                MediaFile.library_id == library.id, MediaFile.is_transcode_variant.is_(False)
             )
-        ).all()
-        if not media_files:
+        ) or 0)
+        if not media_count:
             _emit_progress(
                 progress_callback,
                 phase=HistoryReconstructionPhase.loading_libraries,
@@ -567,46 +577,6 @@ def reconstruct_history_from_media_files(
                 ).all()
                 if date_created is not None
             }
-        prepared_files: list[_PreparedMediaFile] = []
-        prepared_step = _progress_update_step(len(media_files))
-        for prepared_index, media_file in enumerate(media_files, start=1):
-            added_at_override = jellyfin_added_dates.get(media_file.id)
-            prepared_files.append(
-                _build_prepared_media_file(
-                    media_file,
-                    resolution_categories,
-                    now,
-                    added_at_override=added_at_override,
-                )
-            )
-            if library.history_added_date_source in {
-                HistoryAddedDateSource.jellyfin,
-                HistoryAddedDateSource.connector,
-            }:
-                if added_at_override is None:
-                    jellyfin_added_date_fallbacks += 1
-                else:
-                    jellyfin_added_dates_used += 1
-            if prepared_index % prepared_step == 0 or prepared_index == len(media_files):
-                _emit_progress(
-                    progress_callback,
-                    phase=HistoryReconstructionPhase.reconstructing_file_history,
-                    progress_percent=_progress_percent(
-                        libraries_total,
-                        library_index,
-                        0.5 * (prepared_index / len(media_files)),
-                    ),
-                    libraries_total=libraries_total,
-                    libraries_processed=library_index,
-                    libraries_with_media=libraries_with_media,
-                    current_library_name=library.name,
-                    phase_total=len(media_files),
-                    phase_completed=prepared_index,
-                    created_file_history_entries=created_file_history_entries,
-                    created_library_history_entries=created_library_history_entries,
-                    updated_library_history_entries=updated_library_history_entries,
-                )
-
         earliest_file_history_by_path = {
             (root_id, relative_path): captured_at
             for root_id, relative_path, captured_at in db.execute(
@@ -617,62 +587,84 @@ def reconstruct_history_from_media_files(
                 )
                 .where(MediaFileHistory.library_id == library.id)
                 .group_by(MediaFileHistory.library_root_id, MediaFileHistory.relative_path)
-            ).all()
+            )
         }
-        file_history_emit_step = _progress_update_step(len(prepared_files))
-        for prepared_index, prepared in enumerate(prepared_files, start=1):
-            history_key = (prepared.media_file.library_root_id, prepared.media_file.relative_path)
-            earliest_existing_capture = earliest_file_history_by_path.get(history_key)
-            if earliest_existing_capture is not None and earliest_existing_capture <= prepared.inferred_added_at:
-                pass
-            elif file_history_cutoff is not None and prepared.inferred_added_at < file_history_cutoff:
-                pass
-            else:
-                snapshot, snapshot_hash = build_media_file_history_snapshot(prepared.media_file, resolution_categories)
-                db.execute(insert(MediaFileHistory.__table__), {
-                    "library_id": library.id,
-                    "library_root_id": prepared.media_file.library_root_id,
-                    "root_alias": prepared.media_file.library_root.display_name if prepared.media_file.library_root else None,
-                    "media_file_id": prepared.media_file.id,
-                    "relative_path": prepared.media_file.relative_path,
-                    "filename": prepared.media_file.filename,
-                    "captured_at": prepared.inferred_added_at,
-                    "capture_reason": MediaFileHistoryCaptureReason.history_reconstruction,
-                    "snapshot_hash": snapshot_hash,
-                    "snapshot": snapshot,
-                })
-                earliest_file_history_by_path[history_key] = prepared.inferred_added_at
-                created_file_history_entries += 1
-
-            # Prepared records are retained for daily aggregate reconstruction,
-            # but their large raw data and newly built snapshots are not needed
-            # after this file's historical entry has been persisted.
-            db.expire(prepared.media_file, [
-                "raw_ffprobe_json", "quality_score_breakdown", "analysis_failure_detail",
-                "media_format", "video_streams", "audio_streams", "subtitle_streams",
-                "external_subtitles", "chapters",
-            ])
-
-            if prepared_index % file_history_emit_step == 0 or prepared_index == len(prepared_files):
-                _emit_progress(
-                    progress_callback,
-                    phase=HistoryReconstructionPhase.reconstructing_file_history,
-                    progress_percent=_progress_percent(
-                        libraries_total,
-                        library_index,
-                        0.5 * (prepared_index / len(prepared_files)),
-                    ),
-                    libraries_total=libraries_total,
-                    libraries_processed=library_index,
-                    libraries_with_media=libraries_with_media,
-                    current_library_name=library.name,
-                    phase_total=len(prepared_files),
-                    phase_completed=prepared_index,
-                    created_file_history_entries=created_file_history_entries,
-                    created_library_history_entries=created_library_history_entries,
-                    updated_library_history_entries=updated_library_history_entries,
+        prepared_files: list[_PreparedMediaFile] = []
+        prepared_step = _progress_update_step(media_count)
+        last_id = 0
+        prepared_index = 0
+        media_file = None
+        while True:
+            media_batch = db.scalars(
+                select(MediaFile)
+                .where(MediaFile.library_id == library.id, MediaFile.is_transcode_variant.is_(False), MediaFile.id > last_id)
+                .order_by(MediaFile.id.asc())
+                .limit(RECONSTRUCTION_BATCH_SIZE)
+                .options(
+                    defer(MediaFile.raw_ffprobe_json),
+                    defer(MediaFile.quality_score_breakdown),
+                    defer(MediaFile.analysis_failure_detail),
+                    selectinload(MediaFile.media_format),
+                    selectinload(MediaFile.video_streams),
+                    selectinload(MediaFile.audio_streams),
+                    selectinload(MediaFile.subtitle_streams),
+                    selectinload(MediaFile.external_subtitles),
+                    selectinload(MediaFile.library_root),
                 )
-
+            ).all()
+            if not media_batch:
+                break
+            last_id = media_batch[-1].id
+            for media_file in media_batch:
+                prepared_index += 1
+                added_at_override = jellyfin_added_dates.get(media_file.id)
+                prepared = _build_prepared_media_file(media_file, resolution_categories, now, added_at_override=added_at_override)
+                prepared_files.append(prepared)
+                if library.history_added_date_source in {HistoryAddedDateSource.jellyfin, HistoryAddedDateSource.connector}:
+                    if added_at_override is None:
+                        jellyfin_added_date_fallbacks += 1
+                    else:
+                        jellyfin_added_dates_used += 1
+                history_key = (media_file.library_root_id, media_file.relative_path)
+                earliest = earliest_file_history_by_path.get(history_key)
+                if not (earliest is not None and earliest <= prepared.inferred_added_at) and not (
+                    file_history_cutoff is not None and prepared.inferred_added_at < file_history_cutoff
+                ):
+                    snapshot, snapshot_hash = build_media_file_history_snapshot(media_file, resolution_categories)
+                    pickle.dump({
+                        "library_id": library.id,
+                        "library_root_id": media_file.library_root_id,
+                        "root_alias": media_file.library_root.display_name if media_file.library_root else None,
+                        "media_file_id": media_file.id,
+                        "relative_path": media_file.relative_path,
+                        "filename": media_file.filename,
+                        "captured_at": prepared.inferred_added_at,
+                        "capture_reason": MediaFileHistoryCaptureReason.history_reconstruction,
+                        "snapshot_hash": snapshot_hash,
+                        "snapshot": snapshot,
+                    }, staged_history, protocol=pickle.HIGHEST_PROTOCOL)
+                    earliest_file_history_by_path[history_key] = prepared.inferred_added_at
+                    created_file_history_entries += 1
+                db.expire(media_file, [
+                    "raw_ffprobe_json", "quality_score_breakdown", "analysis_failure_detail",
+                    "media_format", "video_streams", "audio_streams", "subtitle_streams",
+                    "external_subtitles", "chapters",
+                ])
+                prepared.media_file = None
+                if prepared_index % prepared_step == 0 or prepared_index == media_count:
+                    _emit_progress(
+                        progress_callback,
+                        phase=HistoryReconstructionPhase.reconstructing_file_history,
+                        progress_percent=_progress_percent(libraries_total, library_index, 0.5 * (prepared_index / media_count)),
+                        libraries_total=libraries_total, libraries_processed=library_index,
+                        libraries_with_media=libraries_with_media, current_library_name=library.name,
+                        phase_total=media_count, phase_completed=prepared_index,
+                        created_file_history_entries=created_file_history_entries,
+                        created_library_history_entries=created_library_history_entries,
+                        updated_library_history_entries=updated_library_history_entries,
+                    )
+            media_batch.clear()
+        del media_file
         if not prepared_files:
             continue
 
@@ -766,12 +758,25 @@ def reconstruct_history_from_media_files(
                 accumulator.add(prepared)
             if accumulator.file_count > 0:
                 snapshot_day = current_day.isoformat()
-                reconstructed_snapshot = _build_reconstructed_library_snapshot(
-                    library,
-                    accumulator,
-                    new_files=len(new_files),
-                )
                 existing_history_row = existing_history_rows.get(snapshot_day)
+                needs_reconstruction = (
+                    existing_history_row is None
+                    or _snapshot_needs_trend_reconstruction(
+                        existing_history_row.snapshot
+                        if isinstance(existing_history_row.snapshot, dict)
+                        else None
+                    )
+                )
+                # Complete snapshots are immutable inputs to reconstruction. Keep
+                # applying this day's events above so later missing or incomplete
+                # days receive the same cumulative values, but avoid rebuilding
+                # summaries and distributions for a day that will be preserved.
+                if needs_reconstruction:
+                    reconstructed_snapshot = _build_reconstructed_library_snapshot(
+                        library,
+                        accumulator,
+                        new_files=len(new_files),
+                    )
                 if existing_history_row is None:
                     db.add(
                         LibraryHistory(
@@ -787,9 +792,7 @@ def reconstruct_history_from_media_files(
                         oldest_snapshot_day = snapshot_day
                     if newest_snapshot_day is None or snapshot_day > newest_snapshot_day:
                         newest_snapshot_day = snapshot_day
-                elif _snapshot_needs_trend_reconstruction(
-                    existing_history_row.snapshot if isinstance(existing_history_row.snapshot, dict) else None
-                ):
+                elif needs_reconstruction:
                     existing_history_row.snapshot = _merge_reconstructed_library_snapshot(
                         existing_history_row.snapshot if isinstance(existing_history_row.snapshot, dict) else None,
                         reconstructed_snapshot,
@@ -836,6 +839,24 @@ def reconstruct_history_from_media_files(
             updated_library_history_entries=updated_library_history_entries,
         )
 
+    _emit_progress(progress_callback, phase=HistoryReconstructionPhase.saving_history,
+                   progress_percent=99.0, current_library_name=None,
+                   phase_total=created_file_history_entries, phase_completed=0)
+    staged_history.seek(0)
+    saved_count = 0
+    while saved_count < created_file_history_entries:
+        batch = []
+        batch_start = staged_history.tell()
+        for _ in range(min(RECONSTRUCTION_BATCH_SIZE, created_file_history_entries - saved_count)):
+            batch.append(pickle.load(staged_history))
+            # A single record can exceed the target; never retain an unbounded
+            # group of large raw probe snapshots in the final write batch.
+            if staged_history.tell() - batch_start >= RECONSTRUCTION_WRITE_BATCH_BYTES:
+                break
+        db.execute(insert(MediaFileHistory.__table__), batch)
+        saved_count += len(batch)
+        _emit_progress(progress_callback, phase=HistoryReconstructionPhase.saving_history,
+                       progress_percent=99.0, phase_total=created_file_history_entries, phase_completed=saved_count)
     db.commit()
     return HistoryReconstructionRead(
         generated_at=now,
