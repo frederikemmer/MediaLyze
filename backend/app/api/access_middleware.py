@@ -32,8 +32,9 @@ from backend.app.services.access_context import principal_context
 
 
 # Desktop uses a private bridge identity for application APIs, not local user
-# accounts. Keep account setup, login, preferences, and rights APIs unavailable
+# accounts. Keep account setup, login, and rights APIs unavailable
 # on this runtime even if a stale browser session or direct client calls them.
+# Personal preferences use the authenticated bridge identity without an account.
 DESKTOP_DISABLED_ACCESS_PATHS = {
     "/me/passkeys",
     "/me/passkeys/options",
@@ -51,7 +52,6 @@ DESKTOP_DISABLED_ACCESS_PATHS = {
     "/users/{account_id}",
     "/access/guest",
     "/access/libraries",
-    "/me/preferences",
     "/me/account",
 }
 

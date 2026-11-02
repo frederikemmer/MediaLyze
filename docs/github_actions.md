@@ -10,9 +10,16 @@ This document describes the MediaLyze GitHub Actions workflows, their automatic 
 | --- | --- | --- | --- | --- |
 | `build and publish Docker images` | `.github/workflows/build-docker.yaml` | Push to `dev` or `main` | Yes | Publish development images or run the official release process |
 | `build desktop artifacts` | `.github/workflows/build-desktop.yaml` | Published GitHub release | Yes | Build Linux, macOS, and Windows desktop packages |
+| `tests` | `.github/workflows/test.yaml` | Pull requests targeting `dev`/`main`; reused before Docker publishing | Yes | Locked backend/frontend tests, production build/asset checks and Desktop packaging contracts |
 | `validate release metadata` | `.github/workflows/validate-release-pr.yaml` | Relevant pull request changes targeting `main` | No | Validate aligned versions and release changelog data |
 
 The former dedicated development Docker and desktop workflow files were consolidated into the two build workflows above. Development and release outputs remain logically isolated even though they share workflow definitions.
+
+## Test gates
+
+The reusable `test.yaml` workflow runs Python 3.12 with `uv sync --locked --extra dev`, FFmpeg/ffprobe and isolated temporary configuration/media directories. Its Node 22 job installs frontend packages with `npm ci`, runs Vitest, builds the production bundle, verifies every required Brotli/Gzip asset against its original bytes, and runs the Desktop packaging regression tests. The large UI catalog has a separate structural markup test; route tests verify its development-only access without mounting every fixture interaction.
+
+Pull requests to `dev` and `main` expose stable Backend and Frontend checks for branch protection. The Docker workflow calls the same workflow and requires it to pass before preparing or publishing images/releases. Failed tests therefore prevent publication even when a push was already accepted. Official main-branch runs are not canceled by a newer run's reusable-test concurrency group. This does not replace native installer smoke tests on the Desktop target platforms.
 
 ## Branch and publication boundaries
 

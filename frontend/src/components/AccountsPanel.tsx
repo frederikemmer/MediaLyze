@@ -1,7 +1,6 @@
 import { validNewPassword } from "../lib/password-policy";
-import { useTheme, type ThemePreference } from "../lib/theme";
-import i18n, { SUPPORTED_INTERFACE_LANGUAGES } from "../i18n";
 import { Fragment, useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, ChevronRight, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { accessRequest } from "../lib/access-session";
@@ -593,169 +592,91 @@ export function RightsTree({
   );
 }
 
-export function PersonalAccountPanel() {
-  const { identity, logout, refresh } = useAuth();
-  const { preference, setPreference } = useTheme();
+export function PersonalAccountPanel({ onProfileSaved }: { onProfileSaved?: (username: string) => void } = {}) {
+  const { identity, refresh } = useAuth();
   const { t } = useTranslation();
+  const [username, setUsername] = useState(identity?.username ?? "");
+  const [email, setEmail] = useState(identity?.email ?? "");
+  const [saved, setSaved] = useState({ username: identity?.username ?? "", email: identity?.email ?? "" });
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
-  const [username, setUsername] = useState(identity?.username ?? "");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
   const [message, setMessage] = useState("");
-  if (!identity) return null;
+  const [profileError, setProfileError] = useState("");
+  const emailRef = useRef<HTMLInputElement>(null);
+  const usernameEnvConfigured = identity?.owner && identity.username_env_configured;
+  const passwordEnvConfigured = identity?.owner && identity.password_env_configured;
+  const usernameInvalid = !/^[a-zA-Z0-9][a-zA-Z0-9_.@-]{0,63}$/.test(username);
+  const emailInvalid = Boolean(email && emailRef.current && !emailRef.current.validity.valid);
+  const closePasswordDialog = () => { setDialogOpen(false); setCurrent(""); setNext(""); setMessage(""); };
+  const saveProfile = () => {
+    if (!identity || identity.kind !== "account" || profileSaving || profileError) return;
+    if (username === saved.username && email === saved.email) return;
+    if (usernameInvalid || !emailRef.current?.validity.valid) return;
+    const changes: { username?: string; email?: string } = {};
+    if (username !== saved.username) changes.username = username;
+    if (email !== saved.email) changes.email = email;
+    if (!Object.keys(changes).length) return;
+    setProfileSaving(true);
+    void accessRequest<{ username: string; email: string | null }>("/me/account", {
+      method: "PATCH", body: JSON.stringify(changes),
+    }).then(async (result) => {
+      setSaved({ username: result.username, email: result.email ?? "" });
+      onProfileSaved?.(result.username);
+      setProfileError("");
+      await refresh();
+    }).catch(() => setProfileError(t("access.saveError")))
+      .finally(() => setProfileSaving(false));
+  };
+  useEffect(() => {
+    const timer = window.setTimeout(saveProfile, 600);
+    return () => window.clearTimeout(timer);
+  }, [username, email, saved, identity, refresh, t, profileSaving, profileError, onProfileSaved]);
+  if (!identity || identity.kind !== "account") return null;
   return (
     <div className="form-grid">
-      <div className="app-settings-performance-grid">
-        <label>
-          {t("libraries.language")}
-          <select
-            className="settings-choice-input"
-            value={i18n.resolvedLanguage ?? "en"}
-            onChange={(e) => void i18n.changeLanguage(e.target.value)}
-          >
-            {SUPPORTED_INTERFACE_LANGUAGES.map((language) => (
-              <option key={language} value={language}>
-                {t(`language.${language}`)}
-              </option>
-            ))}
-          </select>
+      <div className="app-settings-performance-grid personal-account-credentials-grid">
+        <label>{t("access.username")}
+          <input value={username} maxLength={64}
+            onChange={(e) => { setProfileError(""); setUsername(e.target.value); }} onBlur={saveProfile} autoComplete="username" required
+            aria-invalid={usernameInvalid} aria-describedby={usernameInvalid ? "personal-username-error" : undefined} />
+          {usernameInvalid && <span id="personal-username-error" className="field-hint">{t("access.invalidUsername")}</span>}
         </label>
-        <label>
-          {t("libraries.theme")}
-          <select
-            className="settings-choice-input"
-            value={preference}
-            onChange={(e) => setPreference(e.target.value as ThemePreference)}
-          >
-            {["system", "light", "dark"].map((theme) => (
-              <option key={theme} value={theme}>
-                {t(`theme.${theme}`)}
-              </option>
-            ))}
-          </select>
+        <label>{t("access.email")}
+          <input ref={emailRef} type="email" value={email} maxLength={254}
+            onChange={(e) => { setProfileError(""); setEmail(e.target.value); }} onBlur={saveProfile} autoComplete="email"
+            aria-invalid={emailInvalid} aria-describedby={emailInvalid ? "personal-email-error" : undefined} />
+          {emailInvalid && <span id="personal-email-error" className="field-hint">{t("access.invalidEmail")}</span>}
         </label>
       </div>
-      {identity.owner && (
-        <form
-          className="form-grid"
-          onSubmit={(e) => {
+      {usernameEnvConfigured && <p className="field-hint">{t("access.ownerUsernameEnvironmentWarning")}</p>}
+      {profileError && <p role="alert" className="alert">{profileError}</p>}
+      <div className="button-row"><button type="button" className="secondary"
+        onClick={() => { setMessage(""); setDialogOpen(true); }}>
+        {t("access.changePassword")}</button></div>
+      <PasskeysPanel />
+      {dialogOpen && createPortal(<div className="settings-create-library-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !pending) closePasswordDialog(); }}>
+        <section className="settings-create-library-dialog" role="dialog" aria-modal="true" aria-labelledby="personal-password-title" onKeyDown={(e) => { if (e.key === "Escape" && !pending) closePasswordDialog(); }}>
+          <div className="settings-create-library-dialog-header"><h2 id="personal-password-title">{t("access.changePassword")}</h2>
+            <button type="button" className="secondary icon-only-button" aria-label={t("access.close")} disabled={pending} onClick={closePasswordDialog}><X aria-hidden="true" /></button></div>
+          <form className="form-grid" onSubmit={(e) => {
             e.preventDefault();
-            void accessRequest("/me/account", {
-              method: "PATCH",
-              body: JSON.stringify({ username, password: current }),
-            })
-              .then(async () => {
-                setCurrent("");
-                await refresh();
-              })
-              .catch(() => setMessage(t("access.saveError")));
-          }}
-        >
-          <div className="app-settings-performance-grid personal-account-credentials-grid">
-            <label>
-              {t("access.username")}
-              <input
-                value={username}
-                maxLength={64}
-                disabled={identity.username_locked}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
-                required
-              />
-            </label>
-            <label>
-              {t("access.currentPassword")}
-              <PasswordField
-                value={current}
-                autoComplete="current-password"
-                onChange={(e) => setCurrent(e.target.value)}
-                required
-              />
-            </label>
-          </div>
-          <div className="button-row personal-account-actions">
-            <button
-              type="submit"
-              disabled={
-                identity.username_locked || username === identity.username
-              }
-            >
-              {t("access.save")}
-            </button>
-            <button
-              className="secondary"
-              type="button"
-              onClick={() => void logout()}
-            >
-              {t("access.logout")}
-            </button>
-          </div>
-          {identity.username_locked && (
-            <p className="muted">{t("access.environmentLocked")}</p>
-          )}
-          {message && <p role="alert">{message}</p>}
-        </form>
-      )}
-      {identity.kind === "account" && !identity.owner && (
-        <form
-          className="form-grid"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!validNewPassword(next)) {
-              setMessage(t("access.passwordRequirements"));
-              return;
-            }
-            void accessRequest("/auth/password", {
-              method: "POST",
-              body: JSON.stringify({
-                current_password: current,
-                password: next,
-              }),
-            })
-              .then(refresh)
-              .catch(() => setMessage(t("access.saveError")));
-          }}
-        >
-          <label>
-            {t("access.currentPassword")}
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={current}
-              onChange={(e) => setCurrent(e.target.value)}
-              required
-            />
-          </label>
-          <label>
-            {t("access.newPassword")}
-            <input
-              type="password"
-              autoComplete="new-password"
-              minLength={5}
-              value={next}
-              onChange={(e) => setNext(e.target.value)}
-              disabled={identity.password_locked}
-              required
-            />
-          </label>
-          {identity.password_locked && (
-            <p className="muted">{t("access.environmentLocked")}</p>
-          )}
-          <div className="button-row personal-account-actions">
-            <button type="submit" disabled={identity.password_locked}>
-              {t("access.save")}
-            </button>
-            <button
-              className="secondary"
-              type="button"
-              onClick={() => void logout()}
-            >
-              {t("access.logout")}
-            </button>
-          </div>
-          {message && <p role="alert">{message}</p>}
-        </form>
-      )}
-      {identity.kind === "account" && <PasskeysPanel />}
+            if (!validNewPassword(next)) { setMessage(t("access.passwordRequirements")); return; }
+            setPending(true); setMessage("");
+            void accessRequest("/auth/password", { method: "POST", body: JSON.stringify({ current_password: current, password: next }) })
+              .then(async () => { setCurrent(""); setNext(""); setDialogOpen(false); await refresh(); })
+              .catch(() => setMessage(t("access.passwordChangeError"))).finally(() => setPending(false));
+          }}>
+            {passwordEnvConfigured && <p className="field-hint">{t("access.ownerPasswordEnvironmentWarning")}</p>}
+            <label>{t("access.currentPassword")}<PasswordField autoFocus autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required /></label>
+            <label>{t("access.newPassword")}<PasswordField autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} required minLength={5} /></label>
+            {message && <p role="alert" className="alert">{message}</p>}
+            <div className="button-row"><button type="submit" disabled={pending}>{t("access.save")}</button></div>
+          </form>
+        </section>
+      </div>, document.body)}
     </div>
   );
 }
@@ -804,6 +725,8 @@ export function AccountsPanel({
   });
   const [accessLoaded, setAccessLoaded] = useState(Boolean(fixture));
   const [selected, setSelected] = useState<string | null>(null);
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
   const [tab, setTab] = useState("rights");
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState(emptyPolicy());
@@ -880,7 +803,7 @@ export function AccountsPanel({
   if (actor.kind === "guest") {
     return (
       <AsyncPanel title={t("access.title")}>
-        <PersonalAccountPanel />
+        <p className="field-hint">{t("access.guestProfileHint")}</p>
       </AsyncPanel>
     );
   }
@@ -1010,6 +933,17 @@ export function AccountsPanel({
       titleAddon={
         selected ? (
           <>
+            {isSelf && actor.owner && (actor.username_env_configured || actor.password_env_configured) && (
+              <TooltipTrigger
+                className="settings-heading-tooltip"
+                ariaLabel={t("access.ownerEnvironmentTooltipLabel")}
+                content={[
+                  actor.username_env_configured && t("access.ownerUsernameEnvironmentWarning"),
+                  actor.password_env_configured && t("access.ownerPasswordEnvironmentWarning"),
+                ].filter(Boolean).join("\n")}
+                preserveLineBreaks
+              >?</TooltipTrigger>
+            )}
             {target?.owner && !isSelf && tab === "rights" ? (
               <span className="muted">{t("access.readOnly")}</span>
             ) : null}
@@ -1074,6 +1008,7 @@ export function AccountsPanel({
                 <Save className="nav-icon" aria-hidden="true" />
               </button>
             )}
+            {isSelf && tab === "account" && <button type="button" className="secondary" onClick={() => void auth.logout()}>{t("access.logout")}</button>}
             <button type="button" className="icon-button icon-button-borderless icon-button-static"
               aria-label={t("access.close")} data-tooltip={t("access.close")}
               disabled={pending} onClick={closeEditor}>
@@ -1262,7 +1197,13 @@ export function AccountsPanel({
               </div>
             )}
           </form>
-          {isSelf && tab === "account" && <PersonalAccountPanel />}
+          {isSelf && tab === "account" && <PersonalAccountPanel onProfileSaved={(username) => {
+            setAccounts((items) => items.map((item) => item.id === actor.id ? { ...item, username } : item));
+            if (selectedRef.current === actor.id) {
+              setName(username);
+              setSavedDraft((draft) => ({ ...draft, name: username }));
+            }
+          }} />}
         </>
       )}
     </AsyncPanel>

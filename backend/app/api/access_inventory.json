@@ -1,6 +1,6 @@
 {
-  "GET /notification-history": "notification_history",
-  "POST /notification-history": "notification_history",
+  "GET /notification-history": "notification_history_list",
+  "POST /notification-history": "notification_history_create",
   "DELETE /compatibility/hardware-profiles/{profile_id}": "delete_compatibility_hardware_profile",
   "DELETE /compatibility/profiles/{profile_id}": "delete_compatibility_profile",
   "DELETE /compatibility/software-profiles/{profile_id}": "delete_compatibility_software_profile",

@@ -105,8 +105,10 @@ export function NotificationSettingsPanel({ sectionId = "notification-settings",
   const bodyId = useId();
   const settingsHref = "/settings?section=application#notification-settings";
   const { appSettings, appSettingsLoaded, setAppSettings } = useAppData();
+  // Keep the editor's baseline stable; read current Guest storage when saving.
+  const [guestStored, setGuestStored] = useState(readGuestNotificationSettings);
   const stored = identity?.kind === "guest"
-    ? readGuestNotificationSettings()
+    ? guestStored
     : normalizeNotificationSettings(appSettings.ui_preferences?.notifications);
   const storedKey = JSON.stringify(stored);
   const [draft, setDraft] = useState(stored);
@@ -132,8 +134,13 @@ export function NotificationSettingsPanel({ sectionId = "notification-settings",
     if (!editable || saving || !appSettingsLoaded || JSON.stringify(draft) !== attemptedDraftKey) return;
     setSaving(true);
     try {
+      const changes: Partial<NotificationSettings> = {};
+      for (const key of ["palette", "style", "duration_seconds", "grouping"] as const) {
+        if (draft[key] !== stored[key]) Object.assign(changes, { [key]: draft[key] });
+      }
       if (identity?.kind === "guest") {
-        const updated = saveGuestNotificationSettings(draft);
+        const updated = saveGuestNotificationSettings({ ...readGuestNotificationSettings(), ...changes });
+        setGuestStored(updated);
         setDraft(updated);
         notify({
           type: "success", message: t("notifications.saved"), topicKey: "notification-settings",
@@ -141,7 +148,7 @@ export function NotificationSettingsPanel({ sectionId = "notification-settings",
         });
         return;
       }
-      const updated = await api.updateAppSettings({ ui_preferences: { notifications: draft } });
+      const updated = await api.updateAppSettings({ ui_preferences: { notifications: changes } });
       setAppSettings(updated);
       notify({
         type: "success", message: t("notifications.saved"), topicKey: "notification-settings",

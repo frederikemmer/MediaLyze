@@ -419,7 +419,6 @@ def test_desktop_has_no_local_account_or_rights_apis_and_browser_credentials_do_
         ("POST", "/api/users"),
         ("GET", "/api/access/libraries"),
         ("GET", "/api/access/guest"),
-        ("GET", "/api/me/preferences"),
         ("POST", "/api/auth/login"),
         ("POST", "/api/auth/guest"),
         ("POST", "/api/auth/password"),

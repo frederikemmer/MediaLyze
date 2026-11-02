@@ -475,53 +475,124 @@ describe("Account permissions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.getByPlaceholderText("Search accounts")).toBeInTheDocument();
   });
-  it("pairs owner username and masked current password with Save and Sign out", () => {
-    vi.spyOn(authModule, "useAuth").mockReturnValue({
-      identity: { ...actor, username: "Self" },
-      status: null,
-      has: () => false,
-      refresh: vi.fn(),
-      logout: vi.fn(),
-    });
-    const request = vi.spyOn(accessApi, "accessRequest");
-    const { container } = render(<PersonalAccountPanel />);
-    expect(screen.getByLabelText("Color theme")).toBeInTheDocument();
-    expect(screen.getByLabelText("Interface language")).toBeInTheDocument();
-    expect(container.querySelectorAll(".personal-account-credentials-grid > label")).toHaveLength(2);
-    expect(screen.queryByLabelText("New password")).not.toBeInTheDocument();
-
-    const currentPassword = screen.getByLabelText("Current password");
-    expect(currentPassword).toHaveAttribute("type", "password");
-    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Show password" }));
-    expect(currentPassword).toHaveAttribute("type", "text");
-    expect(screen.getByRole("button", { name: "Hide password" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(request).toHaveBeenCalledWith("/me/passkeys");
-    expect(request.mock.calls.every(([, init]) => !init?.method)).toBe(true);
-  });
-  it("keeps password changing available to non-owner account holders", () => {
-    vi.spyOn(authModule, "useAuth").mockReturnValue({
-      identity: { ...actor, owner: false, username: "Alex" },
-      status: null,
-      has: () => false,
-      refresh: vi.fn(),
-      logout: vi.fn(),
-    });
-    const request = vi.spyOn(accessApi, "accessRequest");
+  it("autosaves personal username and email and opens a password dialog", async () => {
+    vi.spyOn(authModule, "useAuth").mockReturnValue({ identity: { ...actor, username: "Self" }, status: null, has: () => false, refresh: vi.fn(), logout: vi.fn() });
+    const request = vi.spyOn(accessApi, "accessRequest").mockImplementation(async (path, init) => path === "/me/account" ? { username: JSON.parse(String(init?.body)).username ?? "Self", email: "self@example.com" } : { enabled: false, reason: "not_configured", items: [] });
     render(<PersonalAccountPanel />);
-    expect(screen.getByLabelText("Current password")).toHaveAttribute(
-      "type",
-      "password",
-    );
+    expect(screen.queryByLabelText("Color theme")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Interface language")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "self@example.com" } });
+    fireEvent.blur(screen.getByLabelText("Email address"));
+    expect(request).toHaveBeenCalledWith("/me/account", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ email: "self@example.com" }) }));
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/me/account", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ email: "self@example.com" }) })));
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "NewSelf" } });
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/me/account", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ username: "NewSelf" }) })));
+    fireEvent.click(screen.getByRole("button", { name: "Change password" }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    expect(dialog.parentElement).toHaveClass("settings-create-library-backdrop");
+    expect(dialog.parentElement?.parentElement).toBe(document.body);
+    expect(screen.getByLabelText("Current password")).toHaveAttribute("type", "password");
+    expect(screen.getByLabelText("New password")).toHaveAttribute("type", "password");
+    fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "old-password" } });
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "new-password1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/auth/password", expect.objectContaining({ method: "POST", body: JSON.stringify({ current_password: "old-password", password: "new-password1" }) })));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+  it("offers the password dialog to non-owner account holders", () => {
+    vi.spyOn(authModule, "useAuth").mockReturnValue({ identity: { ...actor, owner: false, username: "Alex" }, status: null, has: () => false, refresh: vi.fn(), logout: vi.fn() });
+    render(<PersonalAccountPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Change password" }));
+    expect(screen.getByLabelText("Current password")).toBeInTheDocument();
     expect(screen.getByLabelText("New password")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
-    expect(request).toHaveBeenCalledWith("/me/passkeys");
-    expect(request.mock.calls.every(([, init]) => !init?.method)).toBe(true);
+    fireEvent.mouseDown(screen.getByRole("dialog").parentElement!);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Change password" }));
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+  it("keeps the password dialog open when changing the password fails", async () => {
+    vi.spyOn(authModule, "useAuth").mockReturnValue({ identity: actor, status: null, has: () => false, refresh: vi.fn(), logout: vi.fn() });
+    vi.spyOn(accessApi, "accessRequest").mockImplementation(async (path) => {
+      if (path === "/auth/password") throw new Error("Invalid current password");
+      return { enabled: false, reason: "not_configured", items: [] };
+    });
+    render(<PersonalAccountPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Change password" }));
+    fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "incorrect" } });
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "new-password1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not change the password");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+  it.each([[false, false], [true, false], [false, true], [true, true]])(
+    "shows independent environment warnings for username=%s and password=%s",
+    async (usernameConfigured, passwordConfigured) => {
+      vi.spyOn(authModule, "useAuth").mockReturnValue({
+        identity: { ...actor, username_env_configured: usernameConfigured, password_env_configured: passwordConfigured },
+        status: null, has: () => false, refresh: vi.fn(), logout: vi.fn(),
+      });
+      vi.spyOn(accessApi, "accessRequest").mockResolvedValue({ enabled: false, reason: "not_configured", items: [] });
+      render(<PersonalAccountPanel />);
+      expect(screen.getByLabelText("Username")).toBeEnabled();
+      expect(Boolean(screen.queryByText(/OWNER_USERNAME is set/))).toBe(usernameConfigured);
+      const button = screen.getByRole("button", { name: "Change password" });
+      expect(button).toBeEnabled();
+      fireEvent.click(button);
+      expect(Boolean(screen.queryByText(/OWNER_PASSWORD is set/))).toBe(passwordConfigured);
+      expect(screen.getByLabelText("Current password")).toBeEnabled();
+    },
+  );
+  it("places configured owner environment details between the account title and tabs", async () => {
+    vi.spyOn(authModule, "useAuth").mockReturnValue({
+      identity: { ...actor, username_env_configured: true, password_env_configured: true },
+      status: null, has: () => false, refresh: vi.fn(), logout: vi.fn(),
+    });
+    vi.spyOn(accessApi, "accessRequest").mockResolvedValue({ enabled: false, reason: "not_configured", items: [] });
+    render(<AccountsPanel openOwnAccount />);
+    const trigger = await screen.findByRole("button", { name: "Explain owner environment variables" });
+    expect(trigger.previousElementSibling).toHaveTextContent("Owner");
+    expect(trigger.nextElementSibling).toHaveAttribute("aria-label", "Account editor");
+    fireEvent.click(trigger);
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip).toHaveTextContent("OWNER_USERNAME");
+    expect(tooltip).toHaveTextContent("OWNER_PASSWORD");
+  });
+  it.each([[false, false], [true, false], [false, true]])(
+    "only mentions configured environment values in the account header (username=%s, password=%s)",
+    async (usernameConfigured, passwordConfigured) => {
+      vi.spyOn(authModule, "useAuth").mockReturnValue({
+        identity: { ...actor, username_env_configured: usernameConfigured, password_env_configured: passwordConfigured },
+        status: null, has: () => false, refresh: vi.fn(), logout: vi.fn(),
+      });
+      vi.spyOn(accessApi, "accessRequest").mockResolvedValue({ enabled: false, reason: "not_configured", items: [] });
+      render(<AccountsPanel openOwnAccount />);
+      await screen.findByRole("button", { name: "Sign out" });
+      const trigger = screen.queryByRole("button", { name: "Explain owner environment variables" });
+      if (!usernameConfigured && !passwordConfigured) {
+        expect(trigger).not.toBeInTheDocument();
+        return;
+      }
+      expect(trigger).not.toBeNull();
+      fireEvent.click(trigger!);
+      const tooltip = await screen.findByRole("tooltip");
+      expect(tooltip.textContent?.includes("OWNER_USERNAME")).toBe(usernameConfigured);
+      expect(tooltip.textContent?.includes("OWNER_PASSWORD")).toBe(passwordConfigured);
+    },
+  );
+  it("places sign out immediately before close in the personal account header", async () => {
+    const logout = vi.fn();
+    vi.spyOn(authModule, "useAuth").mockReturnValue({ identity: actor, status: null, has: () => false, refresh: vi.fn(), logout });
+    const request = vi.spyOn(accessApi, "accessRequest").mockImplementation(async (path) => path === "/me/account" ? { username: "Renamed", email: null } : { enabled: false, reason: "not_configured", items: [] });
+    render(<AccountsPanel openOwnAccount />);
+    const signOut = await screen.findByRole("button", { name: "Sign out" });
+    expect(signOut.nextElementSibling).toHaveAttribute("aria-label", "Close");
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "Renamed" } });
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/me/account", expect.objectContaining({ method: "PATCH" })));
+    expect(await screen.findByRole("heading", { name: "Renamed" })).toBeInTheDocument();
+    fireEvent.click(signOut);
+    expect(logout).toHaveBeenCalledOnce();
   });
   it("returns to the account overview when the active Users & access navigation is selected again", () => {
     const fixture = {

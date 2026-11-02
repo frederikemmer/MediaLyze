@@ -14,7 +14,7 @@ import { HeaderAccountMenu } from "../components/HeaderAccountMenu";
 import * as passkeys from "./passkeys";
 import { AuthProvider, emptyPolicy, useAuth } from "./auth";
 import { clearIdentityRequests, setExpectedIdentity } from "./access-session";
-import { selectPreferenceIdentity } from "./preference-storage";
+import { preferenceStorage, selectPreferenceIdentity } from "./preference-storage";
 const identity = {
   id: "user-id",
   kind: "account",
@@ -72,6 +72,43 @@ function SessionView() {
   </>;
 }
 describe("Authentication gate", () => {
+  it.each(["account", "desktop"])("hydrates and partially saves %s preferences without overwriting another editor", async (kind) => {
+    const current = { ...identity, kind, id: kind === "desktop" ? "desktop" : identity.id };
+    const original = { palette: "contrast", style: "tint", duration_seconds: 9, grouping: "type" };
+    const latest = { ...original, duration_seconds: 6 };
+    let saved = { storage: {} as Record<string, string>, ui_preferences: {
+      interface_language: "en", color_theme: "dark", notifications: original,
+    } };
+    const patches: Array<Record<string, unknown>> = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      if (String(url).endsWith("/auth/status")) return json(status(current));
+      if (init?.method === "PATCH") {
+        const patch = JSON.parse(String(init.body));
+        patches.push(patch);
+        saved = { ...saved, ...patch, ui_preferences: { ...saved.ui_preferences, ...patch.ui_preferences } };
+      }
+      return json(saved);
+    });
+    const mounted = renderAuth(<AuthProvider><div>Preferences ready</div></AuthProvider>);
+    await screen.findByText("Preferences ready");
+    expect(preferenceStorage.getItem("medialyze-theme")).toBe("dark");
+    // The Notification editor saved newer values after hydration.
+    saved.ui_preferences.notifications = latest;
+    act(() => preferenceStorage.setItem("medialyze-settings-active-panel", "logs"));
+    await waitFor(() => expect(patches).toHaveLength(1));
+    expect(patches[0]).toMatchObject({ storage: { "medialyze-settings-active-panel": "logs" }, ui_preferences: { color_theme: "dark" } });
+    expect(patches[0].ui_preferences).not.toHaveProperty("notifications");
+    expect(saved.ui_preferences.notifications).toEqual(latest);
+    mounted.unmount();
+    // A fresh browser/Electron session has no local mirror to fall back to.
+    localStorage.clear();
+    selectPreferenceIdentity(null);
+    renderAuth(<AuthProvider><div>Restored preferences</div></AuthProvider>);
+    await screen.findByText("Restored preferences");
+    expect(preferenceStorage.getItem("medialyze-settings-active-panel")).toBe("logs");
+    expect(preferenceStorage.getItem("medialyze-theme")).toBe("dark");
+  });
+
   it("explains setup password requirements and rejects short passwords before sending", async () => {
     const fetch = vi
       .spyOn(globalThis, "fetch")

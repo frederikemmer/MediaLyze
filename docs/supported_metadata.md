@@ -318,6 +318,8 @@ External-source and playback sections depend on matched capable connectors. Sync
 
 These behaviors are shared across currently supported media kinds.
 
+Manual account/Guest scan jobs require both metadata-read and scan permission for their library when queued and again before execution. Revoking either prerequisite cancels waiting work, including jobs with older saved authority records. Scheduled/watch/maintenance work keeps its installation-level authority; already running jobs may finish. See [Users and access](user-access.md#jobs-and-desktopmachine-trust).
+
 ### 7.1 Scan modes
 
 | Scan Mode | Meaning | Normalized `scan_config` fields |

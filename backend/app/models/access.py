@@ -11,6 +11,7 @@ class LocalAccount(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     username: Mapped[str] = mapped_column(String(64), nullable=False)
     username_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    email: Mapped[str | None] = mapped_column(String(254), nullable=True)
     password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
     owner_slot: Mapped[int | None] = mapped_column(Integer, unique=True, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

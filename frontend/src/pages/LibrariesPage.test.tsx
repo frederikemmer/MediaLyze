@@ -564,10 +564,11 @@ describe("LibrariesPage settings navigation", () => {
     expect(await screen.findByRole("heading", { name: "App settings" })).toBeInTheDocument();
     expect(screen.getByTestId("location-probe")).toHaveTextContent("/settings?section=application");
 
-    fireEvent.click(screen.getByRole("button", { name: "History retention" }));
+    fireEvent.click(screen.getByRole("button", { name: "Logs" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Expand History retention" }));
 
     expect(await screen.findByRole("heading", { name: "History retention" })).toBeInTheDocument();
-    expect(screen.getByTestId("location-probe")).toHaveTextContent("/settings?section=history-retention");
+    expect(screen.getByTestId("location-probe")).toHaveTextContent("/settings?section=logs");
   });
 
   it("groups and searches the settings navigation", async () => {
@@ -1546,11 +1547,11 @@ describe("LibrariesPage ignore patterns", () => {
     await waitFor(() => expect(reconstructSpy).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(historyStatusSpy).toHaveBeenCalledTimes(2), { timeout: 3000 });
     await waitFor(() => expect(historyStorageSpy).toHaveBeenCalledTimes(2), { timeout: 3000 });
-    const reconstructionMessage = await screen.findByText(
-      "Reconstructed 12 library snapshots and 4 initial file-history entries.",
-    );
-    expect(reconstructionMessage).toBeInTheDocument();
-    expect(reconstructionMessage).toHaveClass("alert", "success");
+    // Terminal feedback moved to the shared notification watcher. The Logs
+    // action retains only live progress and refreshes its storage forecast.
+    expect(screen.queryByText("Reconstructed 12 library snapshots and 4 initial file-history entries.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reconstructing file history")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reconstruct history" })).toBeEnabled();
   });
 
   it("persists history retention values and refreshes the storage forecast", async () => {
@@ -2034,6 +2035,51 @@ describe("LibrariesPage media type selection", () => {
 });
 
 describe("LibrariesPage Jellyfin library assignments", () => {
+  it.each(["account", "guest", "owner", "desktop"] as const)(
+    "matches owner-only library connector settings to the %s identity",
+    async (kind) => {
+      const owner = kind === "owner" || kind === "desktop";
+      vi.spyOn(authModule, "useAuth").mockReturnValue({
+        identity: {
+          id: kind, username: kind, kind: kind === "owner" ? "account" : kind,
+          owner, revision: 1, must_change_password: false,
+          policy: { ...authModule.emptyPolicy(), mode: "future", shared: ["library.read", "library.edit"] },
+        },
+        status: null, refresh: async () => {}, logout: async () => {},
+        has: (right) => owner || ["library.read", "library.edit", "connector.view", "connector.manage"].includes(right),
+      });
+      const library = createLibrarySummary({
+        history_added_date_source: "medialyze",
+        connector_links: [{ connection_id: 7, connection_name: "Jellyfin", provider: "jellyfin",
+          connector_library_id: 1, connector_library_name: "Movies", link_method: "path" }],
+      });
+      vi.mocked(api.libraries).mockResolvedValue([library]);
+      const update = vi.spyOn(api, "updateLibrarySettings").mockResolvedValue(library);
+      renderPage({ activePanel: "configuredLibraries" });
+      await expandLibrarySettings();
+      const historySource = screen.getByRole("combobox", { name: "Historical added date" });
+      const preferredConnection = screen.getByRole("combobox", { name: "Preferred metadata connection" });
+      if (owner) {
+        expect(historySource).toBeEnabled();
+        expect(preferredConnection).toBeEnabled();
+        fireEvent.change(historySource, { target: { value: "connector" } });
+        await waitFor(() => expect(update).toHaveBeenCalledWith(1, { history_added_date_source: "connector" }));
+        fireEvent.change(preferredConnection, { target: { value: "7" } });
+        await waitFor(() => expect(update).toHaveBeenCalledWith(1, { preferred_connector_connection_id: 7 }));
+      } else {
+        expect(historySource).toBeDisabled();
+        expect(preferredConnection).toBeDisabled();
+        const hint = "Only the owner can change the historical added-date source and preferred metadata connection.";
+        expect(historySource).toHaveAccessibleDescription(hint);
+        expect(preferredConnection).toHaveAccessibleDescription(hint);
+        // Programmatic changes also stop before the request, even with edit/manage rights.
+        fireEvent.change(historySource, { target: { value: "connector" } });
+        fireEvent.change(preferredConnection, { target: { value: "7" } });
+        expect(update).not.toHaveBeenCalled();
+      }
+    },
+  );
+
   it("shows connector assignments as status instead of a library-side editor", async () => {
     const medialyzeLibrary = createLibrarySummary({
       connector_links: [
@@ -2203,6 +2249,18 @@ describe("LibrariesPage desktop mode", () => {
 });
 
 describe("LibrariesPage settings panels", () => {
+  it("lets Guest change language and theme locally in App settings", async () => {
+    vi.spyOn(authModule, "useAuth").mockReturnValue({
+      identity: { id: "guest", username: "Guest", kind: "guest", owner: false, revision: 1,
+        must_change_password: false, policy: authModule.emptyPolicy() },
+      status: null, refresh: async () => {}, logout: async () => {}, has: () => false,
+    });
+    renderPage({ activePanel: "appSettings" });
+    const theme = await screen.findByLabelText("Color theme");
+    expect(screen.getByLabelText("Interface language")).toBeInTheDocument();
+    fireEvent.change(theme, { target: { value: "dark" } });
+    expect(api.updateAppSettings).not.toHaveBeenCalled();
+  });
   it("keeps libraries selected while no library exists and exposes add library from the panel", async () => {
     vi.spyOn(api, "libraries").mockResolvedValue([]);
 
@@ -2583,12 +2641,10 @@ describe("LibrariesPage settings panels", () => {
 
     const qualityProfilesItem = await screen.findByRole("button", { name: /^quality profiles$/i });
     const patternRecognitionItem = screen.getByRole("button", { name: /^pattern recognition$/i });
-    const historyRetentionItem = screen.getByRole("button", { name: /^history retention$/i });
-    const recentScanLogsItem = screen.getByRole("button", { name: /^recent scan logs$/i });
+    const logsItem = screen.getByRole("button", { name: /^logs$/i });
 
     expect(qualityProfilesItem.compareDocumentPosition(patternRecognitionItem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(patternRecognitionItem.compareDocumentPosition(historyRetentionItem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(historyRetentionItem.compareDocumentPosition(recentScanLogsItem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(patternRecognitionItem.compareDocumentPosition(logsItem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("restores the persisted active settings panel from localStorage", async () => {
@@ -3031,7 +3087,7 @@ describe("LibrariesPage settings panels", () => {
   it("keeps recent scan logs out of the active panel by default", async () => {
     renderPage({ seedExpandedPanels: false });
 
-    expect(await screen.findByRole("button", { name: /^recent scan logs$/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /^logs$/i })).toBeInTheDocument();
     expect(screen.queryByText("No completed scans yet.")).not.toBeInTheDocument();
   });
 
@@ -3039,7 +3095,7 @@ describe("LibrariesPage settings panels", () => {
     renderPage({ seedExpandedPanels: false, activePanel: "recentScanLogs" });
 
     expect(await screen.findByText("No completed scans yet.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^recent scan logs$/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: /^logs$/i })).toHaveAttribute("aria-current", "page");
   });
 
   it("renders recent scan log cards and lazy-loads details", async () => {

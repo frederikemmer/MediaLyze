@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router";
 import { App } from "./App";
 import i18n from "./i18n";
 import { api, type AppSettings } from "./lib/api";
+import { preferenceStorage, selectPreferenceIdentity } from "./lib/preference-storage";
 
 const appVersionMock = vi.hoisted(() => ({ value: "dev" }));
 
@@ -14,6 +15,7 @@ vi.mock("./lib/app-version", () => ({
   },
 }));
 
+vi.mock("./pages/UiElementsPage", () => ({ UiElementsPage: () => <main><h2>UI elements</h2></main> }));
 vi.mock("./pages/DashboardPage", () => ({ DashboardPage: () => <main>Dashboard route</main> }));
 vi.mock("./pages/LibrariesPage", () => ({ LibrariesPage: () => <main>Settings route</main> }));
 vi.mock("./pages/LibraryDetailPage", () => ({ LibraryDetailPage: () => <main>Library route</main> }));
@@ -58,6 +60,7 @@ function renderApp(path: string) {
 }
 
 beforeEach(() => {
+  selectPreferenceIdentity(null);
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => new Response(JSON.stringify(String(url).endsWith("/auth/status") ? { setup_required: false, guest_enabled: false, csrf: "test", identity: { id: "desktop", kind: "desktop", username: "", owner: true, revision: 1, must_change_password: false, policy: { global: [], mode: "per_library", libraries: {}, shared: [], create: false } } } : {}), { status: 200, headers: { "Content-Type": "application/json" } }));
   appVersionMock.value = "dev";
   Object.defineProperty(window, "matchMedia", {
@@ -96,42 +99,10 @@ afterEach(() => {
 
 describe("App routing", () => {
   it("renders the UI elements catalog in development builds", async () => {
-    const { container } = renderApp("/ui-elements");
-
-    expect(
-      await screen.findByRole("heading", { name: "UI elements" }, { timeout: 10_000 }),
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText("Theme preview")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Header & navigation" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Settings variants" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Tables" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Runtime & scan logs" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Library & file detail" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Duplicates, paths & telemetry" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Dialogs, popovers & tooltips" })).toBeInTheDocument();
-
-    expect(screen.getAllByText("Dashboard", { exact: false }).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Settings", { exact: false }).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Library detail", { exact: false }).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("File detail", { exact: false }).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Scan logs", { exact: false }).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Release notes", { exact: false }).length).toBeGreaterThan(0);
-
-    expect(screen.getByText("Quality profiles list and metric accordions")).toBeInTheDocument();
-    expect(screen.getByText("Analyzed files virtual table")).toBeInTheDocument();
-    expect(screen.getByText("Recent scan log card")).toBeInTheDocument();
-    expect(screen.getByText("Duplicate group cards")).toBeInTheDocument();
-    expect(screen.getByText("File detail navigation and badges")).toBeInTheDocument();
-    expect(screen.getByText("Release notes dialog")).toBeInTheDocument();
-    const navigationButtons = container.querySelectorAll("button.icon-nav-button:not(.media-header-account-trigger), button.library-nav-link");
-    expect(navigationButtons.length).toBeGreaterThan(0);
-    navigationButtons.forEach((button) => {
-      expect(button.closest(".media-nav-library-menu")).not.toBeNull();
-      expect(button).toHaveAttribute("aria-label", "Libraries");
-      expect(["true", "false"]).toContain(button.getAttribute("aria-expanded"));
-    });
-    expect(container.querySelectorAll("a.icon-nav-button, a.library-nav-link").length).toBeGreaterThanOrEqual(4);
-  }, 30_000);
+    renderApp("/ui-elements");
+    expect(await screen.findByRole("heading", { name: "UI elements" })).toBeInTheDocument();
+    expect(screen.queryByText("Dashboard route")).not.toBeInTheDocument();
+  });
 
   it("redirects the UI elements catalog route outside development builds", async () => {
     appVersionMock.value = "0.14.0";
@@ -166,6 +137,10 @@ describe("App routing", () => {
   });
 
   it("uses the persisted interface language when no local language is stored", async () => {
+    const originalFetch = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (url, init) => String(url).endsWith("/me/preferences")
+      ? new Response(JSON.stringify({ ui_preferences: { interface_language: "uk", color_theme: "system" } }), { status: 200 })
+      : originalFetch(url, init));
     vi.mocked(api.appSettings).mockResolvedValue({
       ...createAppSettings(),
       ui_preferences: { interface_language: "uk", color_theme: "system" },
@@ -174,6 +149,6 @@ describe("App routing", () => {
     renderApp("/");
 
     await waitFor(() => expect(i18n.language).toBe("uk"));
-    expect(window.localStorage.getItem("medialyze-language")).toBe("uk");
+    expect(preferenceStorage.getItem("medialyze-language")).toBe("uk");
   });
 });

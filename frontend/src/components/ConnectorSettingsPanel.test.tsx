@@ -4,6 +4,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { api, type ConnectorConnection } from "../lib/api";
+import { MemoryRouter } from "react-router";
+import { AppDataProvider } from "../lib/app-data";
+import { NotificationProvider } from "../lib/notifications";
 import { ConnectorSettingsPanel } from "./ConnectorSettingsPanel";
 
 const CONNECTION: ConnectorConnection = {
@@ -30,6 +33,7 @@ const CONNECTION: ConnectorConnection = {
 };
 
 function mockApi(connections: ConnectorConnection[] = [CONNECTION]) {
+  vi.spyOn(api, "recordNotification").mockResolvedValue(undefined);
   vi.spyOn(api, "connectors").mockResolvedValue(connections);
   vi.spyOn(api, "connectorSyncStatus").mockResolvedValue(null);
   vi.spyOn(api, "connectorUsers").mockResolvedValue([
@@ -47,7 +51,7 @@ describe("ConnectorSettingsPanel", () => {
   it("renders provider connections as accordions with a subtle URL", async () => {
     mockApi();
 
-    render(<ConnectorSettingsPanel />);
+    render(<MemoryRouter><AppDataProvider><NotificationProvider><ConnectorSettingsPanel /></NotificationProvider></AppDataProvider></MemoryRouter>);
 
     expect(document.querySelector(".connector-settings-stack")).not.toBeInTheDocument();
     expect(await screen.findByText("Living Room")).toBeInTheDocument();
@@ -72,7 +76,7 @@ describe("ConnectorSettingsPanel", () => {
 
   it("shows a simple provider dropdown with Plex disabled", async () => {
     mockApi([]);
-    render(<ConnectorSettingsPanel />);
+    render(<MemoryRouter><AppDataProvider><NotificationProvider><ConnectorSettingsPanel /></NotificationProvider></AppDataProvider></MemoryRouter>);
 
     const addConnection = await screen.findByRole("button", { name: "Add connection" });
     expect(addConnection).toHaveClass("secondary", "small", "settings-panel-header-action");
@@ -92,7 +96,7 @@ describe("ConnectorSettingsPanel", () => {
   it("creates an additional Jellyfin connection disabled by default", async () => {
     mockApi([]);
     const create = vi.spyOn(api, "createConnector").mockResolvedValue(CONNECTION);
-    render(<ConnectorSettingsPanel />);
+    render(<MemoryRouter><AppDataProvider><NotificationProvider><ConnectorSettingsPanel /></NotificationProvider></AppDataProvider></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: "Add connection" }));
 
     fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Living Room" } });
@@ -114,7 +118,7 @@ describe("ConnectorSettingsPanel", () => {
       { remote_id: "user-1", name: "Alice", enabled_for_sync: true, last_synced_at: null },
       { remote_id: "user-2", name: "Bob", enabled_for_sync: true, last_synced_at: null },
     ]);
-    render(<ConnectorSettingsPanel />);
+    render(<MemoryRouter><AppDataProvider><NotificationProvider><ConnectorSettingsPanel /></NotificationProvider></AppDataProvider></MemoryRouter>);
 
     fireEvent.click(await screen.findByRole("button", { name: /Analyzed users/ }));
     fireEvent.click(await screen.findByRole("checkbox", { name: "Bob" }));
@@ -124,7 +128,7 @@ describe("ConnectorSettingsPanel", () => {
 
   it("groups and filters analyzed users", async () => {
     mockApi();
-    render(<ConnectorSettingsPanel />);
+    render(<MemoryRouter><AppDataProvider><NotificationProvider><ConnectorSettingsPanel /></NotificationProvider></AppDataProvider></MemoryRouter>);
 
     fireEvent.click(await screen.findByRole("button", { name: /Analyzed users/ }));
     expect(await screen.findByRole("heading", { name: "Selected" })).toBeInTheDocument();
@@ -161,7 +165,7 @@ describe("ConnectorSettingsPanel", () => {
       id: 1, name: "Movies", path: "/media/movies", roots: [{ id: 51, path: "/media/movies", display_name: "Main", path_key: "/media/movies" }], type: "movies", last_scan_at: null, scan_mode: "manual", duplicate_detection_mode: "off", scan_config: {}, created_at: "2026-08-04T00:00:00Z", updated_at: "2026-08-04T00:00:00Z", quality_profile: {} as never, show_on_dashboard: true, file_count: 0, total_size_bytes: 0, total_duration_seconds: 0, ready_files: 0, pending_files: 0,
     }]);
     const update = vi.spyOn(api, "updateConnector").mockResolvedValue({ ...CONNECTION, path_mapping_mode: "manual" });
-    render(<ConnectorSettingsPanel />);
+    render(<MemoryRouter><AppDataProvider><NotificationProvider><ConnectorSettingsPanel /></NotificationProvider></AppDataProvider></MemoryRouter>);
 
     const pathToggle = await screen.findByRole("button", { name: "Path mappings" });
     expect(pathToggle).toHaveAttribute("aria-expanded", "false");
@@ -195,7 +199,7 @@ describe("ConnectorSettingsPanel", () => {
     const sync = vi.spyOn(api, "syncConnector").mockResolvedValue({ job_id: 12, status: "queued", trigger_source: "manual", accepted: true });
     const remove = vi.spyOn(api, "deleteConnector").mockResolvedValue();
     vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<ConnectorSettingsPanel />);
+    render(<MemoryRouter><AppDataProvider><NotificationProvider><ConnectorSettingsPanel /></NotificationProvider></AppDataProvider></MemoryRouter>);
 
     const testButton = await screen.findByRole("button", { name: "Test" });
     expect(testButton).toHaveClass("connector-action-button");
@@ -216,7 +220,7 @@ describe("ConnectorSettingsPanel", () => {
   it("sets and replaces a connector API key from a dialog", async () => {
     mockApi();
     const update = vi.spyOn(api, "updateConnector").mockResolvedValue({ ...CONNECTION, has_secret: true });
-    render(<ConnectorSettingsPanel />);
+    render(<MemoryRouter><AppDataProvider><NotificationProvider><ConnectorSettingsPanel /></NotificationProvider></AppDataProvider></MemoryRouter>);
 
     const replaceButton = await screen.findByRole("button", { name: "Replace key" });
     expect(screen.queryByLabelText("API key / secret")).not.toBeInTheDocument();
@@ -248,7 +252,7 @@ describe("ConnectorSettingsPanel", () => {
       sync_summary: {},
     });
     const cancel = vi.spyOn(api, "cancelConnectorSync").mockResolvedValue({ job_id: 12, status: "running", cancellation_requested: true });
-    render(<ConnectorSettingsPanel />);
+    render(<MemoryRouter><AppDataProvider><NotificationProvider><ConnectorSettingsPanel /></NotificationProvider></AppDataProvider></MemoryRouter>);
 
     expect(document.querySelector(".connector-job-status")).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Cancel sync" }));

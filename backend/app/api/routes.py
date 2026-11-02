@@ -650,12 +650,11 @@ def app_settings(
 ) -> AppSettingsRead:
     result = load_app_settings(db, settings)
     from backend.app.services.access_context import principal_context
-    from backend.app.models.access import LocalAccount
     current = principal_context.get()
     if current is not None:
-        own = db.get(LocalAccount, current.id) if current.kind == "account" else None
-        if current.kind != "desktop":
-            result.ui_preferences = type(result.ui_preferences).model_validate((own.preferences if own else {}).get("ui_preferences", {}))
+        from backend.app.services.personal_preferences import read_preferences
+        personal = read_preferences(db, current) if current.kind != "guest" else {}
+        result.ui_preferences = type(result.ui_preferences).model_validate(personal.get("ui_preferences", {}))
         if not current.has("settings.app.view"):
             result.telemetry.last_user_visible_payload = None
             result.telemetry.installation_id = None
@@ -741,12 +740,12 @@ def app_settings_update(
     runtime: ScanRuntimeManager = Depends(get_scan_runtime),
 ) -> AppSettingsRead:
     from backend.app.services.access_context import principal_context
-    from backend.app.models.access import LocalAccount
     current = principal_context.get()
-    if current is not None and current.kind == "account" and payload.ui_preferences is not None:
-        own = db.get(LocalAccount, current.id)
-        own.preferences = {**own.preferences, "ui_preferences": {**own.preferences.get("ui_preferences", {}), **payload.ui_preferences.model_dump(exclude_unset=True)}}
-        db.commit()
+    if current is not None and current.kind in {"account", "desktop"} and payload.ui_preferences is not None:
+        from backend.app.services.personal_preferences import patch_preferences
+        patch_preferences(db, current, {
+            "ui_preferences": payload.ui_preferences.model_dump(mode="json", exclude_unset=True, exclude_none=True)
+        })
         payload = payload.model_copy(update={"ui_preferences": None})
     current_settings = load_app_settings(db, settings)
     try:

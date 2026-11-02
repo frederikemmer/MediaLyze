@@ -100,6 +100,13 @@ class NotificationSettings(BaseModel):
     grouping: Literal["off", "topic", "type", "both"] = "topic"
 
 
+class NotificationSettingsUpdate(BaseModel):
+    palette: Literal["medialyze", "soft", "contrast"] | None = None
+    style: Literal["outline", "rail", "tint"] | None = None
+    duration_seconds: float | None = Field(default=None, ge=1, le=10, multiple_of=0.5)
+    grouping: Literal["off", "topic", "type", "both"] | None = None
+
+
 class UiPreferencesRead(BaseModel):
     interface_language: InterfaceLanguage = "en"
     color_theme: Literal["system", "light", "dark"] = "system"
@@ -109,7 +116,7 @@ class UiPreferencesRead(BaseModel):
 class UiPreferencesUpdate(BaseModel):
     interface_language: InterfaceLanguage | None = None
     color_theme: Literal["system", "light", "dark"] | None = None
-    notifications: NotificationSettings | None = None
+    notifications: NotificationSettingsUpdate | None = None
 
 
 class TelemetrySettingsRead(BaseModel):

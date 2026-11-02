@@ -28,7 +28,7 @@ services:
       OWNER_PASSWORD:
       GUEST_ENABLED:
       NO_USERS:
-      # Canonical HTTPS address; required to enable passkeys.
+      # Optional proxy IPs for forwarded-header handling; HTTPS proxies must preserve Host.
       MEDIALYZE_TRUSTED_PROXY_IPS: ${MEDIALYZE_TRUSTED_PROXY_IPS:-}
       CONFIG_PATH: /config
       MEDIA_ROOT: /media

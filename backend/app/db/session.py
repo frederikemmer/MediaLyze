@@ -51,6 +51,9 @@ SessionLocal = sessionmaker(bind=ENGINE, autoflush=False, autocommit=False, expi
 
 
 SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
+    "local_accounts": {
+        "email": "ALTER TABLE local_accounts ADD COLUMN email VARCHAR(254)",
+    },
     "login_sessions": {
         "passkey_id": "ALTER TABLE login_sessions ADD COLUMN passkey_id VARCHAR(36) REFERENCES account_passkeys(id) ON DELETE SET NULL",
     },

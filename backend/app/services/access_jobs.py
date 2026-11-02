@@ -40,6 +40,21 @@ def history_target_ids(db, requested=None):
     return tuple(sorted(result))
 
 
+def _effective_requirements(requirements):
+    """Keep execution prerequisites complete, including older persisted authorities."""
+    required = {(right, library_id) for right, library_id in requirements}
+    for right, library_id in tuple(required):
+        if library_id is not None:
+            required.add(("library.read", library_id))
+        if right.startswith("transcode."):
+            required.add(("transcode.view", library_id))
+        if right == "connector.manage":
+            required.add(("connector.view", None))
+        if library_id is None and right.endswith(".edit"):
+            required.add((right[:-5] + ".view", None))
+    return sorted(required, key=lambda item: (item[0], item[1] or 0))
+
+
 def record_job(db, kind, job_id, requirements, *, system=False):
     actor = None if system else principal_context.get()
     item = JobAuthority(
@@ -47,7 +62,7 @@ def record_job(db, kind, job_id, requirements, *, system=False):
         actor_kind=actor.kind if actor else "system",
         actor_id=actor.id if actor else "system",
         actor_name=actor.name if actor else "",
-        requirements=requirements,
+        requirements=_effective_requirements(requirements),
     )
     db.merge(item)
     db.commit()
@@ -69,7 +84,7 @@ def job_allowed(db, item):
         actor = Principal("guest", "guest", "", False, state.guest_policy)
     else:
         return False
-    return all(actor.has(right, library_id) for right, library_id in item.requirements)
+    return all(actor.has(right, library_id) for right, library_id in _effective_requirements(item.requirements))
 
 
 def admit_job(db, kind, job_id):

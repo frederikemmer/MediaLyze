@@ -1,0 +1,62 @@
+name: tests
+
+on:
+  pull_request:
+    branches: [dev, main]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/dev' }}
+
+jobs:
+  backend:
+    name: Backend tests (Python 3.12)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.13.1'
+          enable-cache: true
+      - name: Install media tools
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install locked dependencies
+        run: uv sync --locked --extra dev
+      - name: Test backend
+        env:
+          CONFIG_PATH: ${{ runner.temp }}/medialyze-test-config
+          MEDIA_ROOT: ${{ runner.temp }}/medialyze-test-media
+        run: uv run --locked --extra dev pytest
+      - name: Validate release metadata
+        run: uv run --locked --extra dev python .github/scripts/release_metadata.py validate
+
+  frontend:
+    name: Frontend tests and build (Node 22)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked dependencies
+        run: npm --prefix frontend ci
+      - name: Test frontend
+        run: npm --prefix frontend test -- --run
+      - name: Build frontend
+        run: npm --prefix frontend run build
+      - name: Verify compressed assets
+        run: npm --prefix frontend run verify:build
+      - name: Test desktop packaging contracts
+        run: npm --prefix desktop test

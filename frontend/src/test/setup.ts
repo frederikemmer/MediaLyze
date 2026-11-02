@@ -1,6 +1,12 @@
 import "@testing-library/jest-dom/vitest";
 import React from "react";
 import { vi } from "vitest";
+import { configure } from "@testing-library/react";
+
+// Lazy routes and concurrent rendering exceeded the one-second query default
+// under CPU contention. Keep asynchronous DOM assertions bounded independently
+// of the unchanged per-test limit, without retries or weaker assertions.
+configure({ asyncUtilTimeout: 3000 });
 
 vi.mock("motion/react", () => {
   const motion = new Proxy(

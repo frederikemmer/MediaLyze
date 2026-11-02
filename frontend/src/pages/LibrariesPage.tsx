@@ -1075,6 +1075,49 @@ const QUALITY_METRIC_DEFAULT_WEIGHTS: Record<string, number> = {
   audiobook_chapters: 5,
 };
 
+function ScanLogDetailSection({
+  children,
+  count,
+  isExpandable,
+  summary = "",
+  title,
+}: {
+  children: ReactNode;
+  count: number;
+  isExpandable: boolean;
+  summary?: string;
+  title: string;
+}) {
+  const header = (
+    <>
+      <span className="scan-log-collapse-copy">
+        <strong>{title}</strong>
+        {summary ? <span className="scan-log-collapse-summary">{summary}</span> : null}
+      </span>
+      <span className="scan-log-collapse-meta">
+        <span className="badge">{count}</span>
+        {isExpandable ? <ChevronRight aria-hidden="true" className="nav-icon scan-log-collapse-icon" /> : null}
+      </span>
+    </>
+  );
+
+  if (!isExpandable) {
+    return (
+      <div className="scan-log-detail-section scan-log-detail-section-empty">
+        <div className="scan-log-collapse-toggle scan-log-collapse-toggle-static">{header}</div>
+      </div>
+    );
+  }
+
+  return (
+    <details className="scan-log-detail-section scan-log-collapsible-block">
+      <summary className="scan-log-collapse-toggle">{header}</summary>
+      {children}
+    </details>
+  );
+}
+
+
 export function LibrariesPage() {
   const auth = useAuth();
   const { notify } = useNotifications();
@@ -1330,6 +1373,7 @@ export function LibrariesPage() {
       : t("telemetry.preview.notLoaded");
   const { preference: themePref, setPreference: setThemePref } = useTheme();
   const { activeJobs, hasActiveJobs, refresh, trackJob } = useScanJobs();
+  const canEditLibraryConnectorSettings = !auth.identity || auth.identity.owner;
   const canReconstructHistory = !auth.identity || auth.identity.owner || (
     auth.identity.policy.mode === "future"
       ? auth.identity.policy.shared.includes("library.read") && auth.identity.policy.shared.includes("library.scan")
@@ -1572,6 +1616,7 @@ export function LibrariesPage() {
 
   async function updateInterfaceLanguage(nextLanguage: SupportedInterfaceLanguage) {
     await i18n.changeLanguage(nextLanguage);
+    if (auth.identity?.kind === "guest") return;
     try {
       const updated = await api.updateAppSettings({
         ui_preferences: { interface_language: nextLanguage },
@@ -1584,6 +1629,7 @@ export function LibrariesPage() {
 
   async function updateColorTheme(nextTheme: ThemePreference) {
     setThemePref(nextTheme);
+    if (auth.identity?.kind === "guest") return;
     try {
       const updated = await api.updateAppSettings({
         ui_preferences: { color_theme: nextTheme },
@@ -2787,6 +2833,7 @@ export function LibrariesPage() {
   }
 
   async function updateLibraryHistorySource(library: LibrarySummary, source: HistoryAddedDateSource) {
+    if (!canEditLibraryConnectorSettings) return;
     if (historySourcePending[library.id] || source === library.history_added_date_source) return;
     setHistorySourcePending((current) => ({ ...current, [library.id]: true }));
     try {
@@ -2875,6 +2922,7 @@ export function LibrariesPage() {
   }
 
   async function updatePreferredConnector(library: LibrarySummary, connectionId: number | null) {
+    if (!canEditLibraryConnectorSettings) return;
     try {
       const updated = await api.updateLibrarySettings(library.id, {
         preferred_connector_connection_id: connectionId,
@@ -4001,48 +4049,6 @@ export function LibrariesPage() {
       ...patternRecognitionInputs,
       show_season_patterns: nextShowSeasonPatterns,
     });
-  }
-
-  function ScanLogDetailSection({
-    children,
-    count,
-    isExpandable,
-    summary = "",
-    title,
-  }: {
-    children: ReactNode;
-    count: number;
-    isExpandable: boolean;
-    summary?: string;
-    title: string;
-  }) {
-    const header = (
-      <>
-        <span className="scan-log-collapse-copy">
-          <strong>{title}</strong>
-          {summary ? <span className="scan-log-collapse-summary">{summary}</span> : null}
-        </span>
-        <span className="scan-log-collapse-meta">
-          <span className="badge">{count}</span>
-          {isExpandable ? <ChevronRight aria-hidden="true" className="nav-icon scan-log-collapse-icon" /> : null}
-        </span>
-      </>
-    );
-
-    if (!isExpandable) {
-      return (
-        <div className="scan-log-detail-section scan-log-detail-section-empty">
-          <div className="scan-log-collapse-toggle scan-log-collapse-toggle-static">{header}</div>
-        </div>
-      );
-    }
-
-    return (
-      <details className="scan-log-detail-section scan-log-collapsible-block">
-        <summary className="scan-log-collapse-toggle">{header}</summary>
-        {children}
-      </details>
-    );
   }
 
   function renderScanPathList(
@@ -7208,13 +7214,19 @@ export function LibrariesPage() {
                         id={`history-added-date-source-${library.id}`}
                         className="settings-choice-input"
                         value={library.history_added_date_source || "medialyze"}
-                        disabled={isDeletingLibrary || Boolean(historySourcePending[library.id])}
+                        disabled={!canEditLibraryConnectorSettings || isDeletingLibrary || Boolean(historySourcePending[library.id])}
+                        aria-describedby={!canEditLibraryConnectorSettings ? `library-connector-owner-hint-${library.id}` : undefined}
                         onChange={(event) => void updateLibraryHistorySource(library, event.target.value as HistoryAddedDateSource)}
                       >
                         <option value="medialyze">{t("jellyfin.historySourceMedialyze")}</option>
                         <option value="jellyfin">{t("jellyfin.historySourceJellyfin")}</option>
                         <option value="connector">{t("connectors.historySource")}</option>
                       </select>
+                      {!canEditLibraryConnectorSettings ? (
+                        <p id={`library-connector-owner-hint-${library.id}`} className="field-hint">
+                          {t("libraries.connectorSettingsOwnerOnly")}
+                        </p>
+                      ) : null}
                     </div>
                     {(library.connector_links?.length ?? 0) > 0 ? (
                       <div className="field">
@@ -7223,6 +7235,8 @@ export function LibrariesPage() {
                           id={`preferred-connector-${library.id}`}
                           className="settings-choice-input"
                           value={library.preferred_connector_connection_id ?? ""}
+                          disabled={!canEditLibraryConnectorSettings || isDeletingLibrary}
+                          aria-describedby={!canEditLibraryConnectorSettings ? `library-connector-owner-hint-${library.id}` : undefined}
                           onChange={(event) => void updatePreferredConnector(library, event.target.value ? Number(event.target.value) : null)}
                         >
                           <option value="">{t("connectors.choosePreferred")}</option>
@@ -8054,7 +8068,6 @@ export function LibrariesPage() {
             title={t("libraries.appSettings")}
           >
             <div className="settings-sidebar-stack">
-              {auth.identity?.kind !== "guest" ? (
               <SettingsSection id="app-settings-appearance" title={t("settingsSections.appearance")} defaultOpen>
               <div className="app-settings-performance-grid">
                 <div className="field">
@@ -8087,7 +8100,6 @@ export function LibrariesPage() {
                 </div>
               </div>
               </SettingsSection>
-              ) : null}
               <NotificationSettingsPanel />
               {canViewGlobalAppSettings ? (<>
               <SettingsSection id="app-settings-scans" title={t("libraries.scanSettingsTitle")} defaultOpen>

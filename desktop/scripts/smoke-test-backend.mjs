@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:net";
@@ -106,6 +107,7 @@ async function main() {
       env: {
         ...process.env,
         MEDIALYZE_RUNTIME: "desktop",
+        MEDIALYZE_DESKTOP_TOKEN: randomBytes(32).toString("hex"),
         APP_HOST: "127.0.0.1",
         APP_PORT: String(port),
         CONFIG_PATH: configPath,

@@ -17998,8 +17998,6 @@ button.password-visibility-toggle:focus-visible:not(:disabled) {
   right: 3px;
   transform: translateY(-50%);
 }
-.personal-account-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.personal-account-actions > button { width: 140px; min-width: 140px; }
 .access-rights { display: grid; gap: 6px; }
 .access-right-group { min-width: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--nested-surface); }
 .access-tree-header { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 3px 9px 3px 3px; }

@@ -437,7 +437,7 @@ class ScanRuntimeManager:
                 job_id = job.id
                 if created:
                     from backend.app.services.access_jobs import record_job
-                    record_job(db, "scan", job.id, [["library.scan", library_id]])
+                    record_job(db, "scan", job.id, [["library.read", library_id], ["library.scan", library_id]])
                 if created and library_id not in self.active_library_ids and job.id not in self.submitted_job_ids and not self._history_blocks_library_locked(library_id):
                     self.active_library_ids.add(library_id)
                     self.submitted_job_ids.add(job.id)

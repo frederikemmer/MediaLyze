@@ -128,7 +128,7 @@ directory if an explicit `CONFIG_PATH` is not supplied.
 
 ## Local accounts and trusted proxies
 
-See [Users and access](user-access.md) for setup, upgrade, sessions and current restrictions. First-start environment bootstrap requires both `OWNER_USERNAME` and `OWNER_PASSWORD`. Existing owner fields reconcile separately on each restart; remove a variable and restart to unlock its UI field. `MEDIALYZE_TRUSTED_PROXY_IPS` defaults to empty (no forwarded-header trust); a TLS reverse proxy must preserve Host. Explicit proxy IPs are optional for Uvicorn's forwarded-header handling. `MEDIALYZE_DESKTOP_TOKEN` is an Electron-generated process credential, never a user-configured browser access key.
+See [Users and access](user-access.md) for setup, upgrade, sessions and current restrictions. First-start environment bootstrap requires both `OWNER_USERNAME` and `OWNER_PASSWORD`. Existing owner fields reconcile separately on each restart. UI edits remain possible while variables are set but are replaced at the next startup unless the corresponding variables are changed or removed. `MEDIALYZE_TRUSTED_PROXY_IPS` defaults to empty (no forwarded-header trust); a TLS reverse proxy must preserve Host. Explicit proxy IPs are optional for Uvicorn's forwarded-header handling. `MEDIALYZE_DESKTOP_TOKEN` is an Electron-generated process credential, never a user-configured browser access key.
 
 `GUEST_ENABLED=true` or `false` sets the Guest enabled state on startup without changing its saved permissions. Leave it unset to retain the saved state; see [Guest defaults](user-access.md#entering-the-application) before enabling unauthenticated access.
 

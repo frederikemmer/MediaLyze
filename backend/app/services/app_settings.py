@@ -509,9 +509,18 @@ def update_app_settings(
     next_transcoding = current.transcoding.model_copy(
         update=payload.transcoding.model_dump(exclude_none=True) if payload.transcoding is not None else {}
     )
+    ui_updates = (
+        payload.ui_preferences.model_dump(exclude_unset=True, exclude_none=True)
+        if payload.ui_preferences is not None else {}
+    )
+    if "notifications" in ui_updates:
+        ui_updates["notifications"] = {
+            **current.ui_preferences.notifications.model_dump(),
+            **ui_updates["notifications"],
+        }
     next_ui_preferences = UiPreferencesRead.model_validate({
         **current.ui_preferences.model_dump(),
-        **(payload.ui_preferences.model_dump(exclude_none=True) if payload.ui_preferences is not None else {}),
+        **ui_updates,
     })
     next_telemetry = current.telemetry.model_copy(
         update=payload.telemetry.model_dump(exclude_none=True) if payload.telemetry is not None else {}

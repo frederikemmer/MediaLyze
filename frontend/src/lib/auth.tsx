@@ -43,6 +43,7 @@ export const emptyPolicy = (): AccessPolicy => ({
 export type Identity = {
   id: string;
   username: string;
+  email?: string | null;
   owner: boolean;
   kind: "account" | "guest" | "desktop";
   revision: number;
@@ -50,6 +51,8 @@ export type Identity = {
   policy: AccessPolicy;
   username_locked?: boolean;
   password_locked?: boolean;
+  username_env_configured?: boolean;
+  password_env_configured?: boolean;
   all_scope_available?: boolean;
 };
 type AuthStatus = {
@@ -100,7 +103,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   pendingRef.current = pending;
   const identityRef = useRef<Identity | null>(null);
   const epoch = useRef(0);
-  const prefsRef = useRef<Record<string, unknown>>({});
   const mounted = useRef(true);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -153,14 +155,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         clearIdentityRequests();
         setReady(false);
         ticket = ++epoch.current;
-        if (next?.kind === "account" && !next.must_change_password) {
+        if (next && next.kind !== "guest" && !next.must_change_password) {
           const prefs =
             await accessRequest<Record<string, unknown>>("/me/preferences");
           if (ticket !== epoch.current || !mounted.current) return;
-          prefsRef.current = prefs;
           const ui = prefs.ui_preferences as
             { interface_language?: string; color_theme?: string } | undefined;
-          selectPreferenceIdentity(`account:${next.id}`, {
+          selectPreferenceIdentity(`${next.kind}:${next.id}`, {
             ...((prefs.storage ?? {}) as Record<string, string>),
             ...(ui?.color_theme ? { "medialyze-theme": ui.color_theme } : {}),
           });
@@ -231,15 +232,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const save = () => {
       clearTimeout(timeout);
       const id = identityRef.current?.id;
+      const ticket = epoch.current;
       timeout = setTimeout(() => {
         if (
-          identityRef.current?.kind !== "account" ||
-          identityRef.current.id !== id
+          !identityRef.current || identityRef.current.kind === "guest" ||
+          identityRef.current.id !== id || ticket !== epoch.current
         )
           return;
         const storage = preferenceSnapshot();
         const prefs = {
-          ...prefsRef.current,
           storage,
           ui_preferences: {
             interface_language: storage["medialyze-language"] ?? "en",
@@ -247,9 +248,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           },
         };
         void accessRequest("/me/preferences", {
-          method: "PUT",
+          method: "PATCH",
           body: JSON.stringify(prefs),
-        }).catch(() => setError(t("access.preferencesError")));
+        }).catch(() => {
+          if (ticket === epoch.current) setError(t("access.preferencesError"));
+        });
       }, 500);
     };
     window.addEventListener("medialyze-preferences-changed", save);

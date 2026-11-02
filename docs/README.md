@@ -52,8 +52,6 @@ These references describe the current repository implementation on `dev`, entry 
 These documents have a different status from current user instructions:
 
 - [Prototyping and feature concepts](prototyping/README.md): early feature plans, design decisions, and prototypes; consult source and current product documentation for behavior that is already implemented.
-- [Unreleased transcoding Federation notes](prototyping/unreleased-transcoding.md): retained Federation implementation hidden by the frontend release switch. UI visibility does not disable its backend API; Federation also requires persisted opt-in and its process gate.
-- [Unreleased transcoding automation notes](prototyping/unreleased_transcoding_automation.md): retained rule and inventory implementation hidden by the frontend release switch. UI visibility does not disable its API or scan-triggered automation.
 - [Raw benchmark results](benchmarks/results/): Historical JSON measurements with recorded environment metadata where available. Old test counts are not current-suite claims.
 - [Changelog](../CHANGELOG.md): release notes and accumulated `vUnreleased` work. Consult GitHub releases for publication chronology.
 

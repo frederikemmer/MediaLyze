@@ -36,6 +36,7 @@ AUTH_PATHS = {
     ("GET", "/access/libraries"),
     ("GET", "/me/preferences"),
     ("PUT", "/me/preferences"),
+    ("PATCH", "/me/preferences"),
     ("PATCH", "/me/account"),
 }
 PUBLIC_AUTH = {"/auth/passkeys/options", "/auth/passkeys/verify", "/auth/status", "/auth/setup", "/auth/login", "/auth/guest", "/auth/logout"}
@@ -127,10 +128,27 @@ CATALOG_READS = {
 }
 
 
+def resource_id(value):
+    try:
+        parsed = int(value)
+    except (ValueError, TypeError):
+        fail(422, "Invalid resource ID")
+    if parsed < 1 or parsed > 9223372036854775807:
+        fail(422, "Invalid resource ID")
+    return parsed
+
+
 def authorize(request, db, principal, name, params, body):
+    # Policies inspect parameters before FastAPI's typed endpoint validation.
+    # Validate every numeric resource ID here, including arbitrarily large IDs.
+    params = dict(params)
+    for key in ("library_id", "file_id", "variant_id", "item_id", "rule_id", "job_id"):
+        if key not in params:
+            continue
+        params[key] = resource_id(params[key])
     if principal.owner:
         return
-    if name == "notification_history":
+    if name in {"notification_history_list", "notification_history_create"}:
         return  # The endpoint derives its owner solely from the authenticated request.
     query = request.query_params
     if not principal.has("connector.playback"):
@@ -219,7 +237,7 @@ def authorize(request, db, principal, name, params, body):
     if name == "evaluate_saved_compatibility_profile":
         require("settings.hardware.view")
         try:
-            target_id = int(body.get("file_id", 0))
+            target_id = resource_id(body.get("file_id", 0))
         except (ValueError, TypeError):
             fail(422, "Invalid file")
         target_library = db.scalar(select(MediaFile.library_id).where(MediaFile.id == target_id))
@@ -336,7 +354,7 @@ def authorize(request, db, principal, name, params, body):
     if name in {"transcode_jobs_active", "transcode_jobs_list"}:
         if query.get("library_id"):
             try:
-                selected_library = int(query["library_id"])
+                selected_library = resource_id(query["library_id"])
             except ValueError:
                 fail(422, "Invalid library")
             require("library.read", selected_library)

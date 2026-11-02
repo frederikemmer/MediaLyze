@@ -203,7 +203,9 @@ Windows PowerShell:
 .\scripts\dev-local.ps1
 ```
 
-Both scripts expect:
+The macOS/Linux script creates the Python virtual environment and installs missing Python and frontend dependencies automatically. If Node.js 22.12 or newer or npm is missing, it installs Node.js locally under `.local-config` on supported 64-bit Linux and macOS systems. It requires Python 3.12 or newer (including `venv`), curl, tar, a SHA-256 utility, and network access for the initial installation. Its default media root is your Desktop if present, otherwise it creates `media` in the repository. An explicitly supplied `MEDIA_ROOT` must already exist.
+
+The Windows script expects:
 
 - `.venv` with `pip install -e ".[dev]"`
 - `frontend/node_modules` from `npm --prefix frontend install`

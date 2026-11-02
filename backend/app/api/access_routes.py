@@ -37,6 +37,8 @@ from backend.app.services.notification_access import (
     prune_notification_history,
 )
 from backend.app.services.request_origin import secure_cookie
+from backend.app.schemas.app_settings import UiPreferencesUpdate
+from backend.app.services.personal_preferences import patch_preferences, read_preferences
 
 router = APIRouter()
 
@@ -70,6 +72,14 @@ def current_actor(request, db):
     return value
 
 
+def account_username(request, value, *, is_owner=False):
+    result = username(value)
+    configured = request.app.state.access_settings.owner_username
+    if configured and not is_owner and result.casefold() == configured.casefold():
+        fail(409, "Username reserved for the configured owner")
+    return result
+
+
 def cookie(response, request, token):
     response.set_cookie(
         COOKIE,
@@ -87,6 +97,7 @@ def account_read(account, viewer, settings):
     return {
         "id": account.id,
         "username": account.username,
+        "email": account.email if viewer.id == account.id else None,
         "owner": account.owner_slot == 1,
         "active": account.active,
         "must_change_password": account.must_change_password,
@@ -95,8 +106,10 @@ def account_read(account, viewer, settings):
         if account.owner_slot != 1 and contains(viewer, account.policy)
         else dict(EMPTY_POLICY),
         "editable": account.owner_slot != 1 and contains(viewer, account.policy),
-        "username_locked": account.owner_slot == 1 and settings.owner_username is not None,
-        "password_locked": account.owner_slot == 1 and settings.owner_password is not None,
+        "username_locked": False,
+        "password_locked": False,
+        "username_env_configured": account.owner_slot == 1 and settings.owner_username is not None,
+        "password_env_configured": account.owner_slot == 1 and settings.owner_password is not None,
     }
 
 
@@ -110,6 +123,13 @@ class PasswordChange(BaseModel):
     model_config = ConfigDict(extra="forbid")
     current_password: SecretStr
     password: SecretStr
+
+
+class SelfAccountUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    username: str | None = Field(default=None, max_length=64)
+    email: str | None = Field(default=None, max_length=254)
+    password: SecretStr | None = None
 
 
 class AccountCreate(Credentials):
@@ -128,6 +148,12 @@ class GuestUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     enabled: bool
     policy: dict
+
+
+class PreferencesPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    storage: dict[str, str] = Field(default_factory=dict)
+    ui_preferences: UiPreferencesUpdate = Field(default_factory=UiPreferencesUpdate)
 
 
 @router.get("/auth/status")
@@ -261,8 +287,6 @@ def change_password(
     if current.kind != "account":
         fail()
     account = db.get(LocalAccount, current.id)
-    if account.owner_slot == 1 and request.app.state.access_settings.owner_password is not None:
-        fail(403, "Remove owner password from the startup configuration and restart first")
     if not verify(account.password_hash, payload.current_password.get_secret_value()):
         fail(403, "Invalid current password")
     secret = password(payload.password.get_secret_value())
@@ -298,7 +322,7 @@ def create_account(payload: AccountCreate, request: Request, db=Depends(db_sessi
         fail()
     account = LocalAccount(
         id=str(uuid4()),
-        username=username(payload.username),
+        username=account_username(request, payload.username),
         username_key=payload.username.casefold(),
         password_hash=PASSWORDS.hash(password(payload.password.get_secret_value())),
         policy=policy,
@@ -328,7 +352,7 @@ def update_account(
             fail()
         target.policy = policy
     if payload.username is not None:
-        target.username = username(payload.username)
+        target.username = account_username(request, payload.username, is_owner=target.owner_slot == 1)
         target.username_key = target.username.casefold()
     if payload.active is not None:
         target.active = payload.active
@@ -432,9 +456,15 @@ def access_libraries(request: Request, db=Depends(db_session)):
 @router.get("/me/preferences")
 def preferences_read(request: Request, db=Depends(db_session)):
     current = actor(request)
-    if current.kind != "account":
-        fail()
-    return db.get(LocalAccount, current.id).preferences
+    return read_preferences(db, current)
+
+
+@router.patch("/me/preferences")
+def preferences_patch(payload: PreferencesPatch, request: Request, db=Depends(db_session)):
+    return patch_preferences(
+        db, current_actor(request, db),
+        payload.model_dump(mode="json", exclude_unset=True, exclude_none=True),
+    )
 
 
 @router.put("/me/preferences")
@@ -450,21 +480,23 @@ def preferences_update(payload: dict, request: Request, db=Depends(db_session)):
 
 
 @router.patch("/me/account")
-def self_account(payload: Credentials, request: Request, db=Depends(db_session)):
+def self_account(payload: SelfAccountUpdate, request: Request, db=Depends(db_session)):
     current = current_actor(request, db)
-    if current.kind != "account" or not current.owner:
+    if current.kind != "account":
         fail()
     target = db.get(LocalAccount, current.id)
-    if request.app.state.access_settings.owner_username is not None:
-        fail(403, "Remove owner username from startup configuration and restart first")
-    if not verify(target.password_hash, payload.password.get_secret_value()):
+    if payload.password is not None and not verify(target.password_hash, payload.password.get_secret_value()):
         fail(403)
-    target.username = username(payload.username)
-    target.username_key = target.username.casefold()
-    target.revision += 1
-    revoke(db, target.id)
+    if payload.username is not None:
+        target.username = account_username(request, payload.username, is_owner=current.owner)
+        target.username_key = target.username.casefold()
+    if "email" in payload.model_fields_set:
+        email = (payload.email or "").strip()
+        if email and (email.count("@") != 1 or any(c.isspace() for c in email) or not all(email.split("@"))):
+            fail(422, "Invalid email address")
+        target.email = email or None
     try:
         db.commit()
     except IntegrityError:
         fail(409, "Username already in use")
-    return {"ok": True}
+    return {"ok": True, "username": target.username, "email": target.email}

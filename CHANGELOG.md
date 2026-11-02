@@ -4,191 +4,47 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
-- Reduce history reconstruction, connector matching and automation preview resource contention while preserving atomic history writes.
-- Show reconstruction progress and status errors, dashboard loading dots and Storage Map loading states; apply file searches immediately on Enter.
+## v0.20.0
 
-- Automatically enable passkeys and secure authentication cookies for HTTPS browser access through a reverse proxy, without requiring proxy IPs or a public URL. Passkeys are bound to each browser hostname, and the former `PUBLIC_URL` setting is ignored.
+>2026-11-02
 
-- Use compact Accelerator-style rows without raised card shadows for personal passkeys, retaining inline rename and delete actions.
+This release adds local user accounts, granular permissions, passkey login, and notifications.
+You will have to create an Owner after the update (not on desktop installs).
 
-- Show live password requirement checks below managed-account password fields and report invalid passwords only through the field's native validation bubble.
+### ✨ New
 
-- Add named personal passkeys with registration, inline renaming, deletion and passkey login, with guidance on unsupported origins.
+- **Users and permissions** - create local accounts with protected sessions and grant access per library and action, including read-only browsing, scans, exports, media access, transcoding, connectors, and shared settings. Queued user jobs are revoked when required access is removed. Optional Guest access has its own permissions ([#169](https://github.com/frederikemmer/MediaLyze/issues/169)). Passkey login is supported.
+- **Notifications** - receive configurable notifications and completion messages for manually started scans, transcodes, connector syncs, and history reconstruction. Search your notification history and follow links to results.
 
-- Automatically save Notification preferences after a brief idle delay, remove the manual Save button, and keep the `/ui-elements` specimen read-only.
-- Shorten the notification test controls to “1 test notification”, “10 test notifications” and “clear”, using the flask icon for both test actions.
-- Shorten the Transcoding Presets category tab names to “Transcoding”, “Filename” and “Foldername”.
-- Remove the explanatory helper text above the global transcoding history filters.
-- Keep telemetry mode tooltips within the viewport by aligning them to the right edge of their buttons.
-- Reuse a borderless password visibility control in account settings and access screens, including login.
-- Add a small, consistent gap between the Login and Continue as guest buttons.
-- Hide the password-change helper text when editing Guest access.
-- Prefill new account permissions with the current Guest policy when the editor can read Guest access, and remove unrelated global-settings wording from the temporary-password hint.
-- Default new Guest policies to read-only metadata and statistics for all current and future libraries, and allow the Guest enabled state to be configured with `GUEST_ENABLED` at startup.
-- Add an explicit `NO_USERS` server mode for installations that do not use accounts.
-- Use `OWNER_USERNAME` and `OWNER_PASSWORD` for owner environment configuration, replacing the earlier development-only prefixed names.
+### ✨ Enhancements
+
+- Group scan logs, transcoding history, notification history, and retention settings under **Logs**.
+- Organize App settings into collapsible sections and move resolution categories into **Quality profiles → Resolutions**.
+- Reduce memory usage during history reconstruction and storage forecasting, coordinate maintenance independently of scan workers, and show clearer queued status and retry controls when reconstruction status cannot be refreshed.
+- Show loading indicators for dashboard totals and Storage Map navigation, including a reduced-motion alternative, and apply valid file searches immediately when pressing Enter.
+- Reduce memory usage during connector rematching and Storage Map aggregation.
 
 ### 🐛 Bug fixes
 
-- Allow owner setup and other protected actions behind an HTTPS reverse proxy without requiring trusted proxy IP configuration when the original Host is preserved.
-
-- Give each user and the Guest entry its own compact panel in the account overview, using the shared MediaLyze card styling.
-
-- Move account/Guest editor actions into borderless header icons, keep the editor open after saving, and confirm discarding unsaved changes on close.
-
-- Add a bulk permission switch beside the Libraries & files scope selector, respecting per-library delegation, shared scope, search and read-only restrictions.
-
-- Refresh authentication status and the pre-login security token instead of reusing an older poll, so login opens the dashboard without a page reload even during background status checks.
-
-- Let Guests dismiss release notes without requiring a telemetry choice reserved for app-settings editors.
-
-- Reuse the MediaLyze header on login and owner setup, explain accounts and installation migration only during owner setup, show a concise Login form without a heading or introductory text afterward, and open enabled guest access automatically with sign-in available from the header account menu.
-
-- Fix the server error when a library gets a second folder with the same name as an existing one; the new folder's alias gets a numbered suffix ([#197](https://github.com/frederikemmer/MediaLyze/issues/197)), fixed in [#198](https://github.com/frederikemmer/MediaLyze/pull/198) by [@Rahul-cs50](https://github.com/Rahul-cs50).
-- Fix the server error when saving transcoding settings while CPU parallel jobs is set to Auto ([#199](https://github.com/frederikemmer/MediaLyze/issues/199)), fixed in [#200](https://github.com/frederikemmer/MediaLyze/pull/200) by [@Rahul-cs50](https://github.com/Rahul-cs50).
-
-- Apply a saved notification duration change to visible cards by restarting their timers with the new duration.
-
-- Keep redacted technical diagnoses for failed connector tests, including tests with unsaved server addresses, in browser-local storage across tab and browser restarts; label unsaved-address results and show only a safe summary in notifications.
-
-- Discard unconfirmed notification-history writes when the app session ends; retry them only while the original identity session remains open.
-
-- Keep transient notifications in the tab where their action was triggered; server-backed personal history remains available across tabs.
-
-- Reorganize global account rights into Settings and Presets & Profiles, and move Library access guidance into a heading tooltip.
-
-- Clarify preset permission labels as View/Edit Transcoding presets.
-
-- Align Hardware decode toggles with their labels, give video codec controls half-row width, place number steppers after inline labels, and render capability removal actions as borderless icons.
-
-- Send one-time terminal notifications for explicitly started scans, transcodes, connector syncs and history reconstruction, with links to their results.
-
-- Prune personal notification history entries when an account or Guest session loses access to the referenced target; remove all history when an account is disabled or deleted.
-
-- Restore locally saved language and theme preferences when a Guest session starts.
-
-- Send History Retention save failures and history reconstruction start failures and terminal results as notifications while keeping in-progress details beside the action.
-
-- Group duplicate filename matching and show/season recognition into pattern subpanels; keep suffix rules inline and place the runtime field at the right.
-
-- Shift numeric inline labels aside for native steppers and add chevron-adjacent inline labels to profile capability dropdowns.
-
-- Reuse the Resolution Categories inset-label input in compatible Hardware and Software profile text and number fields.
-
-- Clarify in the access tree that notification preferences are account-scoped and require no app-settings permission.
-
-- Let Guest customize notification palette, style, duration and grouping from App settings, stored locally in the current browser.
-
-- Replace notification preview selectors and helper copy with actions to send one or ten random previews or clear active notifications.
-
-- Organize App settings into compact collapsible sections for appearance, notifications, scan settings, plots/charts and feature flags.
-
-- Keep history reconstruction and its accuracy hint in History Retention instead of Recent scan logs.
-
-- Keep notification preferences in App settings for every signed-in account, saving and showing that account’s own values without exposing global controls; report preference-save results as notifications.
-
-- Place retention first in Logs, simplify helper copy, match empty notification history to scan logs, and exclude preview notifications from saved history.
-
-- Match Logs to the shared settings panel frame and spacing, and place notification retention in the existing compact retention table.
-
-- Move connector library-assignment and path-mapping explanations into compact tooltips beside their headings.
-
-- Move analyzed-user guidance into a tooltip, compact the connector sections, remove the nested user-selector surface, and match both connector user searches to the settings search.
-
-- Tighten the connector mapping and analyzed-user rows further and remove the divider above the first mapping section.
-
-- Add a subtle divider below the connector settings and tighten the three mapping and analyzed-user rows vertically.
-
-- Reduce the size of heading help icons across settings and add a library path-mapping heading example to the UI catalog.
-
-- Use smaller help icons beside settings headings across libraries, quality profiles, connectors, pattern recognition, and transcoding.
-
-- Place the analyzed-user help icon directly beside its heading in the connector settings.
-
-- Show analyzed-user counts before expanding the list and separate the counts with a slash.
-
-- Group scan logs, transcoding history, personal searchable notification history and retention under one “Logs” settings entry with collapsible sub-panels; retain old links and add configurable notification-history retention.
-
-- Reduce panel, menu, segmented-control and selected-navigation shadows to the approved midpoint.
-
-- Move connector connection-action results into transient notifications instead of inline panels, with links to the affected connection and separate request/refresh outcomes.
-
-- Match account-list and rights-tree search fields to the settings navigation search, including its leading search icon and compact sizing.
-
-- Keep local account and rights management out of Desktop navigation and APIs, including direct settings links.
-
-- Add configurable UI notification cards with persistent app settings, grouped stacks, globally paused timers and a targeted preview; remaining product flows are being integrated in stages.
-
-- Match Hardware, Software / Player and Combination profile expanders to the User Permissions tree chevron and indentation.
-
-- Group personal account access and sign-out in the primary navigation under the Lucide User icon, with compact separator spacing.
-
-- Place account editor tabs beside the selected username and use the Lucide User icon for Users & access navigation.
-
-- Put the owner’s current-password confirmation beside the username with a show/hide control, and keep equal-size Save and Sign out actions while removing the duplicate password-change section from the owner account view.
-
-- Show the history-retention editor only with global app-settings edit permission, keep storage forecasts available to settings viewers, and hide reconstruction without read and scan rights for a library.
-
-- Scope legacy Jellyfin path mappings to readable library roots, require all affected path rights for global mapping changes, and use connector management for legacy sync controls.
-
-- Add a global Transcoding rights group between Connectors and Users & access, grouping the existing preset and app-settings rights used by automation while keeping job permissions library-scoped.
-
-- Move resolution category settings into a dedicated “Resolutions” tab in Quality profiles and keep existing links working.
-
-- Move resolution actions into the Quality profiles tab row.
-
-- Show the resolution guidance from the active Resolutions tab after a brief hover delay.
-
-- Present resolution categories in a compact profile-style list with inline editing, separate fields and right-aligned overlay labels, clone and delete actions.
-
-- Let the Resolutions list fill the Quality profiles panel without a duplicate section heading or nested border.
-
-- Keep dashboard and library summary metrics and layout actions inline until their actual heading width requires wrapping.
-
-- Allow installation-wide performance, history-storage and telemetry diagnostics with global settings viewing; require global settings editing for manual telemetry sends and disable telemetry writes for read-only users.
-
-- Clarify shared Guest job ownership in the rights editor: canceling Guest jobs requires the library’s other/system-job cancellation permission.
-
-- Scope history reconstruction to library scan permissions, with single/bulk controls, execution-time checks and private progress/results; preserve queued scans for selected libraries.
-
-- Include embedded cover viewing and image downloads in library metadata access without requiring media preview/download permissions.
-
-- Keep the account overview focused on selection: open rows with initials and Guest last without a subtitle; manage account status on the selected account page.
-
-- Require library editing permission to hide or restore duplicate groups; retain duplicate viewing for metadata readers.
-
+- Fix the server error when a library gets a second folder with the same name as an existing one ([#197](https://github.com/frederikemmer/MediaLyze/issues/197) fixed in [#198](https://github.com/frederikemmer/MediaLyze/pull/198) by [@Rahul-cs50](https://github.com/Rahul-cs50)).
+- Fix the server error when saving transcoding settings while CPU parallel jobs is set to Auto ([#199](https://github.com/frederikemmer/MediaLyze/issues/199) fixed in [#200](https://github.com/frederikemmer/MediaLyze/pull/200) by [@Rahul-cs50](https://github.com/Rahul-cs50)).
+- Preserve Desktop layouts and appearance across application restarts.
 - Align synchronized video wipe sides with the selected file order in Compare files and linked-variant previews.
+- Keep expanded scan-log sections open when copying troubleshooting details.
 
-- Apply common compatibility-profile view/edit permissions to hardware, software and combination profiles, with read-only UI and library-scoped file evaluations.
+### 🔒 Security
 
-- Replace the user-management overview heading with the selected account header while editing, restoring it on close.
+- Update the Certifi CA bundle and affected frontend and desktop build dependencies to address known security advisories.
 
-- Allow the full external connector catalog with connector-view permission while retaining local-library and playback privacy boundaries; fix provider metadata details.
+### Upgrade notes
 
-- Move personal settings into Users & access → the signed-in account’s Account tab, retaining access without management rights; fix the account tab switcher width.
-
-- Keep permission-group toggles checked for fully granted read-only accounts, including Owner.
-
-- Present Owner permissions as a clearly marked read-only view without account-editing or save controls.
-
-- Start permission groups collapsed, return to the account list from the active Users & access navigation item, and tighten account-list spacing.
-
-- Move account-right explanations into compact inline tooltips beside their related permissions.
-
-- Show scan and quality-job progress, history and diagnostics for readable libraries; keep scan cancellation separately protected.
-
-- Fix overlapping labels and visible tooltip-button backgrounds in protected account permission trees.
-
-- Preserve the browser host in the local development proxy so protected setup/login requests pass the origin check.
-
-- Require passwords to contain at least 5 characters and a number or special character; show the rule only on invalid input during setup, account creation and password changes.
-
-- Add local owner/account setup, protected sessions, explicit library/action permissions, guest opt-in and personal preferences with a compact account editor in all four interface languages.
-- Gate server/desktop/Federation access paths centrally; scope media/statistics/jobs and keep unresolved permission mappings restricted to Owner until reviewed.
+- Existing server libraries, analysis data, and history are retained. Create an Owner account on first access after upgrading, or configure `OWNER_USERNAME` and `OWNER_PASSWORD`. See [Users and access](docs/user-access.md) for setup and permissions.
+- Guest access is optional and can be configured with `GUEST_ENABLED`. Set `NO_USERS=true` only for an intentionally account-free server where every visitor should have full access. Desktop continues without account setup.
+- Passkeys require a supported secure browser origin, normally HTTPS. A reverse proxy must preserve the browser's Host; no public-URL setting is required.
 
 ### New Contributors
 
-[@Rahul-cs50](https://github.com/Rahul-cs50) made their first contribution in [#198](https://github.com/frederikemmer/MediaLyze/pull/198).
+[@Rahul-cs50](https://github.com/Rahul-cs50) made their first contribution in [#198](https://github.com/frederikemmer/MediaLyze/pull/198) and also contributed [#200](https://github.com/frederikemmer/MediaLyze/pull/200).
 
 ## v0.19.2
 
@@ -236,19 +92,19 @@ validated plans with stream controls, hardware capability tests, reusable preset
 
 ### ✨ New
 
-- **Video transcoding** — build validated FFmpeg plans with stream controls, tested hardware acceleration, explicit CPU-only mode, configurable output, and linked variants for comparison.
-- **Transcoding overview** — queue files, track progress, cancel or retry jobs, and review completed work.
-- **Transcoding presets** — save reusable stream settings for later use.
-- **Filename and folder formatting** — configure each separately, rearrange or remove metadata tokens, include connector metadata, and save presets with language-code options.
-- **Synchronized video comparison** — play two versions in sync and drag the divider across the image to compare them directly.
+- **Video transcoding** - build validated FFmpeg plans with stream controls, tested hardware acceleration, explicit CPU-only mode, configurable output, and linked variants for comparison.
+- **Transcoding overview** - queue files, track progress, cancel or retry jobs, and review completed work.
+- **Transcoding presets** - save reusable stream settings for later use.
+- **Filename and folder formatting** - configure each separately, rearrange or remove metadata tokens, include connector metadata, and save presets with language-code options.
+- **Synchronized video comparison** - play two versions in sync and drag the divider across the image to compare them directly.
 
 ### ✨ Enhancements
 
-- **Compact header navigation** — group libraries under a hover and touch accessible Library icon, show page names after two seconds of icon hover, and show the MediaLyze icon instead of its name on phones.
-- **More compact Storage Map** — remove redundant summary cards and subtitle, match the Transcoding page's icon heading, bring filters closer to the title, and keep the treemap evenly inset from the panel edges.
-- **Connector setup guidance** — move the explanatory text into a tooltip beside the Connectors heading and match its Add connection button to Libraries.
-- **Compact history retention tables** — tighten row spacing and shorten storage forecast headings.
-- **Hardware test progress** — scale live progress to codec work and benchmark frame volume so longer parallel tests keep moving the Test Hardware indicator proportionally.
+- **Compact header navigation** - group libraries under a hover and touch accessible Library icon, show page names after two seconds of icon hover, and show the MediaLyze icon instead of its name on phones.
+- **More compact Storage Map** - remove redundant summary cards and subtitle, match the Transcoding page's icon heading, bring filters closer to the title, and keep the treemap evenly inset from the panel edges.
+- **Connector setup guidance** - move the explanatory text into a tooltip beside the Connectors heading and match its Add connection button to Libraries.
+- **Compact history retention tables** - tighten row spacing and shorten storage forecast headings.
+- **Hardware test progress** - scale live progress to codec work and benchmark frame volume so longer parallel tests keep moving the Test Hardware indicator proportionally.
 
 ### 🐛 Bug fixes
 
@@ -324,9 +180,9 @@ This release adds a read-only Jellyfin integration with catalog synchronization,
 
 ### 🐛 Fixed
 
-- **Reliable local restarts on Windows** — stop orphaned reload workers so stale API and federation sockets cannot survive a restart; align runtime settings with custom development ports.
-- **Full-width profile hover** — highlight the complete profile catalog row, including its actions, in light and dark themes.
-- **Consistent page headings** — Dashboard and Compare files share the Transcoding and Storage Map heading sizes and icon treatment; remove the comparison subtitle and tighten vertical spacing around library media sources.
+- **Reliable local restarts on Windows** - stop orphaned reload workers so stale API and federation sockets cannot survive a restart; align runtime settings with custom development ports.
+- **Full-width profile hover** - highlight the complete profile catalog row, including its actions, in light and dark themes.
+- **Consistent page headings** - Dashboard and Compare files share the Transcoding and Storage Map heading sizes and icon treatment; remove the comparison subtitle and tighten vertical spacing around library media sources.
 
 - restore comfortable responsive search-field widths in the library Analyzed files panel and wrap the search toolbar before adjacent header controls collide
 - open every file detail view on Overview instead of carrying the previously selected subsection across files

@@ -6,12 +6,12 @@ export const preferenceStorage = {
   getItem: (key: string) => localStorage.getItem(keyFor(key)),
   setItem(key: string, value: string) {
     localStorage.setItem(keyFor(key), value);
-    if (namespace?.startsWith("account:"))
+    if (namespace?.startsWith("account:") || namespace?.startsWith("desktop:"))
       window.dispatchEvent(new Event("medialyze-preferences-changed"));
   },
   removeItem(key: string) {
     localStorage.removeItem(keyFor(key));
-    if (namespace?.startsWith("account:"))
+    if (namespace?.startsWith("account:") || namespace?.startsWith("desktop:"))
       window.dispatchEvent(new Event("medialyze-preferences-changed"));
   },
 };
