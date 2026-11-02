@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+- Keep history reconstruction in Logs settings and remove its duplicate control and status timestamp from library details.
+
 ## v0.20.0
 
 >2026-11-02

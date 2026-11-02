@@ -1,4 +1,3 @@
-import { HistoryReconstructionControl } from "../components/HistoryReconstructionControl";
 import { preferenceStorage } from "../lib/preference-storage";
 import { useAuth } from "../lib/auth";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -3601,7 +3600,6 @@ export function LibraryDetailPage() {
                 )
               }
             />
-            {displayLibrary ? <HistoryReconstructionControl libraryId={displayLibrary.id} blocked={Boolean(activeJob)} /> : null}
             <button
               type="button"
               className="icon-button icon-button-borderless icon-button-animated statistic-layout-action-button library-quickscan-button"
