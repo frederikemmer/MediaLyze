@@ -14,6 +14,14 @@
 
 Scan jobs are persisted and scheduled through `ScanRuntimeManager`, with independent scan, two-worker connector, maintenance, and transcode execution paths. Per-file probe workers share a RAM admission gate; ffprobe has bounded output/time and supports cancellation. Startup cancels orphaned jobs and queues history retention asynchronously. [Metadata/runtime support](supported_metadata.md#7-cross-cutting-runtime-support) and [benchmarks](benchmarks.md) provide the detailed limits.
 
+## Identity and authorization
+
+Server mode uses local Owner, account and optional Guest identities. `backend/app/api/access_middleware.py`, `access_policy.py` and `access_inventory.json` gate inventoried routes and enforce global and library-scoped rights; query scopes protect aggregates and job results. Sessions and browser mutations use the authentication and CSRF boundary. Queued jobs retain their initiating authority and recheck it before execution. Desktop uses a per-start native process proof; Federation uses separate machine authentication. See [Users and access](user-access.md) for setup, scope and restrictions.
+
+## Notifications and logs
+
+`frontend/src/lib/notifications.tsx` manages transient, tab-local notifications and submits personal history. `backend/app/api/notification_routes.py` stores and returns history scoped to the authenticated account, Guest session or Desktop identity. Settings groups notification history, scan logs, transcoding history and retention under Logs. [UI notifications](notifications.md) describes preferences, retry and retention behavior.
+
 ## Frontend
 
 - The UI is a React SPA built with Vite, with lazily loaded routes, languages, and modular chart resources.

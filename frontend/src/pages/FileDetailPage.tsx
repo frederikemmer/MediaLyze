@@ -1,3 +1,5 @@
+import { useAuth } from "../lib/auth";
+import { preferenceStorage } from "../lib/preference-storage";
 import {
   AudioLines,
   ArrowLeft,
@@ -130,7 +132,7 @@ function readStoredFileDetailNavCollapsed(): boolean {
   if (typeof window === "undefined") {
     return false;
   }
-  return window.localStorage.getItem(FILE_DETAIL_NAV_COLLAPSED_STORAGE_KEY) === "true";
+  return preferenceStorage.getItem(FILE_DETAIL_NAV_COLLAPSED_STORAGE_KEY) === "true";
 }
 
 function isAudioStreamPrimaryMode(value: string | null): value is AudioStreamPrimaryMode {
@@ -141,7 +143,7 @@ function readStoredAudioStreamPrimaryMode(): AudioStreamPrimaryMode {
   if (typeof window === "undefined") {
     return DEFAULT_AUDIO_STREAM_PRIMARY_MODE;
   }
-  const value = window.localStorage.getItem(FILE_DETAIL_AUDIO_STREAM_PRIMARY_STORAGE_KEY);
+  const value = preferenceStorage.getItem(FILE_DETAIL_AUDIO_STREAM_PRIMARY_STORAGE_KEY);
   return isAudioStreamPrimaryMode(value) ? value : DEFAULT_AUDIO_STREAM_PRIMARY_MODE;
 }
 
@@ -1747,6 +1749,7 @@ function FileHistoryPanel({
 }
 
 export function FileDetailPage() {
+  const auth = useAuth();
   const { t } = useTranslation();
   const { fileId = "" } = useParams();
   const location = useLocation();
@@ -2090,7 +2093,7 @@ export function FileDetailPage() {
   const changeAudioStreamPrimaryMode = useCallback((mode: AudioStreamPrimaryMode) => {
     setAudioStreamPrimaryMode(mode);
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(FILE_DETAIL_AUDIO_STREAM_PRIMARY_STORAGE_KEY, mode);
+      preferenceStorage.setItem(FILE_DETAIL_AUDIO_STREAM_PRIMARY_STORAGE_KEY, mode);
     }
   }, []);
 
@@ -2391,8 +2394,8 @@ export function FileDetailPage() {
       hardwareProfiles.length + softwareProfiles.length + combinationProfiles.length,
       Boolean(jellyfinOverlay?.item || connectorSources?.length || connectorPlayback?.length),
       Boolean(jellyfinOverlay?.item?.image_tags.Primary),
-    ),
-    [combinationProfiles.length, connectorPlayback?.length, connectorSources?.length, file, hardwareProfiles.length, jellyfinOverlay?.item, qualityDetail, softwareProfiles.length],
+    ).filter(id => !auth.identity || !file || (id === "preview" ? auth.has("library.preview", file.library_id) : id === "transcoding" ? auth.has("transcode.view", file.library_id) : true)),
+    [auth.identity, combinationProfiles.length, connectorPlayback?.length, connectorSources?.length, file, hardwareProfiles.length, jellyfinOverlay?.item, qualityDetail, softwareProfiles.length],
   );
   const navItems = FILE_DETAIL_NAV_ITEMS.filter((item) => availablePanelIds.includes(item.id));
   const normalizedActivePanelId = normalizeFileDetailPanelId(activePanelId, availablePanelIds);
@@ -2419,7 +2422,7 @@ export function FileDetailPage() {
     setIsNavCollapsed((current) => {
       const next = !current;
       if (typeof window !== "undefined") {
-        window.localStorage.setItem(FILE_DETAIL_NAV_COLLAPSED_STORAGE_KEY, next ? "true" : "false");
+        preferenceStorage.setItem(FILE_DETAIL_NAV_COLLAPSED_STORAGE_KEY, next ? "true" : "false");
       }
       return next;
     });

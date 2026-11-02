@@ -1,3 +1,4 @@
+import { preferenceStorage } from "./preference-storage";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
 export type ThemePreference = "system" | "light" | "dark";
@@ -17,7 +18,7 @@ function applyTheme(preference: ThemePreference): void {
 
 function readStoredPreference(): ThemePreference {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = preferenceStorage.getItem(STORAGE_KEY);
     if (stored === "light" || stored === "dark" || stored === "system") {
       return stored;
     }
@@ -53,7 +54,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   function setPreference(next: ThemePreference): void {
     try {
-      localStorage.setItem(STORAGE_KEY, next);
+      preferenceStorage.setItem(STORAGE_KEY, next);
     } catch {
       // ignore storage errors
     }

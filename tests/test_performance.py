@@ -61,7 +61,16 @@ def test_diagnostics_are_opt_in_and_queue_waits_are_observed(tmp_path):
         off = create_app(Settings(config_path=tmp_path / "off", media_root=tmp_path, performance_metrics=False, frontend_dist_path=tmp_path / "absent"))
         assert TestClient(off).get("/api/performance").status_code == 404
         on = create_app(Settings(config_path=tmp_path / "on", media_root=tmp_path, performance_metrics=True, frontend_dist_path=tmp_path / "absent"))
-        assert TestClient(on).get("/api/performance").status_code == 200
+        from backend.app.db.base import Base
+        from sqlalchemy.orm import sessionmaker
+        from backend.app.models import access
+        config = tmp_path / "on"
+        config.mkdir(exist_ok=True)
+        engine = create_engine_for_settings(Settings(config_path=config, media_root=tmp_path))
+        Base.metadata.create_all(engine)
+        on.state.auth_session_factory = sessionmaker(engine)
+        assert TestClient(on).get("/api/performance").status_code == 401
+        engine.dispose()
         started, release = Event(), Event()
         executor = observe_executor(ThreadPoolExecutor(max_workers=1), "test_queue")
         def occupied():

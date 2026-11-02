@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
 
 import { AppDataProvider } from "../lib/app-data";
+import * as auth from "../lib/auth";
 import {
   api,
   type AppSettings,
@@ -1030,7 +1031,7 @@ describe("FileDetailPage", () => {
     expect(revokeObjectUrl).toHaveBeenCalledWith("blob:chapters");
   });
 
-  it("renders cover details and keeps analysis diagnostics in overview", async () => {
+  it("loads and downloads cover metadata without preview or media-download permission", async () => {
     const file = {
       ...createFileDetail(),
       scan_status: "failed",
@@ -1043,6 +1044,12 @@ describe("FileDetailPage", () => {
       analysis_failure_reason: "Probably DRM-protected or unreadable by ffprobe.",
       analysis_failure_detail: "Invalid data found when processing input",
     };
+    vi.spyOn(auth, "useAuth").mockReturnValue({ identity: {
+      id: "reader", username: "Reader", kind: "account", owner: false,
+      revision: 1, must_change_password: false,
+      policy: { ...auth.emptyPolicy(), libraries: { [file.library_id]: ["library.read"] } },
+    }, status: null, has: (right, id) => right === "library.read" && id === file.library_id,
+      refresh: async () => {}, logout: async () => {} });
     let resolveCover: ((payload: { blob: Blob; filename: string }) => void) | undefined;
     const downloadCover = vi.spyOn(api, "downloadFileCover").mockReturnValue(
       new Promise((resolve) => {

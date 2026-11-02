@@ -5,7 +5,14 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV_DIR="${VENV_DIR:-$ROOT_DIR/.venv}"
 CONFIG_PATH="${CONFIG_PATH:-$ROOT_DIR/.local-config}"
-MEDIA_ROOT="${MEDIA_ROOT:-$HOME/Desktop}"
+if [[ -z "${MEDIA_ROOT:-}" ]]; then
+  if [[ -d "$HOME/Desktop" ]]; then
+    MEDIA_ROOT="$HOME/Desktop"
+  else
+    MEDIA_ROOT="$ROOT_DIR/media"
+    mkdir -p "$MEDIA_ROOT"
+  fi
+fi
 BACKEND_HOST="${BACKEND_HOST:-0.0.0.0}"
 BACKEND_PORT="${BACKEND_PORT:-8080}"
 FRONTEND_HOST="${FRONTEND_HOST:-0.0.0.0}"
@@ -19,21 +26,91 @@ VITE_SCRIPT="$ROOT_DIR/frontend/node_modules/vite/bin/vite.js"
 
 mkdir -p "$CONFIG_PATH"
 
-if [[ ! -x "$VENV_DIR/bin/python" ]]; then
-  echo "Python virtualenv not found at $VENV_DIR"
-  echo "Create it first, then rerun this script."
-  exit 1
-fi
-
-if [[ ! -d "$ROOT_DIR/frontend/node_modules" ]]; then
-  echo "frontend/node_modules is missing."
-  echo "Run: npm -C frontend install"
-  exit 1
-fi
-
 if [[ ! -d "$MEDIA_ROOT" ]]; then
-  echo "MEDIA_ROOT does not exist: $MEDIA_ROOT"
+  echo "MEDIA_ROOT does not exist: $MEDIA_ROOT" >&2
   exit 1
+fi
+
+for command in curl tar; do
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "Required command not found: $command. Install it and rerun this script." >&2
+    exit 1
+  fi
+done
+
+node_usable() {
+  command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1 &&
+    node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major > 22 || (major === 22 && minor >= 12) ? 0 : 1)' >/dev/null 2>&1
+}
+
+if ! node_usable; then
+  NODE_VERSION="22.16.0"
+  NODE_DIR="$CONFIG_PATH/node-v$NODE_VERSION"
+  if [[ -x "$NODE_DIR/bin/node" && -x "$NODE_DIR/bin/npm" ]]; then
+    export PATH="$NODE_DIR/bin:$PATH"
+  else
+    case "$(uname -s)-$(uname -m)" in
+      Linux-x86_64) node_platform="linux-x64" ;;
+      Linux-aarch64|Linux-arm64) node_platform="linux-arm64" ;;
+      Darwin-x86_64) node_platform="darwin-x64" ;;
+      Darwin-arm64) node_platform="darwin-arm64" ;;
+      *) echo "Automatic Node.js installation is not supported on $(uname -s)/$(uname -m). Install Node.js 22.12 or newer and npm." >&2; exit 1 ;;
+    esac
+    if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
+      echo "Install sha256sum or shasum to verify the Node.js download." >&2
+      exit 1
+    fi
+    echo "Installing Node.js $NODE_VERSION locally in $NODE_DIR..."
+    (
+      temp_dir="$(mktemp -d)"
+      trap 'rm -rf "$temp_dir"' EXIT
+      archive="node-v$NODE_VERSION-$node_platform.tar.gz"
+      base_url="https://nodejs.org/dist/v$NODE_VERSION"
+      curl -fsSL "$base_url/$archive" -o "$temp_dir/$archive"
+      curl -fsSL "$base_url/SHASUMS256.txt" -o "$temp_dir/SHASUMS256.txt"
+      cd "$temp_dir"
+      expected="$(awk -v file="$archive" '$2 == file {print $1}' SHASUMS256.txt)"
+      [[ -n "$expected" ]] || { echo "Node.js checksum not found." >&2; exit 1; }
+      if command -v sha256sum >/dev/null 2>&1; then
+        actual="$(sha256sum "$archive" | awk '{print $1}')"
+      else
+        actual="$(shasum -a 256 "$archive" | awk '{print $1}')"
+      fi
+      [[ "$actual" == "$expected" ]] || { echo "Node.js checksum verification failed." >&2; exit 1; }
+      mkdir -p "$NODE_DIR"
+      tar -xzf "$archive" --strip-components=1 -C "$NODE_DIR"
+    )
+    export PATH="$NODE_DIR/bin:$PATH"
+  fi
+  node_usable || { echo "The local Node.js installation is incomplete; remove $NODE_DIR and retry." >&2; exit 1; }
+fi
+
+if [[ ! -x "$VENV_PYTHON" ]]; then
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "Python 3.12 or newer is required. Install it and rerun this script." >&2
+    exit 1
+  fi
+  if ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 12))'; then
+    echo "Python 3.12 or newer is required to create the virtual environment." >&2
+    exit 1
+  fi
+  echo "Creating Python virtual environment at $VENV_DIR..."
+  if ! python3 -m venv "$VENV_DIR"; then
+    echo "Could not create the virtual environment. Ensure Python's venv package is installed, then retry." >&2
+    exit 1
+  fi
+fi
+
+# Ignore metadata in the checkout: a leftover .egg-info directory is not proof
+# that this virtual environment contains the project's dependencies.
+if ! "$VENV_PYTHON" -I -c 'import importlib.metadata; importlib.metadata.version("medialyze"); import uvicorn' >/dev/null 2>&1 || ! "$VENV_PYTHON" -I -m pip check >/dev/null 2>&1; then
+  echo "Installing Python development dependencies..."
+  "$VENV_PYTHON" -m pip install -e "$ROOT_DIR[dev]"
+fi
+
+if [[ ! -f "$VITE_SCRIPT" ]]; then
+  echo "Installing frontend dependencies..."
+  npm --prefix "$ROOT_DIR/frontend" ci
 fi
 
 source "$VENV_DIR/bin/activate"

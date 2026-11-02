@@ -1,3 +1,4 @@
+import { preferenceStorage } from "./preference-storage";
 export type FileDetailPanelId =
   | "qualityBreakdown"
   | "fileHistory"
@@ -98,7 +99,7 @@ export function getFileDetailPanelSettings(): FileDetailPanelSettings {
   }
 
   try {
-    const raw = window.localStorage.getItem(FILE_DETAIL_PANEL_SETTINGS_STORAGE_KEY);
+    const raw = preferenceStorage.getItem(FILE_DETAIL_PANEL_SETTINGS_STORAGE_KEY);
     if (!raw) {
       return normalizeFileDetailPanelSettings(undefined);
     }
@@ -113,7 +114,7 @@ export function saveFileDetailPanelSettings(settings: FileDetailPanelSettings): 
 
   if (typeof window !== "undefined") {
     try {
-      window.localStorage.setItem(FILE_DETAIL_PANEL_SETTINGS_STORAGE_KEY, JSON.stringify(normalized));
+      preferenceStorage.setItem(FILE_DETAIL_PANEL_SETTINGS_STORAGE_KEY, JSON.stringify(normalized));
     } catch {
       // ignore storage errors
     }

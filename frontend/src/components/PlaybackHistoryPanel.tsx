@@ -1,3 +1,4 @@
+import { preferenceStorage } from "../lib/preference-storage";
 import {
   CheckCircle2,
   ChevronLeft,
@@ -60,7 +61,7 @@ function parseDateKey(value: string | undefined, endOfDay = false): number | nul
 function readRangeSelection(): HistoryRangeSelection {
   if (typeof window === "undefined") return { mode: "all" };
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(RANGE_STORAGE_KEY) ?? "null");
+    const parsed = JSON.parse(preferenceStorage.getItem(RANGE_STORAGE_KEY) ?? "null");
     if (!["7d", "30d", "1y", "all", "custom"].includes(parsed?.mode)) {
       return { mode: "all" };
     }
@@ -292,7 +293,7 @@ export function PlaybackHistoryPanel({
 
   function updateRangeSelection(next: HistoryRangeSelection) {
     setRangeSelection(next);
-    window.localStorage.setItem(RANGE_STORAGE_KEY, JSON.stringify(next));
+    preferenceStorage.setItem(RANGE_STORAGE_KEY, JSON.stringify(next));
   }
 
   function toggleUser(userKey: string) {

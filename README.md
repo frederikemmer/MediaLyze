@@ -203,7 +203,9 @@ Windows PowerShell:
 .\scripts\dev-local.ps1
 ```
 
-Both scripts expect:
+The macOS/Linux script creates the Python virtual environment and installs missing Python and frontend dependencies automatically. If Node.js 22.12 or newer or npm is missing, it installs Node.js locally under `.local-config` on supported 64-bit Linux and macOS systems. It requires Python 3.12 or newer (including `venv`), curl, tar, a SHA-256 utility, and network access for the initial installation. Its default media root is your Desktop if present, otherwise it creates `media` in the repository. An explicitly supplied `MEDIA_ROOT` must already exist.
+
+The Windows script expects:
 
 - `.venv` with `pip install -e ".[dev]"`
 - `frontend/node_modules` from `npm --prefix frontend install`
@@ -255,7 +257,7 @@ The most commonly used variables are:
 - `MEDIALYZE_TRANSCODE_OUTPUT_ROOT`: optional writable path inside the runtime for separate transcoded output; Compose maps this to `/transcode-output`
 - `MEDIALYZE_HW_RENDER_NODE`: optional Linux DRM render node override for Intel/AMD VAAPI/QSV, for example `/dev/dri/renderD128`; when omitted MediaLyze probes every visible render node and selects a passing device automatically
 - `TRANSCODE_OUTPUT_HOST_DIR`: Compose host directory for `/transcode-output`, default `./Transcode_Output`
-- `JELLYFIN_API_KEY_FILE`: optional path to a Jellyfin API-key secret file; see [Jellyfin integration](docs/jellyfin.md)
+- `JELLYFIN_API_KEY_FILE`: optional path to a Jellyfin API-key secret file; see [Jellyfin integration](docs/connectors.md#jellyfin-integration)
 - `PUID` / `PGID`: optional runtime user/group ids for shared-folder permission setups; set both or leave both unset to keep the default root runtime user
 
 `MEDIA_ROOT` should be mounted read-only in production.
@@ -282,7 +284,7 @@ See [docs/patterns.md](docs/patterns.md) for folder discovery, series recognitio
 
 Telemetry payloads are documented in [docs/telemetry.md](docs/telemetry.md), including the `none`, `minimal`, and `enabled` payload contracts and the privacy-preserving rounding rules for coarse usage counts.
 
-Provider-neutral connections, conservative automatic path inference, automatic/manual library assignment, synchronization, and provider development are documented in [docs/connectors.md](docs/connectors.md). Jellyfin-specific permissions, playback-data privacy, compatibility, and secret handling are documented in [docs/jellyfin.md](docs/jellyfin.md). `JELLYFIN_API_KEY_FILE` applies only to the migrated standard Jellyfin connection; additional Jellyfin servers can be configured in the shared Connector Settings accordions. Remaining read-only diagnostics stages are tracked in [docs/connector-ui-deferred.md](docs/connector-ui-deferred.md).
+Provider-neutral connections, conservative automatic path inference, automatic/manual library assignment, synchronization, and provider development are documented in [docs/connectors.md](docs/connectors.md). Jellyfin-specific permissions, playback-data privacy, compatibility, and secret handling are documented in [docs/connectors.md#jellyfin-integration](docs/connectors.md#jellyfin-integration). `JELLYFIN_API_KEY_FILE` applies only to the migrated standard Jellyfin connection; additional Jellyfin servers can be configured in the shared Connector Settings accordions. Remaining read-only diagnostics stages are tracked in [docs/connectors.md#remaining-connector-work](docs/connectors.md#remaining-connector-work).
 
 Repository automation, Docker and desktop publishing, manual workflow controls, and release recovery are documented in [docs/github_actions.md](docs/github_actions.md).
 

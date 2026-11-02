@@ -203,6 +203,61 @@ def test_connector_matcher_allows_multiple_items_for_one_file_and_prefers_longes
     assert {match.media_file_id for match in matches} == {media.id}
 
 
+def test_connector_matching_batches_catalog_and_preserves_unicode_casefold(tmp_path) -> None:
+    _engine, factory = _session_factory()
+    with factory() as db:
+        connection, library, root, remote_library, location = _connector_graph(db, str(tmp_path))
+        binding = ConnectorRootBinding(
+            location_id=location.id,
+            library_root_id=root.id,
+            source_prefix="/srv/media",
+            normalized_source_prefix="/srv/media",
+            case_mode="insensitive",
+        )
+        unicode_media = MediaFile(
+            library_id=library.id,
+            library_root_id=root.id,
+            relative_path="Straße/movie.mkv",
+            filename="movie.mkv",
+            extension="mkv",
+            size_bytes=123,
+            mtime=1.0,
+            scan_status=ScanStatus.ready,
+        )
+        items = [
+            ConnectorItem(
+                connection_id=connection.id,
+                connector_library_id=remote_library.id,
+                remote_id=f"batch-{index}",
+                item_type="Movie",
+                remote_path=f"/srv/media/Film-{index}.mkv",
+                title=f"Film {index}",
+            )
+            for index in range(260)
+        ]
+        unicode_item = ConnectorItem(
+            connection_id=connection.id,
+            connector_library_id=remote_library.id,
+            remote_id="unicode-casefold",
+            item_type="Movie",
+            remote_path="/srv/media/STRASSE/movie.mkv",
+            title="Unicode casefold",
+        )
+        db.add_all([binding, unicode_media, *items, unicode_item])
+        db.commit()
+
+        summary = recompute_connector_matches(db, connection_id=connection.id)
+        match = db.scalar(
+            select(ConnectorMediaMatch).where(
+                ConnectorMediaMatch.connector_item_id == unicode_item.id
+            )
+        )
+
+    assert summary["matched"] == 1
+    assert summary["no_local_file"] == 260
+    assert match is not None and match.media_file_id == unicode_media.id
+
+
 def test_binding_batch_rejects_equivalent_active_rules_atomically(tmp_path) -> None:
     _engine, factory = _session_factory()
     with factory() as db:
@@ -1155,3 +1210,25 @@ def test_init_db_migrates_legacy_jellyfin_catalog_idempotently(tmp_path) -> None
         assert binding is not None
         assert binding.case_mode == "insensitive"
         assert binding.library_root_id == root.id
+
+
+def test_matching_does_not_duplicate_exact_candidate_when_another_path_needs_filename_fallback(tmp_path):
+    _engine, factory = _session_factory()
+    with factory() as db:
+        connection, library, root, remote_library, location = _connector_graph(db, str(tmp_path))
+        media = MediaFile(library_id=library.id, library_root_id=root.id, relative_path="found/movie.mkv",
+                          filename="movie.mkv", extension="mkv", size_bytes=123, mtime=1.0,
+                          scan_status=ScanStatus.ready)
+        binding = ConnectorRootBinding(location_id=location.id, library_root_id=root.id,
+            source_prefix="/srv/media", normalized_source_prefix="/srv/media", case_mode="sensitive")
+        exact = ConnectorItem(connection_id=connection.id, connector_library_id=remote_library.id,
+            remote_id="exact-same-name", item_type="Movie", remote_path="/srv/media/found/movie.mkv", title="Exact")
+        missing = ConnectorItem(connection_id=connection.id, connector_library_id=remote_library.id,
+            remote_id="missing-same-name", item_type="Movie", remote_path="/srv/media/missing/movie.mkv", title="Missing")
+        db.add_all([media, binding, exact, missing])
+        db.commit()
+        summary = recompute_connector_matches(db, connection_id=connection.id, connector_item_ids={exact.id, missing.id})
+        assert summary["matched"] == 1
+        assert summary["no_local_file"] == 1
+        match = db.scalar(select(ConnectorMediaMatch).where(ConnectorMediaMatch.connector_item_id == exact.id))
+        assert match is not None and match.media_file_id == media.id

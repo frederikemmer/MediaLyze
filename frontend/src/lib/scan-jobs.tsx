@@ -1,3 +1,4 @@
+import { useAuth } from "./auth";
 import { createContext, useContext, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { api, type ScanJob } from "./api";
@@ -16,6 +17,7 @@ const ScanJobsContext = createContext<ScanJobsContextValue | null>(null);
 export const ACTIVE_SCAN_JOBS_POLL_INTERVAL_MS = 5000;
 
 export function ScanJobsProvider({ children }: { children: ReactNode }) {
+  const { identity, has } = useAuth();
   const [activeJobs, setActiveJobs] = useState<ScanJob[]>([]);
   const isPageVisible = usePageVisibility();
   const wasPageVisibleRef = useRef(isPageVisible);
@@ -33,7 +35,7 @@ export function ScanJobsProvider({ children }: { children: ReactNode }) {
 
   const stopAll = useEffectEvent(async () => {
     await api.cancelActiveScanJobs();
-    setActiveJobs([]);
+    await refresh();
   });
 
   const stopLibrary = useEffectEvent(async (libraryId: number) => {
@@ -42,6 +44,7 @@ export function ScanJobsProvider({ children }: { children: ReactNode }) {
   });
 
   const trackJob = useEffectEvent((job: ScanJob) => {
+    if (identity && !has("library.read", job.library_id)) return;
     setActiveJobs((current) => {
       const next = current.filter((entry) => entry.library_id !== job.library_id);
       return [...next, job];

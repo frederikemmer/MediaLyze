@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildProfileIssue, CompatibilityProfilesPanel } from "./CompatibilityProfilesPanel";
+import * as auth from "../lib/auth";
 import {
   api,
   type CompatibilityProfile,
@@ -97,6 +98,30 @@ describe("buildProfileIssue", () => {
 });
 
 describe("CompatibilityProfilesPanel", () => {
+  it("keeps all three profile kinds readable without shared edit actions", async () => {
+    vi.spyOn(auth, "useAuth").mockReturnValue({ identity: {
+      id: "reader", username: "Reader", kind: "account", owner: false,
+      revision: 1, must_change_password: false,
+      policy: { ...auth.emptyPolicy(), global: ["settings.hardware.view"] },
+    }, status: null, has: right => right === "settings.hardware.view",
+      refresh: async () => {}, logout: async () => {} });
+    vi.spyOn(api, "hardwareProfiles").mockResolvedValue([profile()]);
+    vi.spyOn(api, "softwareProfiles").mockResolvedValue([softwareProfile()]);
+    vi.spyOn(api, "compatibilityProfiles").mockResolvedValue([combinationProfile()]);
+    render(<CompatibilityProfilesPanel />);
+    await screen.findByText("Test Device");
+    expect(screen.queryByRole("button", { name: /Edit profile|Clone profile|Delete profile/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Profile" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Software / Player" }));
+    expect(screen.getByText("Test Player")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Edit profile|Clone profile|Delete profile/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Combination" }));
+    fireEvent.click(screen.getByRole("button", { name: "Test Combination" }));
+    expect(screen.getByDisplayValue("Test Combination")).toHaveAttribute("readonly");
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("combobox").every(select => select.hasAttribute("disabled"))).toBe(true);
+  });
   beforeEach(async () => {
     await i18n.changeLanguage("en");
     window.localStorage.clear();

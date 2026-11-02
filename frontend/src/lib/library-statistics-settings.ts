@@ -1,3 +1,4 @@
+import { preferenceStorage } from "./preference-storage";
 import type {
   DashboardResponse,
   LibraryType,
@@ -753,7 +754,7 @@ export function getLibraryStatisticsSettings(storageScope?: string): LibraryStat
     return buildDefaultSettings();
   }
 
-  const raw = window.localStorage.getItem(buildStorageKey(storageScope));
+  const raw = preferenceStorage.getItem(buildStorageKey(storageScope));
   if (!raw) {
     return buildDefaultSettings();
   }
@@ -771,7 +772,7 @@ export function saveLibraryStatisticsSettings(
 ): LibraryStatisticsSettings {
   const normalized = normalizeSettings(settings);
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(buildStorageKey(storageScope), JSON.stringify(normalized));
+    preferenceStorage.setItem(buildStorageKey(storageScope), JSON.stringify(normalized));
   }
   return normalized;
 }

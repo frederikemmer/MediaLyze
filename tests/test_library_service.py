@@ -9,6 +9,7 @@ os.environ.setdefault("MEDIA_ROOT", tempfile.mkdtemp(prefix="medialyze-media-"))
 
 from backend.app.core.config import Settings
 from backend.app.db.base import Base
+from backend.app.db.session import init_db
 from backend.app.models.entities import (
     AudioStream,
     DuplicateDetectionMode,
@@ -543,6 +544,84 @@ def test_update_library_settings_replaces_removed_roots_without_deleting_media(t
     assert [root.path for root in roots] == [str(replacement_dir.resolve())]
     assert [media_file.relative_path for media_file in files] == ["anime.mkv"]
     assert files[0].library_root_id is None
+
+
+def test_update_library_settings_adds_root_with_same_folder_name_as_existing_root(tmp_path) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    init_db(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    settings = Settings(
+        runtime_mode="desktop",
+        config_path=tmp_path / "config",
+        media_root=tmp_path / "media-root",
+    )
+    first_dir = tmp_path / "Media_1" / "Filme"
+    second_dir = tmp_path / "Media_2" / "Filme"
+    first_dir.mkdir(parents=True)
+    second_dir.mkdir(parents=True)
+
+    with session_factory() as db:
+        library = create_library(
+            db,
+            settings,
+            LibraryCreate(
+                name="Filme",
+                path=str(first_dir),
+                type=LibraryType.movies,
+                scan_mode=ScanMode.manual,
+            ),
+        )
+        updated, _quality_profile_changed = update_library_settings(
+            db,
+            settings,
+            library.id,
+            LibraryUpdate(paths=[str(first_dir), str(second_dir)]),
+        )
+        db.expire_all()
+        roots = db.scalars(
+            select(LibraryRoot).where(LibraryRoot.library_id == library.id).order_by(LibraryRoot.id)
+        ).all()
+
+    assert updated is not None
+    assert [(root.path, root.display_name) for root in roots] == [
+        (str(first_dir.resolve()), "Filme"),
+        (str(second_dir.resolve()), "Filme (2)"),
+    ]
+
+
+def test_create_library_with_roots_sharing_a_folder_name(tmp_path) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    init_db(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    settings = Settings(
+        runtime_mode="desktop",
+        config_path=tmp_path / "config",
+        media_root=tmp_path / "media-root",
+    )
+    first_dir = tmp_path / "Media_1" / "Filme"
+    second_dir = tmp_path / "Media_2" / "Filme"
+    first_dir.mkdir(parents=True)
+    second_dir.mkdir(parents=True)
+
+    with session_factory() as db:
+        library = create_library(
+            db,
+            settings,
+            LibraryCreate(
+                name="Filme",
+                path=str(first_dir),
+                paths=[str(first_dir), str(second_dir)],
+                type=LibraryType.movies,
+                scan_mode=ScanMode.manual,
+            ),
+        )
+        roots = db.scalars(
+            select(LibraryRoot).where(LibraryRoot.library_id == library.id).order_by(LibraryRoot.id)
+        ).all()
+
+    assert [root.display_name for root in roots] == ["Filme", "Filme (2)"]
 
 
 def test_update_library_path_falls_back_to_scheduled_for_desktop_network_paths(

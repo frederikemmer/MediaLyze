@@ -18,7 +18,8 @@ import {
   X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
+import { trackExplicitJobStart } from "../lib/notification-job-tracking";
 
 import { getIdlePollInterval, usePageVisibility } from "../lib/page-visibility";
 import { TooltipTrigger } from "../components/TooltipTrigger";
@@ -675,6 +676,8 @@ function HardwareLoadStrip({
 
 export function TranscodingPage() {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
+  const requestedJobId = Number(searchParams.get("job"));
   const { appSettings, libraries } = useAppData();
   const [tab, setTab] = useState<CenterTab>("active");
   const [activeJobs, setActiveJobs] = useState<TranscodeJob[]>([]);
@@ -709,6 +712,16 @@ export function TranscodingPage() {
     minPx: number;
     maxPx: number;
   } | null>(null);
+
+  useEffect(() => {
+    if (!Number.isSafeInteger(requestedJobId) || requestedJobId < 1) return;
+    setTab("history");
+    setSearch("");
+    setStatusFilter("all");
+    setTargetFilter("all");
+    setHardwareFilter("all");
+    setExpandedJobId(requestedJobId);
+  }, [requestedJobId]);
 
   const refreshJobs = useCallback(async (forceHistory = false) => {
     if (refreshInFlightRef.current) return;
@@ -926,7 +939,8 @@ export function TranscodingPage() {
     setRetryingIds((current) => new Set(current).add(job.id));
     setNotice(null);
     try {
-      await api.startFileTranscode(job.source_file_id, job.plan);
+      const started = await api.startFileTranscode(job.source_file_id, job.plan);
+      trackExplicitJobStart({ kind: "transcode", job: started });
       setNotice(t("transcoding.center.retryStarted"));
       await refreshJobs(true);
     } catch (reason) {

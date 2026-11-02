@@ -10,6 +10,7 @@ BACKEND_ROOT = REPO_ROOT / "backend"
 PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 
 IMPORT_TO_DISTRIBUTION = {
+    "argon2": "argon2-cffi",
     "apscheduler": "apscheduler",
     "fastapi": "fastapi",
     "psutil": "psutil",

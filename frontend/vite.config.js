@@ -50,11 +50,16 @@ export default defineConfig({
     },
     server: {
         port: 5173,
+        allowedHosts: true,
         fs: {
             allow: [repoRoot],
         },
         proxy: {
-            "/api": `http://${proxyHost}:${backendPort}`,
+            "/api": {
+                target: `http://${proxyHost}:${backendPort}`,
+                // Preserve the browser origin for the backend's exact Origin/Host check.
+                changeOrigin: false,
+            },
         },
     },
     build: {

@@ -1,6 +1,6 @@
 from enum import Enum
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -81,7 +81,7 @@ class TranscodingSettingsRead(BaseModel):
 class TranscodingSettingsUpdate(BaseModel):
     execution_mode: Literal["hardware_required", "cpu_only"] | None = None
     cpu_budget_percent: int | None = Field(default=None, ge=1, le=100)
-    cpu_parallel_jobs: Literal["auto"] | int | None = Field(default=None, ge=1, le=64)
+    cpu_parallel_jobs: Literal["auto"] | Annotated[int, Field(ge=1, le=64)] | None = None
     gpu_parallel_jobs_per_device: int | None = Field(default=None, ge=1, le=8)
     default_output_mode: Literal["transcode_output", "same_directory", "replace_original"] | None = None
     on_error: Literal["continue", "stop_queue"] | None = None
@@ -93,14 +93,30 @@ class TranscodingSettingsUpdate(BaseModel):
 InterfaceLanguage = Literal["en", "de", "es", "uk"]
 
 
+class NotificationSettings(BaseModel):
+    palette: Literal["medialyze", "soft", "contrast"] = "medialyze"
+    style: Literal["outline", "rail", "tint"] = "outline"
+    duration_seconds: float = Field(default=2.5, ge=1, le=10, multiple_of=0.5)
+    grouping: Literal["off", "topic", "type", "both"] = "topic"
+
+
+class NotificationSettingsUpdate(BaseModel):
+    palette: Literal["medialyze", "soft", "contrast"] | None = None
+    style: Literal["outline", "rail", "tint"] | None = None
+    duration_seconds: float | None = Field(default=None, ge=1, le=10, multiple_of=0.5)
+    grouping: Literal["off", "topic", "type", "both"] | None = None
+
+
 class UiPreferencesRead(BaseModel):
     interface_language: InterfaceLanguage = "en"
     color_theme: Literal["system", "light", "dark"] = "system"
+    notifications: NotificationSettings = Field(default_factory=NotificationSettings)
 
 
 class UiPreferencesUpdate(BaseModel):
     interface_language: InterfaceLanguage | None = None
     color_theme: Literal["system", "light", "dark"] | None = None
+    notifications: NotificationSettingsUpdate | None = None
 
 
 class TelemetrySettingsRead(BaseModel):
@@ -128,6 +144,7 @@ class HistoryRetentionBucketUpdate(BaseModel):
 
 
 class HistoryRetentionRead(BaseModel):
+    notification_history_days: int = Field(default=30, ge=0, le=36500)
     file_history: HistoryRetentionBucketRead = Field(default_factory=lambda: HistoryRetentionBucketRead(days=30))
     library_history: HistoryRetentionBucketRead = Field(default_factory=lambda: HistoryRetentionBucketRead(days=365))
     scan_history: HistoryRetentionBucketRead = Field(default_factory=lambda: HistoryRetentionBucketRead(days=30))
@@ -135,6 +152,7 @@ class HistoryRetentionRead(BaseModel):
 
 
 class HistoryRetentionUpdate(BaseModel):
+    notification_history_days: int | None = Field(default=None, ge=0, le=36500)
     file_history: HistoryRetentionBucketUpdate | None = None
     library_history: HistoryRetentionBucketUpdate | None = None
     scan_history: HistoryRetentionBucketUpdate | None = None

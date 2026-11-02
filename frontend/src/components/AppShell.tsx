@@ -1,3 +1,4 @@
+import { useAuth, hasLibraryPermission } from "../lib/auth";
 import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
@@ -8,6 +9,8 @@ import { AnimatePresence, motion, useAnimation, type Transition } from "motion/r
 import { AnimatedSearchIcon } from "./AnimatedSearchIcon";
 import { BanIcon } from "./BanIcon";
 import { ConnectorProviderIcon } from "./ConnectorProviderIcon";
+import { HeaderBrand } from "./HeaderBrand";
+import { HeaderAccountMenu } from "./HeaderAccountMenu";
 import { FolderInputIcon } from "./FolderInputIcon";
 import { FolderOutputIcon } from "./FolderOutputIcon";
 import { GithubIcon } from "./GithubIcon";
@@ -133,14 +136,16 @@ type ScanMetric = {
   value: number;
 };
 
-function ScanJobCard({
+export function ScanJobCard({
   job,
   onStop,
   stopping,
+  canStop = true,
 }: {
   job: ScanJob;
   onStop: () => void;
   stopping: boolean;
+  canStop?: boolean;
 }) {
   const { t } = useTranslation();
   const [isMobile, setIsMobile] = useState(() => {
@@ -217,17 +222,21 @@ function ScanJobCard({
               : <FolderOutputIcon size={16} aria-hidden="true" />
             }
           </button>
-          <span className="scan-job-action-sep" aria-hidden="true" />
-          <button
-            type="button"
-            className="secondary icon-only-button scan-banner-stop"
-            aria-label={t("scanBanner.metrics.stopJob")}
-            title={t("scanBanner.metrics.stopJob")}
-            disabled={stopping}
-            onClick={onStop}
-          >
-            <BanIcon size={16} aria-hidden="true" />
-          </button>
+          {canStop ? (
+            <>
+              <span className="scan-job-action-sep" aria-hidden="true" />
+              <button
+                type="button"
+                className="secondary icon-only-button scan-banner-stop"
+                aria-label={t("scanBanner.metrics.stopJob")}
+                title={t("scanBanner.metrics.stopJob")}
+                disabled={stopping}
+                onClick={onStop}
+              >
+                <BanIcon size={16} aria-hidden="true" />
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
     </div>
@@ -373,6 +382,7 @@ function ConnectorSyncJobCard({
 
 
 export function AppShell() {
+  const auth = useAuth();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -436,9 +446,10 @@ export function AppShell() {
     last_user_visible_payload: null,
   };
   const telemetryUndecided = telemetry.mode === "none" || telemetry.mode === "initialized";
-  const showReleaseTelemetryChoice = telemetryUndecided || telemetry.mode === "off";
+  const canEditTelemetry = !auth.identity || auth.has("settings.app.edit");
+  const showReleaseTelemetryChoice = canEditTelemetry && (telemetryUndecided || telemetry.mode === "off");
   const showTelemetryAttention =
-    showReleaseNotes &&
+    canEditTelemetry && showReleaseNotes &&
     (showUpdateTelemetryAttention || (appSettingsLoaded && telemetryUndecided && !telemetry.environment_disabled));
   const [transcodeAttention, setTranscodeAttention] = useState(false);
   useEffect(() => {
@@ -468,7 +479,7 @@ export function AppShell() {
   }, [librariesMenuOpen]);
 
   function dismissReleaseNotes() {
-    if (appSettingsLoaded && telemetryUndecided && !telemetry.environment_disabled) {
+    if (canEditTelemetry && appSettingsLoaded && telemetryUndecided && !telemetry.environment_disabled) {
       setTelemetryError(t("telemetry.releaseNotesChooseFirst"));
       return;
     }
@@ -480,6 +491,7 @@ export function AppShell() {
   }
 
   async function saveTelemetryMode(mode: "off" | "minimal" | "enabled") {
+    if (!canEditTelemetry) return;
     setPendingTelemetryMode(mode);
     setTelemetryError(null);
     try {
@@ -680,10 +692,7 @@ export function AppShell() {
       <div className="bg-shapes" />
       <header className="panel hero-panel">
         <div className="app-header media-header">
-          <div className="app-title-block">
-            <NavLink to="/" end className="app-title-link" aria-label={`${t("app.title")} ${t("nav.homeAria")}`}>
-              <h1><span className="app-title-text">{t("app.title")}</span><img className="app-title-icon" src="/favicon.svg" alt="" /></h1>
-            </NavLink>
+          <HeaderBrand>
             <button
               type="button"
               className="app-version"
@@ -696,10 +705,10 @@ export function AppShell() {
             {updateAvailable && latestAvailableVersion ? (
               <span className="app-version-update">{t("releaseNotes.updateAvailable", { version: latestAvailableVersion })}</span>
             ) : null}
-          </div>
+          </HeaderBrand>
           <nav className="media-nav-panel" aria-label="Primary">
             <div className="media-nav-icons">
-              <NavLink
+              {(!auth.identity || auth.has("overview.dashboard")) && <NavLink
                 to="/"
                 end
                 aria-label={t("nav.homeAria")}
@@ -720,7 +729,7 @@ export function AppShell() {
                     </span>
                   </>
                 )}
-              </NavLink>
+              </NavLink>}
               <div
                 ref={librariesMenuRef}
                 className="media-nav-library-menu"
@@ -769,7 +778,7 @@ export function AppShell() {
                   </div>
                 ) : null}
               </div>
-              <NavLink
+              {(!auth.identity || auth.has("overview.compare")) && <NavLink
                 to="/files/compare"
                 end
                 aria-label={t("nav.compareAria")}
@@ -790,8 +799,8 @@ export function AppShell() {
                     </span>
                   </>
                 )}
-              </NavLink>
-              <NavLink
+              </NavLink>}
+              {(!auth.identity || auth.has("overview.storage")) && <NavLink
                 to="/storage-map"
                 end
                 aria-label={t("nav.storageMapAria")}
@@ -812,8 +821,8 @@ export function AppShell() {
                     </span>
                   </>
                 )}
-              </NavLink>
-              <NavLink
+              </NavLink>}
+              {(!auth.identity || hasLibraryPermission(auth.identity, "transcode.view")) && <NavLink
                 to="/transcoding"
                 end
                 aria-label={t("nav.transcodingAria")}
@@ -834,7 +843,7 @@ export function AppShell() {
                     </span>
                   </>
                 )}
-              </NavLink>
+              </NavLink>}
               <NavLink
                 to="/settings"
                 end
@@ -859,6 +868,14 @@ export function AppShell() {
                   </>
                 )}
               </NavLink>
+              {auth.identity && auth.identity.kind !== "desktop" ? (
+                <HeaderAccountMenu
+                  username={auth.identity.username}
+                  owner={auth.identity.owner}
+                  kind={auth.identity.kind}
+                  onSignOut={auth.logout}
+                />
+              ) : null}
             </div>
           </nav>
         </div>
@@ -880,6 +897,7 @@ export function AppShell() {
                   key={job.id}
                   job={job}
                   stopping={stoppingScans}
+                  canStop={!auth.identity || auth.has("library.scan", job.library_id)}
                   onStop={async () => {
                     setStoppingScans(true);
                     setScanCancelError(null);

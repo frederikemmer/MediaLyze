@@ -123,27 +123,27 @@ class _FolderAggregate:
         if subtitle_language:
             self.subtitle_language_bytes[subtitle_language] += weight
         self.analysis_status_bytes[analysis_status] += weight
-        distribution_values = {
-            "codec": video_codec,
-            "resolution": resolution_category[0] if resolution_category else resolution,
-            "hdr": hdr_type,
-            "quality": quality_score_raw,
-            "size": size_bytes,
-            "container": container,
-            "duration": duration_seconds,
-            "bitrate": bitrate,
-            "audio_bitrate": audio_bitrate,
-            "audio_codec": audio_codec,
-            "audio_channels": audio_channels,
-            "frame_rate": round(frame_rate, 3) if frame_rate else None,
-            "bit_depth": bit_depth,
-            "audio_language": audio_language,
-            "subtitle_status": subtitle_status,
-            "subtitle_language": subtitle_language,
-            "analysis_status": analysis_status,
-        }
-        for mode, value in distribution_values.items():
-            self.color_distribution_bytes[mode][value] += weight
+        # Avoid allocating a temporary mapping for every file in large libraries.
+        color_distributions = self.color_distribution_bytes
+        color_distributions["codec"][video_codec] += weight
+        color_distributions["resolution"][
+            resolution_category[0] if resolution_category else resolution
+        ] += weight
+        color_distributions["hdr"][hdr_type] += weight
+        color_distributions["quality"][quality_score_raw] += weight
+        color_distributions["size"][size_bytes] += weight
+        color_distributions["container"][container] += weight
+        color_distributions["duration"][duration_seconds] += weight
+        color_distributions["bitrate"][bitrate] += weight
+        color_distributions["audio_bitrate"][audio_bitrate] += weight
+        color_distributions["audio_codec"][audio_codec] += weight
+        color_distributions["audio_channels"][audio_channels] += weight
+        color_distributions["frame_rate"][round(frame_rate, 3) if frame_rate else None] += weight
+        color_distributions["bit_depth"][bit_depth] += weight
+        color_distributions["audio_language"][audio_language] += weight
+        color_distributions["subtitle_status"][subtitle_status] += weight
+        color_distributions["subtitle_language"][subtitle_language] += weight
+        color_distributions["analysis_status"][analysis_status] += weight
 
     def to_read(self) -> StorageMapNodeRead:
         quality = round(self.weighted_quality_total / max(self.size_bytes, 1)) if self.file_count else None

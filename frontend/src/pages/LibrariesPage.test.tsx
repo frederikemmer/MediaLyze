@@ -25,8 +25,11 @@ import {
   type ScanJobDetail,
 } from "../lib/api";
 import { ScanJobsProvider } from "../lib/scan-jobs";
+import { NotificationProvider } from "../lib/notifications";
 import type { SettingsPanelId } from "../lib/settings-panel-state";
 import { LibrariesPage } from "./LibrariesPage";
+import * as authModule from "../lib/auth";
+import * as accessApi from "../lib/access-session";
 
 type AppSettingsOverrides = Omit<
   Partial<AppSettings>,
@@ -462,6 +465,9 @@ function renderPage({
   activePanel?: SettingsPanelId;
   initialEntry?: string;
 } = {}) {
+  if (activePanel === "historyRetention" && initialEntry === "/settings") {
+    initialEntry = "/settings?section=history-retention";
+  }
   if (activePanel) {
     window.localStorage.setItem("medialyze-settings-active-panel", activePanel);
   }
@@ -486,10 +492,12 @@ function renderPage({
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <AppDataProvider>
-        <ScanJobsProvider>
-          <LocationProbe />
-          <LibrariesPage />
-        </ScanJobsProvider>
+        <NotificationProvider>
+          <ScanJobsProvider>
+            <LocationProbe />
+            <LibrariesPage />
+          </ScanJobsProvider>
+        </NotificationProvider>
       </AppDataProvider>
     </MemoryRouter>,
   );
@@ -556,10 +564,11 @@ describe("LibrariesPage settings navigation", () => {
     expect(await screen.findByRole("heading", { name: "App settings" })).toBeInTheDocument();
     expect(screen.getByTestId("location-probe")).toHaveTextContent("/settings?section=application");
 
-    fireEvent.click(screen.getByRole("button", { name: "History retention" }));
+    fireEvent.click(screen.getByRole("button", { name: "Logs" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Expand History retention" }));
 
     expect(await screen.findByRole("heading", { name: "History retention" })).toBeInTheDocument();
-    expect(screen.getByTestId("location-probe")).toHaveTextContent("/settings?section=history-retention");
+    expect(screen.getByTestId("location-probe")).toHaveTextContent("/settings?section=logs");
   });
 
   it("groups and searches the settings navigation", async () => {
@@ -607,6 +616,55 @@ describe("LibrariesPage settings navigation", () => {
     expect(activePill).not.toBeNull();
     if (!activePill) throw new Error("The active settings navigation pill was not rendered");
     expect(activePill).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("returns from the selected owner account to the users overview when its active navigation item is clicked", async () => {
+    const ownerPolicy = authModule.emptyPolicy();
+    vi.spyOn(authModule, "useAuth").mockReturnValue({
+      identity: {
+        id: "owner",
+        username: "Frederik",
+        kind: "account",
+        owner: true,
+        revision: 1,
+        must_change_password: false,
+        policy: ownerPolicy,
+      },
+      status: null,
+      refresh: async () => {},
+      logout: async () => {},
+      has: () => true,
+    });
+    vi.spyOn(accessApi, "accessRequest").mockImplementation(
+      async <T,>(path: string): Promise<T> => {
+        if (path === "/users") {
+          return [
+            {
+              id: "owner",
+              username: "Frederik",
+              owner: true,
+              active: true,
+              editable: false,
+              must_change_password: false,
+              policy: ownerPolicy,
+            },
+          ] as T;
+        }
+        if (path === "/access/libraries") return [] as T;
+        if (path === "/access/guest") {
+          return { enabled: false, policy: authModule.emptyPolicy(), editable: true } as T;
+        }
+        throw new Error(`Unexpected access request: ${path}`);
+      },
+    );
+    renderPage({ initialEntry: "/settings?section=accounts&account=me" });
+
+    expect(await screen.findByRole("heading", { name: "Frederik" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Users & access" }));
+
+    expect(await screen.findByPlaceholderText("Search accounts")).toBeInTheDocument();
+    expect(screen.getByTestId("location-probe")).toHaveTextContent("/settings?section=accounts");
+    expect(screen.queryByRole("heading", { name: "Frederik" })).not.toBeInTheDocument();
   });
 
   it("opens and highlights the best nested settings match, including a small typo", async () => {
@@ -745,7 +803,6 @@ describe("LibrariesPage ignore patterns", () => {
       expect(count.compareDocumentPosition(restoreButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     };
 
-    await assertRestoreActionPosition(/^filename suffix regexes\d+$/i, "Restore duplicate matching defaults");
     await assertRestoreActionPosition(/^bonus folder patterns\d+$/i, "Restore bonus defaults");
     await assertRestoreActionPosition(/^ignore patterns\d+$/i, "Restore ignore defaults");
     expect(screen.queryByText("Bonus content", { exact: true })).not.toBeInTheDocument();
@@ -759,10 +816,8 @@ describe("LibrariesPage ignore patterns", () => {
     const showField = screen.getByText("Show & Seasons", { exact: true }).closest<HTMLElement>(".field");
     expect(duplicateField).not.toBeNull();
     expect(showField).not.toBeNull();
-    const divider = duplicateField?.nextElementSibling;
-    expect(divider).toHaveClass("app-settings-divider", "pattern-recognition-section-divider");
-    expect(divider?.nextElementSibling).toBe(showField);
-    expect(document.querySelectorAll(".pattern-recognition-section-divider")).toHaveLength(1);
+    expect(duplicateField?.nextElementSibling).toBe(showField);
+    expect(document.querySelectorAll(".pattern-recognition-section-divider")).toHaveLength(0);
   });
 
   it("saves combined ignore patterns through the shared section", async () => {
@@ -1391,6 +1446,24 @@ describe("LibrariesPage ignore patterns", () => {
     expect((await screen.findAllByText("2.9 MB")).length).toBeGreaterThan(0);
   });
 
+  it("hides retention editing and reconstruction controls without the required rights", async () => {
+    vi.spyOn(authModule, "useAuth").mockReturnValue({
+      identity: { id: "reader", username: "reader", kind: "account", owner: false,
+        revision: 1, must_change_password: false,
+        policy: { ...authModule.emptyPolicy(), global: ["settings.app.view"] } },
+      status: null, refresh: async () => {}, logout: async () => {},
+      has: right => right === "settings.app.view",
+    });
+    renderPage({ activePanel: "historyRetention" });
+    expect(await screen.findByRole("heading", { name: "History retention" })).toBeInTheDocument();
+    expect(screen.getByText("Editing retention values requires global app settings edit permission.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Retention days")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Storage limit (GB)")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reconstruct history" })).not.toBeInTheDocument();
+    expect(await screen.findByText("977 KB")).toBeInTheDocument();
+    expect(api.updateAppSettings).not.toHaveBeenCalled();
+  });
+
   it("shows live reconstruction progress inside the history retention panel", async () => {
     vi.spyOn(api, "historyReconstructionStatus").mockResolvedValue(
       createHistoryReconstructionStatus({
@@ -1414,6 +1487,19 @@ describe("LibrariesPage ignore patterns", () => {
     expect(screen.getByText("50 of 200 media files")).toBeInTheDocument();
     expect(screen.getByText("1 of 4 libraries")).toBeInTheDocument();
     expect(screen.getByText("Current library: Movies")).toBeInTheDocument();
+  });
+
+  it("shows history status query errors and retries the status request", async () => {
+    const statusSpy = vi.spyOn(api, "historyReconstructionStatus")
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(createHistoryReconstructionStatus());
+    renderPage({ activePanel: "historyRetention" });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("History status could not be refreshed.");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText(/Last successful status update:/)).toBeInTheDocument();
+    expect(statusSpy).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("reconstructs approximate history and refreshes the storage forecast", async () => {
@@ -1461,11 +1547,11 @@ describe("LibrariesPage ignore patterns", () => {
     await waitFor(() => expect(reconstructSpy).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(historyStatusSpy).toHaveBeenCalledTimes(2), { timeout: 3000 });
     await waitFor(() => expect(historyStorageSpy).toHaveBeenCalledTimes(2), { timeout: 3000 });
-    const reconstructionMessage = await screen.findByText(
-      "Reconstructed 12 library snapshots and 4 initial file-history entries.",
-    );
-    expect(reconstructionMessage).toBeInTheDocument();
-    expect(reconstructionMessage).toHaveClass("alert", "success");
+    // Terminal feedback moved to the shared notification watcher. The Logs
+    // action retains only live progress and refreshes its storage forecast.
+    expect(screen.queryByText("Reconstructed 12 library snapshots and 4 initial file-history entries.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reconstructing file history")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reconstruct history" })).toBeEnabled();
   });
 
   it("persists history retention values and refreshes the storage forecast", async () => {
@@ -1565,7 +1651,7 @@ describe("LibrariesPage ignore patterns", () => {
     })));
   });
 
-  it("auto-saves renamed resolution categories on blur", async () => {
+  it("saves renamed resolution categories from the row editor", async () => {
     const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
       createAppSettings({
         resolution_categories: [
@@ -1579,11 +1665,13 @@ describe("LibrariesPage ignore patterns", () => {
       }),
     );
 
-    renderPage({ activePanel: "resolutionCategories" });
+    renderPage({ initialEntry: "/settings?section=quality-profiles&qualityTab=resolution-categories" });
 
-    const labelInput = (await screen.findByDisplayValue("4k")) as HTMLInputElement;
+    const categoryRow = (await screen.findByText("4k", { selector: "strong" })).closest(".compatibility-profile-list-item") as HTMLElement;
+    fireEvent.click(within(categoryRow).getByRole("button", { name: "Edit" }));
+    const labelInput = within(categoryRow).getByLabelText("Label") as HTMLInputElement;
     fireEvent.change(labelInput, { target: { value: "UHD" } });
-    fireEvent.blur(labelInput);
+    fireEvent.click(within(categoryRow).getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
       expect(updateSpy).toHaveBeenCalledWith(
@@ -1620,9 +1708,8 @@ describe("LibrariesPage ignore patterns", () => {
       }),
     );
 
-    renderPage({ activePanel: "resolutionCategories" });
+    renderPage({ initialEntry: "/settings?section=quality-profiles&qualityTab=resolution-categories" });
 
-    await screen.findByDisplayValue("UHD");
     const restoreButton = await screen.findByRole("button", { name: "Restore defaults" });
     expect(restoreButton).toHaveClass(
       "tooltip-trigger",
@@ -1630,20 +1717,20 @@ describe("LibrariesPage ignore patterns", () => {
       "resolution-category-restore-button",
     );
     expect(restoreButton.querySelector("svg")).toBeInTheDocument();
-    expect(restoreButton.closest(".async-panel-toggle-actions")).not.toBeNull();
+    const actionGroup = restoreButton.closest(".settings-profile-toggle-actions");
+    expect(actionGroup).not.toBeNull();
 
-    const heading = screen.getByRole("heading", { name: "Resolution categories" });
-    expect(heading.closest(".resolution-categories-async-panel")).not.toBeNull();
-    const titleRow = heading.closest(".panel-title-row");
-    expect(titleRow).not.toBeNull();
-    const titleActions = titleRow?.querySelector(".async-panel-toggle-actions");
-    expect(titleActions).toContainElement(restoreButton);
+    const resolutionList = document.querySelector(".resolution-category-list");
+    expect(resolutionList).not.toBeNull();
+    expect(resolutionList?.closest(".quality-profile-resolution-categories")).not.toBeNull();
     const addButton = screen.getByRole("button", { name: "Add category" });
-    expect(titleActions).toContainElement(addButton);
-    expect(titleActions?.firstElementChild).toBe(restoreButton);
-    expect(titleActions?.lastElementChild).toBe(addButton);
+    expect(actionGroup).toContainElement(addButton);
+    expect(actionGroup?.firstElementChild).toBe(restoreButton);
+    expect(actionGroup?.lastElementChild).toBe(addButton);
+    expect(actionGroup?.closest(".quality-profile-toggle-row")).not.toBeNull();
     expect(document.querySelector(".resolution-category-actions")).not.toBeInTheDocument();
 
+    await waitFor(() => expect(restoreButton).toBeEnabled());
     fireEvent.click(restoreButton);
 
     await waitFor(() =>
@@ -1661,10 +1748,19 @@ describe("LibrariesPage ignore patterns", () => {
     );
   });
 
-  it("shows the resolution category tooltip with relaxed thresholds and reference formats", async () => {
-    renderPage({ activePanel: "resolutionCategories" });
+  it("shows the Resolutions tab tooltip only while that tab is active", async () => {
+    renderPage({ initialEntry: "/settings?section=quality-profiles&qualityTab=video" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Explain reduced default resolution thresholds" }));
+    const inactiveTab = await screen.findByRole("tab", { name: "Resolutions" });
+    expect(inactiveTab).not.toHaveClass("tooltip-trigger");
+    fireEvent.mouseEnter(inactiveTab);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    fireEvent.click(inactiveTab);
+    const activeTab = await screen.findByRole("tab", { name: "Resolutions" });
+    await waitFor(() => expect(activeTab).toHaveAttribute("aria-selected", "true"));
+    expect(activeTab).toHaveClass("tooltip-trigger");
+    fireEvent.mouseEnter(activeTab);
 
     expect(await screen.findByRole("tooltip")).toHaveTextContent(
       "Default buckets intentionally use 5% lower minimum width and height thresholds",
@@ -1688,28 +1784,29 @@ describe("LibrariesPage ignore patterns", () => {
       }),
     );
 
-    renderPage({ activePanel: "resolutionCategories" });
+    renderPage({ initialEntry: "/settings?section=quality-profiles&qualityTab=resolution-categories" });
 
     const addButton = await screen.findByRole("button", { name: "Add category" });
-    await screen.findByDisplayValue("4k");
+    await screen.findByText("4k", { selector: "strong" });
     await waitFor(() => expect(addButton).toBeEnabled());
     expect(addButton).toHaveClass("secondary", "small", "settings-panel-header-action", "resolution-category-add");
-    expect(addButton.closest(".resolution-category-table-shell")).toBeNull();
-    expect(addButton.closest(".async-panel-toggle-actions")).not.toBeNull();
+    expect(addButton.closest(".resolution-category-list")).toBeNull();
+    expect(addButton.closest(".settings-profile-toggle-actions")).not.toBeNull();
+    expect(addButton.closest(".quality-profile-toggle-row")).not.toBeNull();
     expect(screen.queryByPlaceholderText("New category")).not.toBeInTheDocument();
 
     fireEvent.click(addButton);
 
     const newLabelInput = await screen.findByPlaceholderText("New category");
-    const newRow = newLabelInput.closest("tr");
-    expect(newRow).toHaveClass("resolution-category-new-row");
+    const newRow = newLabelInput.closest(".compatibility-profile-list-item");
+    expect(newRow).not.toBeNull();
     fireEvent.change(newLabelInput, { target: { value: "480p" } });
     fireEvent.change(within(newRow as HTMLElement).getByLabelText("Min width"), {
       target: { value: "854" },
     });
     const heightInput = within(newRow as HTMLElement).getByLabelText("Min height");
     fireEvent.change(heightInput, { target: { value: "480" } });
-    fireEvent.blur(heightInput);
+    fireEvent.click(within(newRow as HTMLElement).getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
       expect(updateSpy).toHaveBeenCalledWith(
@@ -1746,9 +1843,9 @@ describe("LibrariesPage ignore patterns", () => {
     renderPage({ activePanel: "configuredLibraries" });
 
     fireEvent.click(await screen.findByRole("button", { name: "Quality profiles" }));
-    const mediaTypeTabs = await screen.findByRole("tablist", { name: "Media type" });
+    const mediaTypeTabs = await screen.findByRole("tablist", { name: "Quality profiles" });
     expect(mediaTypeTabs).toHaveClass("transcode-automation-tab-list");
-    expect(within(mediaTypeTabs).getAllByRole("tab")).toHaveLength(3);
+    expect(within(mediaTypeTabs).getAllByRole("tab")).toHaveLength(4);
     expect(within(mediaTypeTabs).getByRole("tab", { name: "Video" })).toHaveClass("transcode-automation-tab-button", "active");
     const videoProfileTrigger = await screen.findByRole("button", { name: /Default video/ });
     expect(videoProfileTrigger).toHaveAttribute("aria-expanded", "false");
@@ -1938,6 +2035,51 @@ describe("LibrariesPage media type selection", () => {
 });
 
 describe("LibrariesPage Jellyfin library assignments", () => {
+  it.each(["account", "guest", "owner", "desktop"] as const)(
+    "matches owner-only library connector settings to the %s identity",
+    async (kind) => {
+      const owner = kind === "owner" || kind === "desktop";
+      vi.spyOn(authModule, "useAuth").mockReturnValue({
+        identity: {
+          id: kind, username: kind, kind: kind === "owner" ? "account" : kind,
+          owner, revision: 1, must_change_password: false,
+          policy: { ...authModule.emptyPolicy(), mode: "future", shared: ["library.read", "library.edit"] },
+        },
+        status: null, refresh: async () => {}, logout: async () => {},
+        has: (right) => owner || ["library.read", "library.edit", "connector.view", "connector.manage"].includes(right),
+      });
+      const library = createLibrarySummary({
+        history_added_date_source: "medialyze",
+        connector_links: [{ connection_id: 7, connection_name: "Jellyfin", provider: "jellyfin",
+          connector_library_id: 1, connector_library_name: "Movies", link_method: "path" }],
+      });
+      vi.mocked(api.libraries).mockResolvedValue([library]);
+      const update = vi.spyOn(api, "updateLibrarySettings").mockResolvedValue(library);
+      renderPage({ activePanel: "configuredLibraries" });
+      await expandLibrarySettings();
+      const historySource = screen.getByRole("combobox", { name: "Historical added date" });
+      const preferredConnection = screen.getByRole("combobox", { name: "Preferred metadata connection" });
+      if (owner) {
+        expect(historySource).toBeEnabled();
+        expect(preferredConnection).toBeEnabled();
+        fireEvent.change(historySource, { target: { value: "connector" } });
+        await waitFor(() => expect(update).toHaveBeenCalledWith(1, { history_added_date_source: "connector" }));
+        fireEvent.change(preferredConnection, { target: { value: "7" } });
+        await waitFor(() => expect(update).toHaveBeenCalledWith(1, { preferred_connector_connection_id: 7 }));
+      } else {
+        expect(historySource).toBeDisabled();
+        expect(preferredConnection).toBeDisabled();
+        const hint = "Only the owner can change the historical added-date source and preferred metadata connection.";
+        expect(historySource).toHaveAccessibleDescription(hint);
+        expect(preferredConnection).toHaveAccessibleDescription(hint);
+        // Programmatic changes also stop before the request, even with edit/manage rights.
+        fireEvent.change(historySource, { target: { value: "connector" } });
+        fireEvent.change(preferredConnection, { target: { value: "7" } });
+        expect(update).not.toHaveBeenCalled();
+      }
+    },
+  );
+
   it("shows connector assignments as status instead of a library-side editor", async () => {
     const medialyzeLibrary = createLibrarySummary({
       connector_links: [
@@ -1976,6 +2118,47 @@ describe("LibrariesPage Jellyfin library assignments", () => {
 });
 
 describe("LibrariesPage desktop mode", () => {
+  it("omits Users & access and redirects direct account links without loading account APIs", async () => {
+    window.medialyzeDesktop = {
+      isDesktop: () => true,
+      selectLibraryPaths: vi.fn().mockResolvedValue([]),
+    };
+    vi.spyOn(authModule, "useAuth").mockReturnValue({
+      identity: {
+        id: "desktop",
+        username: "Desktop",
+        kind: "desktop",
+        owner: true,
+        revision: 0,
+        must_change_password: false,
+        policy: authModule.emptyPolicy(),
+      },
+      status: null,
+      refresh: async () => {},
+      logout: async () => {},
+      has: () => true,
+    });
+    const accountRequest = vi.spyOn(accessApi, "accessRequest").mockRejectedValue(
+      new Error("Desktop must not call account APIs"),
+    );
+
+    renderPage({ initialEntry: "/settings?section=accounts&account=me" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location-probe")).toHaveTextContent(
+        "/settings?section=libraries",
+      );
+    });
+    const settingsMenu = screen.getByLabelText("Settings menu");
+    const settingsNavigation = settingsMenu.querySelector(".settings-navigation-list");
+    expect(settingsNavigation).not.toBeNull();
+    expect(
+      within(settingsNavigation as HTMLElement).queryByRole("button", { name: "Users & access" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Users & access" })).not.toBeInTheDocument();
+    expect(accountRequest).not.toHaveBeenCalled();
+  });
+
   it("shows the desktop folder picker instead of the MEDIA_ROOT browser", async () => {
     window.medialyzeDesktop = {
       isDesktop: () => true,
@@ -2066,6 +2249,18 @@ describe("LibrariesPage desktop mode", () => {
 });
 
 describe("LibrariesPage settings panels", () => {
+  it("lets Guest change language and theme locally in App settings", async () => {
+    vi.spyOn(authModule, "useAuth").mockReturnValue({
+      identity: { id: "guest", username: "Guest", kind: "guest", owner: false, revision: 1,
+        must_change_password: false, policy: authModule.emptyPolicy() },
+      status: null, refresh: async () => {}, logout: async () => {}, has: () => false,
+    });
+    renderPage({ activePanel: "appSettings" });
+    const theme = await screen.findByLabelText("Color theme");
+    expect(screen.getByLabelText("Interface language")).toBeInTheDocument();
+    fireEvent.change(theme, { target: { value: "dark" } });
+    expect(api.updateAppSettings).not.toHaveBeenCalled();
+  });
   it("keeps libraries selected while no library exists and exposes add library from the panel", async () => {
     vi.spyOn(api, "libraries").mockResolvedValue([]);
 
@@ -2091,11 +2286,13 @@ describe("LibrariesPage settings panels", () => {
     expect(screen.getByRole("option", { name: "Ukrainian" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add category" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /^resolution categories$/i }));
+    expect(screen.queryByRole("button", { name: /^resolution categories$/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Quality profiles" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Resolutions" }));
 
     expect(await screen.findByRole("button", { name: "Add category" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Interface language")).not.toBeInTheDocument();
-    expect(window.localStorage.getItem("medialyze-settings-active-panel")).toBe("resolutionCategories");
+    expect(window.localStorage.getItem("medialyze-settings-active-panel")).toBe("qualityProfiles");
   });
 
   it("opens the separate transcoding presets submenu with filename and foldername management", async () => {
@@ -2106,14 +2303,14 @@ describe("LibrariesPage settings panels", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Transcoding Presets" }));
 
     expect(await screen.findByRole("heading", { name: "Transcoding Presets" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Transcoding Presets" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "Filename Presets" })).toHaveAttribute("aria-selected", "false");
-    expect(screen.getByRole("tab", { name: "Foldername Presets" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "Transcoding" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Filename" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "Foldername" })).toHaveAttribute("aria-selected", "false");
 
-    fireEvent.click(screen.getByRole("tab", { name: "Filename Presets" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Filename" }));
     expect(await screen.findByText("No filename presets are configured yet.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New preset" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Foldername Presets" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Foldername" }));
     expect(await screen.findByText("No foldername presets are configured yet.")).toBeInTheDocument();
   });
 
@@ -2148,13 +2345,14 @@ describe("LibrariesPage settings panels", () => {
     expect(within(menu as HTMLElement).getByRole("button", { name: "full scan" })).toBeInTheDocument();
     expect(within(menu as HTMLElement).getByRole("button", { name: "Sync connectors" })).toBeInTheDocument();
 
-    fireEvent.click(within(menu as HTMLElement).getByRole("button", { name: "Resolution categories" }));
+    fireEvent.click(within(menu as HTMLElement).getByRole("button", { name: "Quality profiles" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Resolutions" }));
 
     expect(await screen.findByRole("button", { name: "Add category" })).toBeInTheDocument();
-    expect(window.localStorage.getItem("medialyze-settings-active-panel")).toBe("resolutionCategories");
+    expect(window.localStorage.getItem("medialyze-settings-active-panel")).toBe("qualityProfiles");
     expect(menu).toHaveAttribute("aria-hidden", "true");
     expect(await screen.findByRole("button", { name: "Open settings menu" })).toHaveTextContent(
-      "Resolution categories",
+      "Quality profiles",
     );
   });
 
@@ -2330,6 +2528,31 @@ describe("LibrariesPage settings panels", () => {
     expect(open).not.toHaveBeenCalled();
   });
 
+  it("keeps telemetry previews available but prevents writes for global settings readers", async () => {
+    vi.spyOn(authModule, "useAuth").mockReturnValue({
+      identity: { id: "reader", username: "reader", kind: "account", owner: false,
+        revision: 1, must_change_password: false,
+        policy: { ...authModule.emptyPolicy(), global: ["settings.app.view"] } },
+      status: null, refresh: async () => {}, logout: async () => {},
+      has: right => right === "settings.app.view",
+    });
+    vi.mocked(api.appSettings).mockResolvedValue(createAppSettings({ telemetry: {
+      mode: "enabled", environment_disabled: false, installation_id_suffix: null,
+      last_sent_at: null, last_user_visible_payload: null,
+    } }));
+    renderPage({ activePanel: "telemetry" });
+    const modes = await screen.findAllByRole("button", { name: "Help the dev" });
+    expect(modes[0]).toBeDisabled();
+    for (let i = 0; i < 3; i++) fireEvent.click(modes[0]);
+    const minimal = await screen.findAllByRole("button", { name: "Minimal telemetry" });
+    expect(minimal[0]).toBeDisabled();
+    fireEvent.click(minimal[0]);
+    expect(api.updateAppSettings).not.toHaveBeenCalled();
+    expect(api.telemetrySendNow).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Example full" }));
+    await waitFor(() => expect(api.telemetryPreview).toHaveBeenCalledWith("enabled"));
+  });
+
   it("updates telemetry mode from the panel header toggle", async () => {
     const updateSpy = vi.spyOn(api, "updateAppSettings").mockResolvedValue(
       createAppSettings({
@@ -2416,14 +2639,12 @@ describe("LibrariesPage settings panels", () => {
   it("orders settings navigation entries consistently", async () => {
     renderPage();
 
-    const resolutionItem = await screen.findByRole("button", { name: /^resolution categories$/i });
+    const qualityProfilesItem = await screen.findByRole("button", { name: /^quality profiles$/i });
     const patternRecognitionItem = screen.getByRole("button", { name: /^pattern recognition$/i });
-    const historyRetentionItem = screen.getByRole("button", { name: /^history retention$/i });
-    const recentScanLogsItem = screen.getByRole("button", { name: /^recent scan logs$/i });
+    const logsItem = screen.getByRole("button", { name: /^logs$/i });
 
-    expect(resolutionItem.compareDocumentPosition(patternRecognitionItem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(patternRecognitionItem.compareDocumentPosition(historyRetentionItem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(historyRetentionItem.compareDocumentPosition(recentScanLogsItem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(qualityProfilesItem.compareDocumentPosition(patternRecognitionItem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(patternRecognitionItem.compareDocumentPosition(logsItem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("restores the persisted active settings panel from localStorage", async () => {
@@ -2866,7 +3087,7 @@ describe("LibrariesPage settings panels", () => {
   it("keeps recent scan logs out of the active panel by default", async () => {
     renderPage({ seedExpandedPanels: false });
 
-    expect(await screen.findByRole("button", { name: /^recent scan logs$/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /^logs$/i })).toBeInTheDocument();
     expect(screen.queryByText("No completed scans yet.")).not.toBeInTheDocument();
   });
 
@@ -2874,7 +3095,7 @@ describe("LibrariesPage settings panels", () => {
     renderPage({ seedExpandedPanels: false, activePanel: "recentScanLogs" });
 
     expect(await screen.findByText("No completed scans yet.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^recent scan logs$/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: /^logs$/i })).toHaveAttribute("aria-current", "page");
   });
 
   it("renders recent scan log cards and lazy-loads details", async () => {
@@ -2922,6 +3143,27 @@ describe("LibrariesPage settings panels", () => {
     expect(await screen.findByRole("button", {
       name: "Copy troubleshooting details for broken.mkv",
     })).toBeInTheDocument();
+  });
+
+  it("shows quality jobs with their own progress instead of scan discovery metrics", async () => {
+    const quality_progress: ScanJob = {
+      id: 14, library_id: 1, library_name: "Movies", status: "completed",
+      job_type: "quality_recompute", files_total: 10, files_scanned: 10, errors: 0,
+      started_at: null, finished_at: null, progress_percent: 100,
+      phase_label: "Completed", phase_detail: null,
+    };
+    vi.spyOn(api, "recentScanJobs").mockResolvedValue(createRecentScanJobPage({
+      items: [createRecentScanJob({ job_type: "quality_recompute", quality_progress })],
+    }));
+    vi.spyOn(api, "scanJobDetail").mockResolvedValue(createScanJobDetail({
+      job_type: "quality_recompute", quality_progress,
+    }));
+    renderPage({ activePanel: "recentScanLogs" });
+    const jobButton = await screen.findByRole("button", { name: /movies/i });
+    expect(screen.getByText("Quality scores")).toBeInTheDocument();
+    fireEvent.click(jobButton);
+    expect(await screen.findByText("Quality scores updated: 10 / 10")).toBeInTheDocument();
+    expect(screen.queryByText("Duplicate processing")).not.toBeInTheDocument();
   });
 
   it("loads older scans when clicking load more", async () => {

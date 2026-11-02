@@ -17,7 +17,11 @@ concurrency:
   cancel-in-progress: ${{ github.ref == 'refs/heads/dev' }}
 
 jobs:
+  tests:
+    uses: ./.github/workflows/test.yaml
+
   prepare:
+    needs: tests
     runs-on: ubuntu-latest
     outputs:
       channel: ${{ steps.build_context.outputs.channel }}

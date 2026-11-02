@@ -76,7 +76,7 @@ MediaLyze does **not** currently:
 * scrape movie or TV metadata
 * connect to external metadata APIs
 * modify or rename media files implicitly; explicit transcoding may write to `Transcode_Output`, create a same-directory linked variant, or replace the original only after server-side confirmation and without a byte-for-byte backup
-* manage authentication internally
+* provide self-registration, external login, or e-mail account recovery
 
 ## 2.3 Backlog / Not Yet Implemented
 
@@ -582,6 +582,21 @@ Implemented UI behavior includes:
 * file-detail External sources that return all matched provider items while retaining Jellyfin compatibility fields
 * a file-detail playback timeline that combines all matched capable connections without cross-server deduplication and labels events by connection when multiple sources contribute
 
+Notification foundation (2026-10-23):
+
+* `frontend/src/lib/notifications.tsx` owns transient messages above route suspense and submits personal history records; `NotificationHost.tsx` renders compact lower-right cards, individual timers, topic/type stacks and global hover/focus/modal pause. Saving a duration change restarts timers for visible cards with the new duration; normal pauses preserve remaining time. Account and Desktop Notification settings send only changed fields and merge them atomically in the personal preference record. Guest settings remain browser-local and merge changed fields with the latest local value on save.
+* Settings now has a canonical `Logs` entry (`section=logs`) grouping collapsible scan logs, transcoding history, personal Notifications and History Retention; legacy scan/retention links remain compatible. `LogsSection.tsx` owns the shared sub-panel pattern. Authenticated notification history uses `backend/app/api/notification_routes.py` and the additive `notification_history` table; owners are server-derived per account, Guest session or Desktop identity. `history_retention.notification_history_days` defaults to 30, with 0 unlimited. Access changes prune entries whose saved targets are no longer readable; account disable/delete removes that account's history and disabling Guest clears Guest histories. See `docs/notifications.md` for retry limitations and pruning behavior.
+* `NotificationSettingsPanel.tsx` lives exclusively in App settings: every signed-in account may open it and edit its own account-scoped preferences without a notification permission. Guest can open App settings for Appearance and Notifications; language, theme, palette, style, duration and grouping are saved in the browser-local Guest preference namespace. Global scan/chart/feature controls remain hidden for Guest and retain view/edit restrictions for other identities. The rights tree's app-settings view/edit permissions govern global controls and are labeled accordingly. The account page has no duplicate Notification editor. Desktop keeps App settings. Guest language and theme preferences are available in App settings and remain in the browser-local Guest namespace. Direct Connector actions use Notifications; failed connection tests retain the backend-redacted technical diagnosis in identity-scoped browser `localStorage` across tab/browser restarts until the next test or saved configuration change. Results for unsaved server addresses are labeled as belonging to the last unsaved-address test; the toast/history keep only the safe summary. Toasts remain in the tab where the action occurred. Unconfirmed notification-history writes remain in memory and are discarded on reload or identity change; they are retried only in the original open identity session. A shared watcher reports one-time terminal results for explicitly started scans, transcodes, accepted connector/Jellyfin syncs and history reconstruction; scheduled/watch jobs and indirect syncs remain excluded. Other action-feedback flows continue to be integrated individually. See `docs/notifications.md` for API, scope and outstanding validation. `/ui-elements` uses the exported fields/cards/deck.
+
+App settings grouping (2026-10-24):
+
+* The App settings page uses the existing collapsible settings sub-panel DOM for Appearance (language/theme), Notifications, Scan Settings, Plots & Charts, and Feature flags. `SettingsSection` is a generic export of the shared implementation in `components/LogsSection.tsx`; it introduces no alternate styling. These groups start expanded. Further subdivision remains a user decision; `/ui-elements` includes a representative grouped page fixture.
+* Notification settings provide one- and ten-message random transient previews and a clear-visible action in place of preview selectors. Clearing removes active toasts and timers, not personal history; previews remain excluded from history.
+
+Inline-label input pattern (2026-10-24):
+
+* `components/SettingsInlineLabelInput.tsx` is the shared one-line input with the compact inset label treatment originally introduced for Resolution Categories. Number inputs keep the native stepper at the right edge; the label shifts left on hover/focus, with reduced-motion support. `components/SettingsInlineLabelSelect.tsx` places a compact label immediately left of the native select chevron. The select pattern is currently scoped to Compatibility profile capability sections. Keep checkboxes, URL-with-adjacent-action, and multiline fields on their established label layout when an inset label would compete with the value or control.
+
 UI catalog maintenance rule:
 
 * the hidden development-only `/ui-elements` catalog is the canonical visual inventory for frontend UI patterns
@@ -609,6 +624,18 @@ Frontend design decision history:
 * Record a decision when a design becomes canonical, replaces or rejects a product-wide pattern, or leaves intentional exceptions after a migration. Keep entries dated and concise; do not record every local spacing tweak.
 * Each entry should include the decision, rationale, canonical implementation and catalog references, deprecated selectors or patterns, migration scope, status, and remaining intentional exceptions.
 * Update the entry when the canonical pattern or migration status changes. The history must not keep legacy CSS alive; after migration, retain only identifiers needed to explain intentional exceptions.
+
+### 2026-10-27 — Keep managed account editor actions in the header
+
+* Decision: managed user/Guest editors use the shared borderless Delete, Save and Close icons, with Save immediately left of Close. Saving retains the current editor/tab and resets its saved baseline; Close asks to discard a changed draft. Narrow headers wrap the title/actions above the tabs/status control.
+* Account overview: every user and Guest uses its own compact shared `media-card` surface with an 8px list gap. The borderless `.access-account-row*` presentation and negative list margins are retired; the whole card remains keyboard-accessible through its account button.
+* Canonical references: `AccountsPanel.tsx`, the account header rules in `medialyze.css`, and the live account editor in `/ui-elements`. The `.access-editor-footer` button row and its CSS are retired. Personal credential forms retain their dedicated Save/Sign out controls. Status: active.
+
+### 2026-10-27 — Reuse the app header for authentication
+
+* Decision: login, first-owner setup and required password changes use the normal shell/header with the shared `HeaderBrand` and compact `AccessScreen` panel. Only first-owner setup explains accounts since 0.20, optional Guest access and automatic installation carry-over; the subsequent Login panel starts directly with the form, without a visible heading or introduction.
+* Canonical references: `HeaderBrand.tsx`, `AccessScreen.tsx`, `auth.tsx`, `.access-login` and the authentication/Guest menu examples in `/ui-elements`. The standalone headerless login panel is retired; unauthenticated screens omit protected navigation.
+* Enabled Guest access starts automatically on ordinary visits, sign-out and expiry with the configured Guest rights. Explicit `/login` remains available through the header account menu; Guest has Login instead of Sign out. Status polling never dismisses this explicit login page. Status: active.
 
 ### 2026-10-14 — Share compact summary metric pills across page headers
 
@@ -850,6 +877,21 @@ These flags currently control:
 * whether music-only library contexts show quality-score metrics and columns
 * whether dashboard and library statistic panels may grow beyond the default 4-row height cap while panel width still remains limited by the underlying 4-column grid
 * whether Dolby Vision profile variants and deeper details such as Profile 8 compatibility and Profile 7 layer metadata are displayed directly instead of being grouped as plain Dolby Vision
+
+---
+
+# 8.5 Local accounts and authorization (dev, 2026-10-22)
+
+* Server deployments require an atomic single-owner setup. Local accounts use Argon2id, revocable hashed-token sessions, same-origin/CSRF checks and persistent login throttles. Guest is disabled by default and requires explicit entry.
+* `backend/app/models/access.py`, `services/access*.py`, `api/access_routes.py`, `api/access_middleware.py`, `api/access_policy.py` and `api/access_inventory.json` own identity/policy state. `docs/user-access.md` is the implementation reference, including deliberately restricted mappings and technical gaps; the prototyping matrix remains a proposal.
+* Every new HTTP route/method must be inventoried and reviewed; unknown routes are denied even to Owner. The middleware also covers framework routes/mounts and the separate Federation listener; WebSockets are closed. Do not bypass it to repair a test fixture.
+* Restricted media/aggregate queries attach request-local SQL scope through `api/deps.py` and `services/access_context.py`; they do not consume shared stats caches/in-flight results. Playback requires its separate right. Global configuration writes and their authorized system follow-ups remain installation-wide, without returning hidden media details.
+* Preserve job provenance without account-delete cascades and recheck queued work at execution. Scheduler/watch/maintenance are independent system work. Owner-only unresolved projections must stay restricted until their policy/data projection is explicitly implemented.
+* Library historical added-date sources and preferred metadata connections remain Owner-only. Restricted-account/Guest library settings show disabled controls with a shared explanation, even with library-edit or connector-management rights; handler guards and API checks enforce the same boundary. `/ui-elements` includes the restricted state.
+* `frontend/src/lib/auth.tsx` gates data providers; `access-session.ts` invalidates old identity requests; `preference-storage.ts` wraps existing personal layout serializers with account/Desktop namespaces and server synchronization. `GET/PATCH /api/me/preferences` hydrate and atomically update personal storage/UI fields; the legacy account PUT remains a full replacement. `services/personal_preferences.py` stores Desktop/NO_USERS preferences in the additive `app_settings.desktop_preferences` record, with existing global appearance as the initial fallback. Guest preferences remain browser-local. Do not write new personal preferences directly to raw localStorage.
+* The real `AccountsPanel.tsx` is reused in `/ui-elements`; its fixtures must never write live access state. Separate compact `media-card` panels for each account and Guest, the selected-account editor, shared switches/tabs, borderless 32px icon buttons and 26px chevrons are current patterns.
+* Own-account WebAuthn passkeys use the current HTTPS origin and bind credentials to its hostname (HTTP localhost is a development exception); `PUBLIC_URL` is ignored. `passkey_routes.py` endpoints are explicitly listed in `AUTH_PATHS` and disabled for Desktop/`NO_USERS`; registration requires the current password. `PasskeysPanel` reuses the shared collapsible settings panel and remains visible/disabled with guidance on unsupported origins. See `docs/user-access.md#passkeys`.
+* Electron's per-start proof is confined to its own window/backend origin/port. Loopback and runtime flags do not authenticate a browser. Proxy trust defaults to none; `MEDIALYZE_TRUSTED_PROXY_IPS` explicitly configures the supported launcher.
 
 ---
 
@@ -1251,6 +1293,7 @@ Current workflows include:
 * manually triggered dev desktop artifact builds
 * desktop release artifact publishing, including manual rebuilds for an existing release tag from an alternate code ref when only build logic needs to be corrected
 * release metadata validation for pull requests
+* backend (locked Python 3.12) and frontend (Node 22) regression tests, production build/asset verification and Desktop packaging contracts on PRs to `dev`/`main`; the reusable test workflow gates Docker preparation/publication on pushes and manual builds
 
 ## 13.2 Release Metadata Rules
 
@@ -1379,6 +1422,7 @@ When updating documentation, code, or behavior in this repository:
 * if a change affects supported library modes, scan behavior, media/subtitle extensions, parsed metadata fields, codec/HDR/subtitle classification logic, or unsupported-input handling, update `docs/supported_metadata.md` in the same work so the support matrix stays current
 * if a change is relevant for the next release, add it to `CHANGELOG.md` under `vUnreleased`
 * when a changelog entry corresponds to a tracked GitHub issue, include the GitHub issue link in the `CHANGELOG.md` entry, for example `[#66](https://github.com/frederikemmer/MediaLyze/issues/66)`
+* release notes describe user-relevant net changes since the previous published release; consolidate development-only iterations and duplicate entries while preserving issue/PR links, contributor credits, upgrade guidance, and the existing published release sections
 * when preparing or publishing a new version, move the accumulated `vUnreleased` entries into the new version section so the release history remains complete
 * when bumping a release version, update every version-bearing file listed in section 13.4, then run the validation commands there before finishing
 
@@ -1387,3 +1431,5 @@ If documentation conflicts with code:
 1. trust code and tests first
 2. use GitHub release metadata for public-release chronology
 3. treat `CHANGELOG.md` as advisory unless it matches the current repository and release state
+
+Personal account profiles: username and optional private email autosave for the signed-in account; `/me/account` uses authenticated session/CSRF and retains sessions for profile changes. An additive nullable `local_accounts.email` column preserves existing accounts. Owner credentials remain editable when `OWNER_USERNAME` or `OWNER_PASSWORD` is configured; the header and relevant editor warn independently that each configured value is reapplied at startup. The configured Owner username remains reserved against creation and renaming of other accounts while the variable is set. Password changes remain a separate current-password-confirmed dialog and revoke sessions. Guest language/theme are in App settings and remain browser-local. See `docs/user-access.md`.

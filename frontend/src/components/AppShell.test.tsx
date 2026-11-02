@@ -8,6 +8,7 @@ import { AppDataProvider } from "../lib/app-data";
 import { api, type AppSettings, type LibrarySummary } from "../lib/api";
 import { ScanJobsProvider } from "../lib/scan-jobs";
 import { AppShell } from "./AppShell";
+import * as authModule from "../lib/auth";
 
 const appVersionMock = vi.hoisted(() => ({ value: "0.8.3" }));
 
@@ -670,6 +671,25 @@ describe("AppShell", () => {
     expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
     await waitFor(() => expect(markReminder).toHaveBeenCalledWith("0.9.0"));
     expect(window.localStorage.getItem("medialyze-update-reminder-v1")).toBeNull();
+  });
+
+  it("lets Guests close release notes without choosing installation telemetry", async () => {
+    vi.spyOn(authModule, "useAuth").mockReturnValue({
+      identity: { id: "guest", kind: "guest", username: "", owner: false, revision: 1, must_change_password: false, policy: authModule.emptyPolicy() },
+      status: null, refresh: vi.fn(), logout: vi.fn(), has: () => false,
+    });
+    vi.mocked(api.appSettings).mockResolvedValue(createAppSettings({
+      telemetry: { mode: "none", environment_disabled: false, installation_id_suffix: null, last_sent_at: null, last_user_visible_payload: null },
+    }));
+    const update = vi.spyOn(api, "updateAppSettings");
+    renderShell();
+    expect(await screen.findByRole("dialog", { name: "Release history" })).toBeInTheDocument();
+    await waitFor(() => expect(api.appSettings).toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: "Help the dev" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close release notes" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Release history" })).not.toBeInTheDocument());
+    expect(update).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Account menu for Guest" })).toBeInTheDocument();
   });
 
   it("updates telemetry mode from the release notes toggle", async () => {

@@ -1319,7 +1319,7 @@ def test_linux_vendor_render_node_keeps_cpu_media_engine_visible_without_encoder
     ]
 
 
-def test_linux_render_metadata_uses_uevent_when_sysfs_vendor_is_hidden(monkeypatch) -> None:
+def test_linux_render_metadata_uses_uevent_when_sysfs_vendor_is_hidden(monkeypatch, tmp_path) -> None:
     def fake_read(path):
         if path.name == "uevent":
             return "PCI_ID=8086:46A6\nDRIVER=i915\n"
@@ -1327,6 +1327,13 @@ def test_linux_render_metadata_uses_uevent_when_sysfs_vendor_is_hidden(monkeypat
 
     monkeypatch.setattr(transcoding, "_read_optional_text", fake_read)
 
+    # Keep symlink/exists lookups isolated too, regardless of the host's real GPU.
+    real_path = transcoding.Path
+
+    def isolated_path(value):
+        return tmp_path / "drm" if str(value) == "/sys/class/drm" else real_path(value)
+
+    monkeypatch.setattr(transcoding, "Path", isolated_path)
     metadata = transcoding._linux_render_device_metadata("/dev/dri/renderD128")
 
     assert metadata["vendor"] == "intel"

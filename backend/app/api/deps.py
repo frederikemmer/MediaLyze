@@ -6,7 +6,12 @@ from backend.app.db.session import get_db
 from backend.app.services.runtime import ScanRuntimeManager
 
 
-def get_db_session(db: Session = Depends(get_db)) -> Session:
+def get_db_session(request: Request, db: Session = Depends(get_db)) -> Session:
+    scope = getattr(request.state, "access_scope", None)
+    if scope is not None:
+        db.info["access_scope"] = scope
+        db.info["access_principal"] = request.state.principal
+        db.info["access_external_catalog"] = getattr(request.state, "access_external_catalog", False)
     return db
 
 

@@ -1,5 +1,6 @@
+import { useAuth } from "../lib/auth";
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Github, Plus, Save, Search, SquareArrowOutUpRight, Trash2, X } from "lucide-react";
+import { ChevronRight, Github, Plus, Save, Search, SquareArrowOutUpRight, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { AsyncPanel } from "./AsyncPanel";
@@ -7,6 +8,8 @@ import { CopyIcon } from "./CopyIcon";
 import { DeleteIcon } from "./DeleteIcon";
 import { ProfileFavoriteButton } from "./ProfileFavoriteButton";
 import { SquarePenIcon } from "./SquarePenIcon";
+import { SettingsInlineLabelInput } from "./SettingsInlineLabelInput";
+import { SettingsInlineLabelSelect } from "./SettingsInlineLabelSelect";
 import { TooltipTrigger } from "./TooltipTrigger";
 import {
   api,
@@ -395,6 +398,8 @@ function softwareTemplate(): SoftwareProfile {
 }
 
 export function CompatibilityProfilesPanel({ searchFocus = null }: CompatibilityProfilesPanelProps = {}) {
+  const auth = useAuth();
+  const canEdit = !auth.identity || auth.has("settings.hardware.edit");
   const { t } = useTranslation();
   const [initialCatalog] = useState(readCompatibilityCatalogCache);
   const [tab, setTab] = useState<ProfileTab>(() => profileTabFromSearchFocus(searchFocus) ?? "hardware");
@@ -569,6 +574,7 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
   }
 
   function editProfile(profile: EditableProfile) {
+    if (!canEdit) return;
     const next = structuredClone(profile);
     delete next.catalog_source;
     if (profile.catalog_source === "official") {
@@ -585,6 +591,7 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
   }
 
   function cloneProfile(profile: EditableProfile) {
+    if (!canEdit) return;
     const next = structuredClone(profile);
     delete next.catalog_source;
     next.id = uniqueLocalId(profile.id, profiles);
@@ -617,6 +624,7 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
   }
 
   async function saveProfile() {
+    if (!canEdit) return;
     if (!draft) return;
     try {
       let parsed = profileFromDraft();
@@ -656,6 +664,7 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
   }
 
   async function removeProfile(profile: EditableProfile) {
+    if (!canEdit) return;
     if (!window.confirm(t("compatibilityProfiles.deleteConfirm", { name: profile.name }))) return;
     try {
       if ("manufacturer" in profile) await api.deleteHardwareProfile(profile.id);
@@ -682,6 +691,7 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
   }
 
   function startCompatibility(profile?: CompatibilityProfile) {
+    if (!canEdit && !profile) return;
     const date = today();
     const next: CompatibilityProfile = profile ? structuredClone(profile) : {
       schema_version: 1,
@@ -701,6 +711,7 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
   }
 
   async function saveCompatibility() {
+    if (!canEdit) return;
     if (!compatibilityDraft) return;
     try {
       let profileToSave = compatibilityDraft.id === "new-compatibility-profile"
@@ -732,6 +743,7 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
   }
 
   async function removeCompatibility(profile: CompatibilityProfile) {
+    if (!canEdit) return;
     if (!window.confirm(t("compatibilityProfiles.deleteConfirm", { name: profile.name }))) return;
     await api.deleteCompatibilityProfile(profile.id);
     await load();
@@ -790,17 +802,14 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
       <div className="compatibility-capability-editor">
         {sources.map((source, index) => (
           <div className="compatibility-capability-row compatibility-source-row" key={`${index}-${source.url}`}>
-            <label>
-              {t("compatibilityProfiles.fields.sourceLabel")}
-              <input
-                className="settings-choice-input"
-                value={source.label}
-                readOnly={!editable}
-                onChange={(event) => updateCapabilityDraft("sources", sources.map((item, itemIndex) => (
-                  itemIndex === index ? { ...item, label: event.target.value } : item
-                )))}
-              />
-            </label>
+            <SettingsInlineLabelInput
+              label={t("compatibilityProfiles.fields.sourceLabel")}
+              value={source.label}
+              readOnly={!editable}
+              onChange={(event) => updateCapabilityDraft("sources", sources.map((item, itemIndex) => (
+                itemIndex === index ? { ...item, label: event.target.value } : item
+              )))}
+            />
             <label>
               {t("compatibilityProfiles.fields.sourceUrl")}
               <span className={`compatibility-source-url-control${editable ? "" : " is-readonly"}`}>
@@ -829,7 +838,7 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
             {editable ? (
               <button
                 type="button"
-                className="secondary icon-only-button compatibility-capability-remove"
+                className="icon-button icon-button-borderless icon-button-static compatibility-capability-remove"
                 aria-label={t("compatibilityProfiles.removeSourceAria", { label: source.label || index + 1 })}
                 onClick={() => updateCapabilityDraft("sources", sources.filter((_, itemIndex) => itemIndex !== index))}
               >
@@ -865,15 +874,14 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
       <div className="compatibility-capability-editor">
         {Object.entries(record).map(([key, support]) => (
           <div className="compatibility-capability-row" key={key}>
-            <label>
-              {t("compatibilityProfiles.fields.format")}
+            <SettingsInlineLabelSelect
+              label={t("compatibilityProfiles.fields.format")}
+              value={key}
+              disabled={!editable}
+              onChange={(event) => renameCapabilityEntry(section, key, event.target.value, record)}
+            >
               {section === "audio" ? (
-                <select
-                  className="settings-choice-input"
-                  value={key}
-                  disabled={!editable}
-                  onChange={(event) => renameCapabilityEntry(section, key, event.target.value, record)}
-                >
+                <>
                   {!AUDIO_CODEC_OPTIONS.some((codec) => codec.value === key) ? (
                     <option value={key}>{key}</option>
                   ) : null}
@@ -886,14 +894,9 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
                       {codec.label} ({codec.value})
                     </option>
                   ))}
-                </select>
+                </>
               ) : (
-                <select
-                  className="settings-choice-input"
-                  value={key}
-                  disabled={!editable}
-                  onChange={(event) => renameCapabilityEntry(section, key, event.target.value, record)}
-                >
+                <>
                   {!SUBTITLE_FORMAT_OPTIONS.some((format) => format.value === key) ? (
                     <option value={key}>{key}</option>
                   ) : null}
@@ -906,33 +909,30 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
                       {format.label} ({format.value})
                     </option>
                   ))}
-                </select>
+                </>
               )}
-            </label>
-            <label>
-              {t("compatibilityProfiles.fields.support")}
-              <select
-                className="settings-choice-input"
-                value={String(support)}
-                disabled={!editable}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  updateCapabilityDraft(section, {
-                    ...record,
-                    [key]: value === "true" ? true : value === "false" ? false : value,
-                  });
-                }}
-              >
-                <option value="true">{t("compatibilityProfiles.supportLevels.supported")}</option>
-                <option value="limited">{t("compatibilityProfiles.supportLevels.limited")}</option>
-                <option value="passthrough_only">{t("compatibilityProfiles.supportLevels.passthroughOnly")}</option>
-                <option value="false">{t("compatibilityProfiles.supportLevels.unsupported")}</option>
-              </select>
-            </label>
+            </SettingsInlineLabelSelect>
+            <SettingsInlineLabelSelect
+              label={t("compatibilityProfiles.fields.support")}
+              value={String(support)}
+              disabled={!editable}
+              onChange={(event) => {
+                const value = event.target.value;
+                updateCapabilityDraft(section, {
+                  ...record,
+                  [key]: value === "true" ? true : value === "false" ? false : value,
+                });
+              }}
+            >
+              <option value="true">{t("compatibilityProfiles.supportLevels.supported")}</option>
+              <option value="limited">{t("compatibilityProfiles.supportLevels.limited")}</option>
+              <option value="passthrough_only">{t("compatibilityProfiles.supportLevels.passthroughOnly")}</option>
+              <option value="false">{t("compatibilityProfiles.supportLevels.unsupported")}</option>
+            </SettingsInlineLabelSelect>
             {editable ? (
               <button
                 type="button"
-                className="secondary icon-only-button compatibility-capability-remove"
+                className="icon-button icon-button-borderless icon-button-static compatibility-capability-remove"
                 aria-label={t("compatibilityProfiles.removeCapabilityAria", { value: key })}
                 onClick={() => updateCapabilityDraft(section, Object.fromEntries(
                   Object.entries(record).filter(([entryKey]) => entryKey !== key),
@@ -971,15 +971,13 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
       <div className="compatibility-capability-editor">
         {Object.entries(record).map(([key, capability]) => (
           <div className="compatibility-video-capability" key={key}>
-            <div className="compatibility-capability-row">
-              <label>
-                {t("compatibilityProfiles.fields.codec")}
-                <select
-                  className="settings-choice-input"
-                  value={key}
-                  disabled={!editable}
-                  onChange={(event) => renameCapabilityEntry("video", key, event.target.value, record)}
-                >
+            <div className="compatibility-capability-row compatibility-hardware-video-row">
+              <SettingsInlineLabelSelect
+                label={t("compatibilityProfiles.fields.codec")}
+                value={key}
+                disabled={!editable}
+                onChange={(event) => renameCapabilityEntry("video", key, event.target.value, record)}
+              >
                   {!VIDEO_CODEC_OPTIONS.some((codec) => codec.value === key) ? (
                     <option value={key}>{key}</option>
                   ) : null}
@@ -992,8 +990,7 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
                       {codec.label} ({codec.value})
                     </option>
                   ))}
-                </select>
-              </label>
+              </SettingsInlineLabelSelect>
               <label className="compatibility-hardware-decode-toggle">
                 <span>{t("compatibilityProfiles.fields.hardwareDecode")}</span>
                 <span className="compatibility-checkbox-field">
@@ -1008,7 +1005,7 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
               {editable ? (
                 <button
                   type="button"
-                  className="secondary icon-only-button compatibility-capability-remove"
+                  className="icon-button icon-button-borderless icon-button-static compatibility-capability-remove"
                   aria-label={t("compatibilityProfiles.removeCapabilityAria", { value: key })}
                   onClick={() => updateCapabilityDraft("video", Object.fromEntries(
                     Object.entries(record).filter(([entryKey]) => entryKey !== key),
@@ -1019,56 +1016,44 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
               ) : null}
             </div>
             <div className="compatibility-capability-limits">
-              <label>
-                {t("compatibilityProfiles.fields.maxResolution")}
-                <input
-                  className="settings-choice-input"
-                  value={capability.max_resolution ?? ""}
-                  readOnly={!editable}
-                  placeholder={t("compatibilityProfiles.placeholders.maxResolution")}
-                  onChange={(event) => updateEntry(key, { max_resolution: event.target.value || null })}
-                />
-              </label>
-              <label>
-                {t("compatibilityProfiles.fields.maxFps")}
-                <input
-                  className="settings-choice-input"
-                  type="number"
-                  min={1}
-                  value={capability.max_fps ?? ""}
-                  readOnly={!editable}
-                  placeholder={t("compatibilityProfiles.placeholders.maxFps")}
-                  onChange={(event) => updateEntry(key, {
-                    max_fps: event.target.value ? Number(event.target.value) : null,
-                  })}
-                />
-              </label>
-              <label>
-                {t("compatibilityProfiles.fields.bitDepth")}
-                <input
-                  className="settings-choice-input"
-                  value={(capability.bit_depth ?? []).join(", ")}
-                  readOnly={!editable}
-                  placeholder={t("compatibilityProfiles.placeholders.bitDepth")}
-                  onChange={(event) => updateEntry(key, {
-                    bit_depth: event.target.value.split(",")
-                      .map((value) => Number(value.trim()))
-                      .filter((value) => Number.isFinite(value) && value > 0),
-                  })}
-                />
-              </label>
-              <label>
-                {t("compatibilityProfiles.fields.hdr")}
-                <input
-                  className="settings-choice-input"
-                  value={(capability.hdr ?? []).join(", ")}
-                  readOnly={!editable}
-                  placeholder={t("compatibilityProfiles.placeholders.hdr")}
-                  onChange={(event) => updateEntry(key, {
-                    hdr: event.target.value.split(",").map((value) => value.trim()).filter(Boolean),
-                  })}
-                />
-              </label>
+              <SettingsInlineLabelInput
+                label={t("compatibilityProfiles.fields.maxResolution")}
+                value={capability.max_resolution ?? ""}
+                readOnly={!editable}
+                placeholder={t("compatibilityProfiles.placeholders.maxResolution")}
+                onChange={(event) => updateEntry(key, { max_resolution: event.target.value || null })}
+              />
+              <SettingsInlineLabelInput
+                label={t("compatibilityProfiles.fields.maxFps")}
+                type="number"
+                min={1}
+                value={capability.max_fps ?? ""}
+                readOnly={!editable}
+                placeholder={t("compatibilityProfiles.placeholders.maxFps")}
+                onChange={(event) => updateEntry(key, {
+                  max_fps: event.target.value ? Number(event.target.value) : null,
+                })}
+              />
+              <SettingsInlineLabelInput
+                label={t("compatibilityProfiles.fields.bitDepth")}
+                value={(capability.bit_depth ?? []).join(", ")}
+                readOnly={!editable}
+                placeholder={t("compatibilityProfiles.placeholders.bitDepth")}
+                onChange={(event) => updateEntry(key, {
+                  bit_depth: event.target.value.split(",")
+                    .map((value) => Number(value.trim()))
+                    .filter((value) => Number.isFinite(value) && value > 0),
+                })}
+              />
+              <SettingsInlineLabelInput
+                label={t("compatibilityProfiles.fields.hdr")}
+                value={(capability.hdr ?? []).join(", ")}
+                readOnly={!editable}
+                placeholder={t("compatibilityProfiles.placeholders.hdr")}
+                onChange={(event) => updateEntry(key, {
+                  hdr: event.target.value.split(",").map((value) => value.trim()).filter(Boolean),
+                })}
+              />
             </div>
           </div>
         ))}
@@ -1097,16 +1082,14 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
       <div className="compatibility-capability-editor">
         {containers.map((container, index) => (
           <div className="compatibility-capability-row compatibility-container-row" key={`${container}-${index}`}>
-            <label>
-              {t("compatibilityProfiles.fields.container")}
-              <select
-                className="settings-choice-input"
-                value={container}
-                disabled={!editable}
-                onChange={(event) => updateCapabilityDraft("containers", containers.map((value, itemIndex) => (
-                  itemIndex === index ? event.target.value : value
-                )))}
-              >
+            <SettingsInlineLabelSelect
+              label={t("compatibilityProfiles.fields.container")}
+              value={container}
+              disabled={!editable}
+              onChange={(event) => updateCapabilityDraft("containers", containers.map((value, itemIndex) => (
+                itemIndex === index ? event.target.value : value
+              )))}
+            >
                 {!CONTAINER_OPTIONS.some((option) => option.value === container) ? (
                   <option value={container}>{container}</option>
                 ) : null}
@@ -1119,12 +1102,11 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
                     {option.label} ({option.value})
                   </option>
                 ))}
-              </select>
-            </label>
+            </SettingsInlineLabelSelect>
             {editable ? (
               <button
                 type="button"
-                className="secondary icon-only-button compatibility-capability-remove"
+                className="icon-button icon-button-borderless icon-button-static compatibility-capability-remove"
                 aria-label={t("compatibilityProfiles.removeCapabilityAria", { value: container })}
                 onClick={() => updateCapabilityDraft("containers", containers.filter((_, itemIndex) => itemIndex !== index))}
               >
@@ -1159,6 +1141,9 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
     const record = editing
       ? parsedCapabilityDraft<Record<string, SoftwareCapability>>(section, active[section])
       : active[section];
+    const keyOptions = section === "video" ? VIDEO_CODEC_OPTIONS
+      : section === "audio" ? AUDIO_CODEC_OPTIONS
+        : section === "containers" ? CONTAINER_OPTIONS : SUBTITLE_FORMAT_OPTIONS;
     const updateEntry = (key: string, patch: Partial<SoftwareCapability>) => {
       updateCapabilityDraft(section, { ...record, [key]: { ...record[key], ...patch } });
     };
@@ -1167,110 +1152,40 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
         {Object.entries(record).map(([key, capability]) => (
           <div className={section === "video" ? "compatibility-video-capability" : ""} key={key}>
             <div className="compatibility-capability-row">
-              <label>
-                {t(section === "video" ? "compatibilityProfiles.fields.codec" : "compatibilityProfiles.fields.format")}
-                {section === "video" ? (
-                  <select
-                    className="settings-choice-input"
-                    value={key}
-                    disabled={!editable}
-                    onChange={(event) => renameCapabilityEntry(section, key, event.target.value, record)}
+              <SettingsInlineLabelSelect
+                label={t(section === "video" ? "compatibilityProfiles.fields.codec" : "compatibilityProfiles.fields.format")}
+                value={key}
+                disabled={!editable}
+                onChange={(event) => renameCapabilityEntry(section, key, event.target.value, record)}
+              >
+                {!keyOptions.some((option) => option.value === key) ? <option value={key}>{key}</option> : null}
+                {keyOptions.map((option) => (
+                  <option
+                    value={option.value}
+                    disabled={option.value !== key && Object.hasOwn(record, option.value)}
+                    key={option.value}
                   >
-                    {!VIDEO_CODEC_OPTIONS.some((codec) => codec.value === key) ? (
-                      <option value={key}>{key}</option>
-                    ) : null}
-                    {VIDEO_CODEC_OPTIONS.map((codec) => (
-                      <option
-                        value={codec.value}
-                        disabled={codec.value !== key && Object.hasOwn(record, codec.value)}
-                        key={codec.value}
-                      >
-                        {codec.label} ({codec.value})
-                      </option>
-                    ))}
-                  </select>
-                ) : section === "audio" ? (
-                  <select
-                    className="settings-choice-input"
-                    value={key}
-                    disabled={!editable}
-                    onChange={(event) => renameCapabilityEntry(section, key, event.target.value, record)}
-                  >
-                    {!AUDIO_CODEC_OPTIONS.some((codec) => codec.value === key) ? (
-                      <option value={key}>{key}</option>
-                    ) : null}
-                    {AUDIO_CODEC_OPTIONS.map((codec) => (
-                      <option
-                        value={codec.value}
-                        disabled={codec.value !== key && Object.hasOwn(record, codec.value)}
-                        key={codec.value}
-                      >
-                        {codec.label} ({codec.value})
-                      </option>
-                    ))}
-                  </select>
-                ) : section === "containers" ? (
-                  <select
-                    className="settings-choice-input"
-                    value={key}
-                    disabled={!editable}
-                    onChange={(event) => renameCapabilityEntry(section, key, event.target.value, record)}
-                  >
-                    {!CONTAINER_OPTIONS.some((option) => option.value === key) ? (
-                      <option value={key}>{key}</option>
-                    ) : null}
-                    {CONTAINER_OPTIONS.map((option) => (
-                      <option
-                        value={option.value}
-                        disabled={option.value !== key && Object.hasOwn(record, option.value)}
-                        key={option.value}
-                      >
-                        {option.label} ({option.value})
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <select
-                    className="settings-choice-input"
-                    value={key}
-                    disabled={!editable}
-                    onChange={(event) => renameCapabilityEntry(section, key, event.target.value, record)}
-                  >
-                    {!SUBTITLE_FORMAT_OPTIONS.some((format) => format.value === key) ? (
-                      <option value={key}>{key}</option>
-                    ) : null}
-                    {SUBTITLE_FORMAT_OPTIONS.map((format) => (
-                      <option
-                        value={format.value}
-                        disabled={format.value !== key && Object.hasOwn(record, format.value)}
-                        key={format.value}
-                      >
-                        {format.label} ({format.value})
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </label>
-              <label>
-                {t("compatibilityProfiles.fields.playbackMode")}
-                <select
-                  className="settings-choice-input"
-                  value={capability.mode}
-                  disabled={!editable}
-                  onChange={(event) => updateEntry(key, { mode: event.target.value as PlaybackMode })}
-                >
-                  <option value="direct">{t("compatibilityProfiles.playbackModes.direct")}</option>
-                  <option value="direct_stream">{t("compatibilityProfiles.playbackModes.directStream")}</option>
-                  <option value="transcode">{t("compatibilityProfiles.playbackModes.transcode")}</option>
-                  <option value="video_transcode">{t("compatibilityProfiles.playbackModes.videoTranscode")}</option>
-                  <option value="conditional">{t("compatibilityProfiles.playbackModes.conditional")}</option>
-                  <option value="unsupported">{t("compatibilityProfiles.playbackModes.unsupported")}</option>
-                </select>
-              </label>
+                    {option.label} ({option.value})
+                  </option>
+                ))}
+              </SettingsInlineLabelSelect>
+              <SettingsInlineLabelSelect
+                label={t("compatibilityProfiles.fields.playbackMode")}
+                value={capability.mode}
+                disabled={!editable}
+                onChange={(event) => updateEntry(key, { mode: event.target.value as PlaybackMode })}
+              >
+                <option value="direct">{t("compatibilityProfiles.playbackModes.direct")}</option>
+                <option value="direct_stream">{t("compatibilityProfiles.playbackModes.directStream")}</option>
+                <option value="transcode">{t("compatibilityProfiles.playbackModes.transcode")}</option>
+                <option value="video_transcode">{t("compatibilityProfiles.playbackModes.videoTranscode")}</option>
+                <option value="conditional">{t("compatibilityProfiles.playbackModes.conditional")}</option>
+                <option value="unsupported">{t("compatibilityProfiles.playbackModes.unsupported")}</option>
+              </SettingsInlineLabelSelect>
               {editable ? (
                 <button
                   type="button"
-                  className="secondary icon-only-button compatibility-capability-remove"
+                  className="icon-button icon-button-borderless icon-button-static compatibility-capability-remove"
                   aria-label={t("compatibilityProfiles.removeCapabilityAria", { value: key })}
                   onClick={() => updateCapabilityDraft(section, Object.fromEntries(
                     Object.entries(record).filter(([entryKey]) => entryKey !== key),
@@ -1282,85 +1197,67 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
             </div>
             {section === "video" ? (
               <div className="compatibility-capability-limits">
-                <label>
-                  {t("compatibilityProfiles.fields.maxResolution")}
-                  <input
-                    className="settings-choice-input"
-                    value={capability.max_resolution ?? ""}
-                    readOnly={!editable}
-                    placeholder={t("compatibilityProfiles.placeholders.maxResolution")}
-                    onChange={(event) => updateEntry(key, { max_resolution: event.target.value || null })}
-                  />
-                </label>
-                <label>
-                  {t("compatibilityProfiles.fields.maxFps")}
-                  <input
-                    className="settings-choice-input"
-                    type="number"
-                    min={1}
-                    value={capability.max_fps ?? ""}
-                    readOnly={!editable}
-                    placeholder={t("compatibilityProfiles.placeholders.maxFps")}
-                    onChange={(event) => updateEntry(key, {
-                      max_fps: event.target.value ? Number(event.target.value) : null,
-                    })}
-                  />
-                </label>
-                <label>
-                  {t("compatibilityProfiles.fields.bitDepth")}
-                  <input
-                    className="settings-choice-input"
-                    value={(capability.bit_depth ?? []).join(", ")}
-                    readOnly={!editable}
-                    placeholder={t("compatibilityProfiles.placeholders.bitDepth")}
-                    onChange={(event) => updateEntry(key, {
-                      bit_depth: event.target.value.split(",")
-                        .map((value) => Number(value.trim()))
-                        .filter((value) => Number.isFinite(value) && value > 0),
-                    })}
-                  />
-                </label>
-                <label>
-                  {t("compatibilityProfiles.fields.hdr")}
-                  <input
-                    className="settings-choice-input"
-                    value={(capability.hdr ?? []).join(", ")}
-                    readOnly={!editable}
-                    placeholder={t("compatibilityProfiles.placeholders.hdr")}
-                    onChange={(event) => updateEntry(key, {
-                      hdr: event.target.value.split(",").map((value) => value.trim()).filter(Boolean),
-                    })}
-                  />
-                </label>
-                <label>
-                  {t("compatibilityProfiles.fields.codecProfiles")}
-                  <input
-                    className="settings-choice-input"
-                    value={(capability.profiles ?? []).join(", ")}
-                    readOnly={!editable}
-                    placeholder={t("compatibilityProfiles.placeholders.codecProfiles")}
-                    onChange={(event) => updateEntry(key, {
-                      profiles: event.target.value.split(",").map((value) => value.trim()).filter(Boolean),
-                    })}
-                  />
-                </label>
+                <SettingsInlineLabelInput
+                  label={t("compatibilityProfiles.fields.maxResolution")}
+                  value={capability.max_resolution ?? ""}
+                  readOnly={!editable}
+                  placeholder={t("compatibilityProfiles.placeholders.maxResolution")}
+                  onChange={(event) => updateEntry(key, { max_resolution: event.target.value || null })}
+                />
+                <SettingsInlineLabelInput
+                  label={t("compatibilityProfiles.fields.maxFps")}
+                  type="number"
+                  min={1}
+                  value={capability.max_fps ?? ""}
+                  readOnly={!editable}
+                  placeholder={t("compatibilityProfiles.placeholders.maxFps")}
+                  onChange={(event) => updateEntry(key, {
+                    max_fps: event.target.value ? Number(event.target.value) : null,
+                  })}
+                />
+                <SettingsInlineLabelInput
+                  label={t("compatibilityProfiles.fields.bitDepth")}
+                  value={(capability.bit_depth ?? []).join(", ")}
+                  readOnly={!editable}
+                  placeholder={t("compatibilityProfiles.placeholders.bitDepth")}
+                  onChange={(event) => updateEntry(key, {
+                    bit_depth: event.target.value.split(",")
+                      .map((value) => Number(value.trim()))
+                      .filter((value) => Number.isFinite(value) && value > 0),
+                  })}
+                />
+                <SettingsInlineLabelInput
+                  label={t("compatibilityProfiles.fields.hdr")}
+                  value={(capability.hdr ?? []).join(", ")}
+                  readOnly={!editable}
+                  placeholder={t("compatibilityProfiles.placeholders.hdr")}
+                  onChange={(event) => updateEntry(key, {
+                    hdr: event.target.value.split(",").map((value) => value.trim()).filter(Boolean),
+                  })}
+                />
+                <SettingsInlineLabelInput
+                  label={t("compatibilityProfiles.fields.codecProfiles")}
+                  value={(capability.profiles ?? []).join(", ")}
+                  readOnly={!editable}
+                  placeholder={t("compatibilityProfiles.placeholders.codecProfiles")}
+                  onChange={(event) => updateEntry(key, {
+                    profiles: event.target.value.split(",").map((value) => value.trim()).filter(Boolean),
+                  })}
+                />
               </div>
             ) : null}
             {section === "audio" ? (
               <div className="compatibility-capability-limits">
-                <label>
-                  {t("compatibilityProfiles.fields.maxChannels")}
-                  <input
-                    className="settings-choice-input"
-                    type="number"
-                    min={1}
-                    value={capability.max_channels ?? ""}
-                    readOnly={!editable}
-                    onChange={(event) => updateEntry(key, {
-                      max_channels: event.target.value ? Number(event.target.value) : null,
-                    })}
-                  />
-                </label>
+                <SettingsInlineLabelInput
+                  label={t("compatibilityProfiles.fields.maxChannels")}
+                  type="number"
+                  min={1}
+                  value={capability.max_channels ?? ""}
+                  readOnly={!editable}
+                  onChange={(event) => updateEntry(key, {
+                    max_channels: event.target.value ? Number(event.target.value) : null,
+                  })}
+                />
               </div>
             ) : null}
             <label className="compatibility-profile-reason">
@@ -1402,7 +1299,7 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
 
   function renderProfileDetails(profile: EditableProfile, detailsId?: string) {
     const editing = Boolean(draft && draftOriginId === profile.id);
-    const editable = editing;
+    const editable = editing && canEdit;
     const active = editing && draft ? draft : profile;
     const isHardware = "manufacturer" in active;
     const categoryOptions: readonly string[] = isHardware ? HARDWARE_CATEGORIES : SOFTWARE_CATEGORIES;
@@ -1567,8 +1464,13 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
             ...(!isHardware ? ["rules" as const] : []),
             "sources",
           ] as CapabilitySection[]).map((section) => (
-            <details className="compatibility-capability-section" key={section}>
-              <summary>{t(`compatibilityProfiles.fields.${section}`)}</summary>
+            <details className="compatibility-capability-section compatibility-capability-tree-section" key={section}>
+              <summary>
+                <span className="connector-connection-chevron">
+                  <ChevronRight aria-hidden="true" className="nav-icon" />
+                </span>
+                <strong>{t(`compatibilityProfiles.fields.${section}`)}</strong>
+              </summary>
               <div className="compatibility-capability-section-body">
                 {section === "sources"
                   ? renderSourcesEditor(active, editable, editing)
@@ -1633,6 +1535,7 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
     return (
       <div className="compatibility-profile-quick-actions">
         {renderFavoriteAction(type, profile.id, profile.name)}
+        {canEdit ? <>
         <button
           type="button"
           className="secondary icon-only-button compatibility-profile-quick-action"
@@ -1661,6 +1564,7 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
         >
           <DeleteIcon size={18} aria-hidden="true" className="nav-icon" />
         </button>
+        </> : null}
       </div>
     );
   }
@@ -1715,7 +1619,7 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
     );
   }
 
-  const createAction = tab === "compatibility" ? (
+  const createAction = !canEdit ? null : tab === "compatibility" ? (
     <button
       type="button"
       className="secondary small settings-panel-header-action compatibility-profile-header-action"
@@ -1743,6 +1647,7 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
         <TooltipTrigger
           ariaLabel={t("compatibilityProfiles.developmentNoteAria")}
           content={t("compatibilityProfiles.developmentNote")}
+          className="settings-heading-tooltip"
         >
           ?
         </TooltipTrigger>
@@ -1788,10 +1693,12 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
                         setExpandedProfileId(profile.id);
                       }}
                     >
+                      <span className="connector-connection-chevron">
+                        <ChevronRight aria-hidden="true" className="nav-icon" />
+                      </span>
                       <span className="transcode-automation-list-copy compatibility-profile-list-copy">
                         <strong>{profile.name}</strong>
                       </span>
-                      <ChevronDown aria-hidden="true" />
                     </button>
                     {renderProfileQuickActions(profile)}
                   </div>
@@ -1803,10 +1710,12 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
               <article className="compatibility-profile-list-item is-expanded">
                 <div className="compatibility-profile-list-row quality-profile-list-row">
                   <div className="compatibility-profile-list-trigger is-static">
+                    <span className="connector-connection-chevron">
+                      <ChevronRight aria-hidden="true" className="nav-icon" />
+                    </span>
                     <span className="transcode-automation-list-copy compatibility-profile-list-copy">
                       <strong>{draft.name}</strong>
                     </span>
-                    <ChevronDown aria-hidden="true" />
                   </div>
                 </div>
                 {renderProfileDetails(draft, `compatibility-profile-details-${draft.id}`)}
@@ -1842,10 +1751,12 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
                         }
                       }}
                     >
+                      <span className="connector-connection-chevron">
+                        <ChevronRight aria-hidden="true" className="nav-icon" />
+                      </span>
                       <span className="transcode-automation-list-copy compatibility-profile-list-copy">
                         <strong>{profile.name}</strong>
                       </span>
-                      <ChevronDown aria-hidden="true" />
                     </button>
                     <div className="compatibility-profile-quick-actions">
                       {renderFavoriteAction("compatibility", profile.id, profile.name)}
@@ -1856,27 +1767,27 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
                       <div className="compatibility-profile-form-grid">
                         <label>
                           {t("compatibilityProfiles.fields.name")}
-                          <input className="settings-choice-input" value={compatibilityDraft.name} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, name: event.target.value })} />
+                          <input readOnly={!canEdit} className="settings-choice-input" value={compatibilityDraft.name} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, name: event.target.value })} />
                         </label>
                         <label>
                           {t("compatibilityProfiles.tabs.hardware")}
-                          <select className="settings-choice-input" value={compatibilityDraft.hardware_profile_id} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, hardware_profile_id: event.target.value })}>
+                          <select disabled={!canEdit} className="settings-choice-input" value={compatibilityDraft.hardware_profile_id} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, hardware_profile_id: event.target.value })}>
                             {hardware.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                           </select>
                         </label>
                         <label>
                           {t("compatibilityProfiles.tabs.software")}
-                          <select className="settings-choice-input" value={compatibilityDraft.software_profile_id} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, software_profile_id: event.target.value })}>
+                          <select disabled={!canEdit} className="settings-choice-input" value={compatibilityDraft.software_profile_id} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, software_profile_id: event.target.value })}>
                             {software.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                           </select>
                         </label>
                       </div>
                       <p>{profileNames.get(compatibilityDraft.hardware_profile_id)} + {profileNames.get(compatibilityDraft.software_profile_id)}</p>
-                      <div className="compatibility-profile-card-actions">
+                      {canEdit ? <div className="compatibility-profile-card-actions">
                         <button type="button" className="transcode-action-button compatibility-profile-action-button" onClick={() => void saveCompatibility()}><Save size={16} />{t("common.save")}</button>
                         <button type="button" className="secondary small settings-panel-header-action compatibility-profile-action-button" onClick={() => void removeCompatibility(profile)}><Trash2 size={16} />{t("common.delete")}</button>
                         <button type="button" className="secondary small settings-panel-header-action compatibility-profile-action-button" onClick={() => setCompatibilityDraft(null)}>{t("common.cancel")}</button>
-                      </div>
+                      </div> : null}
                     </div>
                   ) : null}
                 </article>
@@ -1886,27 +1797,29 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
               <article className="compatibility-profile-list-item is-expanded">
                 <div className="compatibility-profile-list-row quality-profile-list-row">
                   <div className="compatibility-profile-list-trigger is-static">
+                    <span className="connector-connection-chevron">
+                      <ChevronRight aria-hidden="true" className="nav-icon" />
+                    </span>
                     <span className="transcode-automation-list-copy compatibility-profile-list-copy">
                       <strong>{compatibilityDraft.name}</strong>
                     </span>
-                    <ChevronDown aria-hidden="true" />
                   </div>
                 </div>
                 <div id={`compatibility-profile-details-${compatibilityDraft.id}`} className="compatibility-profile-details">
                   <div className="compatibility-profile-form-grid">
                     <label>
                       {t("compatibilityProfiles.fields.name")}
-                      <input className="settings-choice-input" value={compatibilityDraft.name} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, name: event.target.value })} />
+                      <input readOnly={!canEdit} className="settings-choice-input" value={compatibilityDraft.name} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, name: event.target.value })} />
                     </label>
                     <label>
                       {t("compatibilityProfiles.tabs.hardware")}
-                      <select className="settings-choice-input" value={compatibilityDraft.hardware_profile_id} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, hardware_profile_id: event.target.value })}>
+                      <select disabled={!canEdit} className="settings-choice-input" value={compatibilityDraft.hardware_profile_id} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, hardware_profile_id: event.target.value })}>
                         {hardware.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                       </select>
                     </label>
                     <label>
                       {t("compatibilityProfiles.tabs.software")}
-                      <select className="settings-choice-input" value={compatibilityDraft.software_profile_id} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, software_profile_id: event.target.value })}>
+                      <select disabled={!canEdit} className="settings-choice-input" value={compatibilityDraft.software_profile_id} onChange={(event) => setCompatibilityDraft({ ...compatibilityDraft, software_profile_id: event.target.value })}>
                         {software.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                       </select>
                     </label>

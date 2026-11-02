@@ -1,16 +1,18 @@
 {
   "name": "medialyze-frontend",
-  "version": "0.19.2",
+  "version": "0.20.0",
   "private": true,
   "license": "AGPL-3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "verify:build": "node scripts/verify-build.mjs",
     "preview": "vite preview",
     "test": "vitest run"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "^14.0.0",
     "@tanstack/react-virtual": "^3.13.21",
     "echarts": "^6.1.0",
     "echarts-for-react": "^3.0.2",
@@ -31,11 +33,11 @@
     "@vitejs/plugin-react-swc": "^3.8.0",
     "jsdom": "^28.1.0",
     "typescript": "^5.8.2",
-    "vite": "^6.4.3",
-    "vitest": "^4.1.11"
+    "vite": "^6.4.5",
+    "vitest": "^5.0.5"
   },
   "overrides": {
-    "undici": "^7.29.1",
+    "undici": "^7.30.1",
     "source-map-js": "1.2.2"
   }
 }

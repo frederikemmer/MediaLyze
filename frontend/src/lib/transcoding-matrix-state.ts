@@ -1,3 +1,4 @@
+import { preferenceStorage } from "./preference-storage";
 export const TRANSCODING_MATRIX_EXPANSION_STORAGE_KEY = "medialyze-transcoding-matrix-expansion";
 
 export type TranscodingMatrixExpansionState = Record<string, boolean>;
@@ -41,7 +42,7 @@ export function getTranscodingMatrixExpansionState(): TranscodingMatrixExpansion
   }
 
   try {
-    const raw = window.localStorage.getItem(TRANSCODING_MATRIX_EXPANSION_STORAGE_KEY);
+    const raw = preferenceStorage.getItem(TRANSCODING_MATRIX_EXPANSION_STORAGE_KEY);
     return raw ? normalizeTranscodingMatrixExpansionState(JSON.parse(raw)) : {};
   } catch {
     return {};
@@ -54,7 +55,7 @@ export function saveTranscodingMatrixExpansionState(
   const normalized = normalizeTranscodingMatrixExpansionState(state);
   if (typeof window !== "undefined") {
     try {
-      window.localStorage.setItem(
+      preferenceStorage.setItem(
         TRANSCODING_MATRIX_EXPANSION_STORAGE_KEY,
         JSON.stringify(normalized),
       );

@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.20.0
+
+>2026-11-02
+
+This release adds local user accounts, granular permissions, passkey login, and notifications.
+You will have to create an Owner after the update (not on desktop installs).
+
+### ✨ New
+
+- **Users and permissions** - create local accounts with protected sessions and grant access per library and action, including read-only browsing, scans, exports, media access, transcoding, connectors, and shared settings. Queued user jobs are revoked when required access is removed. Optional Guest access has its own permissions ([#169](https://github.com/frederikemmer/MediaLyze/issues/169)). Passkey login is supported.
+- **Notifications** - receive configurable notifications and completion messages for manually started scans, transcodes, connector syncs, and history reconstruction. Search your notification history and follow links to results.
+
+### ✨ Enhancements
+
+- Group scan logs, transcoding history, notification history, and retention settings under **Logs**.
+- Organize App settings into collapsible sections and move resolution categories into **Quality profiles → Resolutions**.
+- Reduce memory usage during history reconstruction and storage forecasting, coordinate maintenance independently of scan workers, and show clearer queued status and retry controls when reconstruction status cannot be refreshed.
+- Show loading indicators for dashboard totals and Storage Map navigation, including a reduced-motion alternative, and apply valid file searches immediately when pressing Enter.
+- Reduce memory usage during connector rematching and Storage Map aggregation.
+
+### 🐛 Bug fixes
+
+- Fix the server error when a library gets a second folder with the same name as an existing one ([#197](https://github.com/frederikemmer/MediaLyze/issues/197) fixed in [#198](https://github.com/frederikemmer/MediaLyze/pull/198) by [@Rahul-cs50](https://github.com/Rahul-cs50)).
+- Fix the server error when saving transcoding settings while CPU parallel jobs is set to Auto ([#199](https://github.com/frederikemmer/MediaLyze/issues/199) fixed in [#200](https://github.com/frederikemmer/MediaLyze/pull/200) by [@Rahul-cs50](https://github.com/Rahul-cs50)).
+- Preserve Desktop layouts and appearance across application restarts.
+- Align synchronized video wipe sides with the selected file order in Compare files and linked-variant previews.
+- Keep expanded scan-log sections open when copying troubleshooting details.
+
+### 🔒 Security
+
+- Update the Certifi CA bundle and affected frontend and desktop build dependencies to address known security advisories.
+
+### Upgrade notes
+
+- Existing server libraries, analysis data, and history are retained. Create an Owner account on first access after upgrading, or configure `OWNER_USERNAME` and `OWNER_PASSWORD`. See [Users and access](docs/user-access.md) for setup and permissions.
+- Guest access is optional and can be configured with `GUEST_ENABLED`. Set `NO_USERS=true` only for an intentionally account-free server where every visitor should have full access. Desktop continues without account setup.
+- Passkeys require a supported secure browser origin, normally HTTPS. A reverse proxy must preserve the browser's Host; no public-URL setting is required.
+
+### New Contributors
+
+[@Rahul-cs50](https://github.com/Rahul-cs50) made their first contribution in [#198](https://github.com/frederikemmer/MediaLyze/pull/198) and also contributed [#200](https://github.com/frederikemmer/MediaLyze/pull/200).
+
 ## v0.19.2
 
 This patch release expands video and subtitle recognition, improves metadata parsing, and resolves several dashboard, library, and file comparison issues.
@@ -50,19 +92,19 @@ validated plans with stream controls, hardware capability tests, reusable preset
 
 ### ✨ New
 
-- **Video transcoding** — build validated FFmpeg plans with stream controls, tested hardware acceleration, explicit CPU-only mode, configurable output, and linked variants for comparison.
-- **Transcoding overview** — queue files, track progress, cancel or retry jobs, and review completed work.
-- **Transcoding presets** — save reusable stream settings for later use.
-- **Filename and folder formatting** — configure each separately, rearrange or remove metadata tokens, include connector metadata, and save presets with language-code options.
-- **Synchronized video comparison** — play two versions in sync and drag the divider across the image to compare them directly.
+- **Video transcoding** - build validated FFmpeg plans with stream controls, tested hardware acceleration, explicit CPU-only mode, configurable output, and linked variants for comparison.
+- **Transcoding overview** - queue files, track progress, cancel or retry jobs, and review completed work.
+- **Transcoding presets** - save reusable stream settings for later use.
+- **Filename and folder formatting** - configure each separately, rearrange or remove metadata tokens, include connector metadata, and save presets with language-code options.
+- **Synchronized video comparison** - play two versions in sync and drag the divider across the image to compare them directly.
 
 ### ✨ Enhancements
 
-- **Compact header navigation** — group libraries under a hover and touch accessible Library icon, show page names after two seconds of icon hover, and show the MediaLyze icon instead of its name on phones.
-- **More compact Storage Map** — remove redundant summary cards and subtitle, match the Transcoding page's icon heading, bring filters closer to the title, and keep the treemap evenly inset from the panel edges.
-- **Connector setup guidance** — move the explanatory text into a tooltip beside the Connectors heading and match its Add connection button to Libraries.
-- **Compact history retention tables** — tighten row spacing and shorten storage forecast headings.
-- **Hardware test progress** — scale live progress to codec work and benchmark frame volume so longer parallel tests keep moving the Test Hardware indicator proportionally.
+- **Compact header navigation** - group libraries under a hover and touch accessible Library icon, show page names after two seconds of icon hover, and show the MediaLyze icon instead of its name on phones.
+- **More compact Storage Map** - remove redundant summary cards and subtitle, match the Transcoding page's icon heading, bring filters closer to the title, and keep the treemap evenly inset from the panel edges.
+- **Connector setup guidance** - move the explanatory text into a tooltip beside the Connectors heading and match its Add connection button to Libraries.
+- **Compact history retention tables** - tighten row spacing and shorten storage forecast headings.
+- **Hardware test progress** - scale live progress to codec work and benchmark frame volume so longer parallel tests keep moving the Test Hardware indicator proportionally.
 
 ### 🐛 Bug fixes
 
@@ -138,9 +180,9 @@ This release adds a read-only Jellyfin integration with catalog synchronization,
 
 ### 🐛 Fixed
 
-- **Reliable local restarts on Windows** — stop orphaned reload workers so stale API and federation sockets cannot survive a restart; align runtime settings with custom development ports.
-- **Full-width profile hover** — highlight the complete profile catalog row, including its actions, in light and dark themes.
-- **Consistent page headings** — Dashboard and Compare files share the Transcoding and Storage Map heading sizes and icon treatment; remove the comparison subtitle and tighten vertical spacing around library media sources.
+- **Reliable local restarts on Windows** - stop orphaned reload workers so stale API and federation sockets cannot survive a restart; align runtime settings with custom development ports.
+- **Full-width profile hover** - highlight the complete profile catalog row, including its actions, in light and dark themes.
+- **Consistent page headings** - Dashboard and Compare files share the Transcoding and Storage Map heading sizes and icon treatment; remove the comparison subtitle and tighten vertical spacing around library media sources.
 
 - restore comfortable responsive search-field widths in the library Analyzed files panel and wrap the search toolbar before adjacent header controls collide
 - open every file detail view on Overview instead of carrying the previously selected subsection across files

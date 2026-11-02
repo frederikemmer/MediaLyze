@@ -1134,6 +1134,57 @@ def test_reconstruct_history_from_media_files_is_idempotent(monkeypatch) -> None
     assert second.created_file_history_entries == 0
 
 
+def test_reconstruct_history_skips_complete_daily_snapshot_aggregation(monkeypatch) -> None:
+    from backend.app.services import history_reconstruction as reconstruction
+
+    factory = _session_factory()
+    fixed_now = datetime(2026, 4, 19, 12, 0, tzinfo=UTC)
+    monkeypatch.setattr(reconstruction, "utc_now", lambda: fixed_now)
+    with factory() as db:
+        library = Library(
+            name="Movies",
+            path="/tmp/movies",
+            type=LibraryType.movies,
+            scan_mode=ScanMode.manual,
+            scan_config={},
+        )
+        db.add(library)
+        db.flush()
+        media_file = _build_media_file(library.id)
+        media_file.mtime = datetime(2026, 4, 10, 9, 0, tzinfo=UTC).timestamp()
+        db.add(media_file)
+        db.commit()
+
+        first = reconstruct_history_from_media_files(db)
+        before = {
+            row.snapshot_day: row.snapshot
+            for row in db.scalars(
+                select(LibraryHistory)
+                .where(LibraryHistory.library_id == library.id)
+                .order_by(LibraryHistory.snapshot_day.asc())
+            ).all()
+        }
+        assert first.created_library_history_entries == 10
+
+        def unexpected_rebuild(*args, **kwargs):
+            raise AssertionError("complete daily snapshots should not be rebuilt")
+
+        monkeypatch.setattr(reconstruction, "_build_reconstructed_library_snapshot", unexpected_rebuild)
+        second = reconstruct_history_from_media_files(db)
+        after = {
+            row.snapshot_day: row.snapshot
+            for row in db.scalars(
+                select(LibraryHistory)
+                .where(LibraryHistory.library_id == library.id)
+                .order_by(LibraryHistory.snapshot_day.asc())
+            ).all()
+        }
+
+    assert second.created_library_history_entries == 0
+    assert second.updated_library_history_entries == 0
+    assert after == before
+
+
 @pytest.mark.parametrize("kind", ["file", "library", "scan", "automation"])
 def test_storage_retention_preserves_byte_estimates_order_and_active_jobs(monkeypatch, kind):
     from backend.app.models.entities import TranscodeAutomationRun
@@ -1207,6 +1258,7 @@ def test_history_reconstruction_releases_raw_data_between_files(monkeypatch):
             db.add(media)
         db.commit()
     build_snapshot = reconstruction.build_media_file_history_snapshot
+    build_daily_snapshot = reconstruction._build_reconstructed_library_snapshot
     retained = []
     with factory() as db:
         def checked_snapshot(media, categories):
@@ -1214,10 +1266,128 @@ def test_history_reconstruction_releases_raw_data_between_files(monkeypatch):
             retained.append(sum("raw_ffprobe_json" not in inspect(item).unloaded for item in files))
             return build_snapshot(media, categories)
 
+        def checked_daily_snapshot(*args, **kwargs):
+            files = [item for item in db.identity_map.values() if isinstance(item, MediaFile)]
+            assert files == []
+            return build_daily_snapshot(*args, **kwargs)
+
         monkeypatch.setattr(reconstruction, "build_media_file_history_snapshot", checked_snapshot)
+        monkeypatch.setattr(reconstruction, "_build_reconstructed_library_snapshot", checked_daily_snapshot)
         result = reconstruct_history_from_media_files(db)
         assert result.created_file_history_entries == 8
         snapshots = db.scalars(select(MediaFileHistory.snapshot)).all()
         assert all(snapshot["raw_ffprobe_json"] == {"padding": "x" * 10000} for snapshot in snapshots)
         assert retained == [0] * 8
         assert reconstruct_history_from_media_files(db).created_file_history_entries == 0
+
+
+def test_history_storage_forecast_streams_and_preserves_recent_and_fallback_windows(monkeypatch):
+    from backend.app.services import history_storage
+
+    now = datetime(2026, 10, 28, 12, tzinfo=UTC)
+    monkeypatch.setattr(history_storage, "utc_now", lambda: now)
+    record = history_storage.HistoryStorageRecord
+    records = [
+        record(now - timedelta(days=70), 900),
+        record(now - timedelta(days=3), 100),
+        record(now - timedelta(days=1), 200),
+    ]
+    result = history_storage._forecast_from_records(iter(records), days_limit=10, storage_limit_bytes=42)
+    assert result.entry_count == 3
+    assert result.current_estimated_bytes == 1200
+    assert result.average_daily_bytes == 100
+    assert result.projected_bytes_for_configured_days == 1000
+    assert result.oldest_recorded_at == records[0].recorded_at
+    assert result.newest_recorded_at == records[-1].recorded_at
+
+    old = [record(now - timedelta(days=70), 100), record(now - timedelta(days=68), 200)]
+    fallback = history_storage._forecast_from_records(iter(old), days_limit=0, storage_limit_bytes=0)
+    assert fallback.average_daily_bytes == 100
+    assert fallback.projected_bytes_for_configured_days is None
+    empty = history_storage._forecast_from_records(iter(()), days_limit=3, storage_limit_bytes=0)
+    assert empty.entry_count == 0
+
+
+def test_reconstruction_batches_media_and_does_not_lock_writer_during_aggregation(tmp_path, monkeypatch):
+    from backend.app.services import history_reconstruction as reconstruction
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'history-concurrency.db'}", connect_args={"timeout": 0.1})
+    with engine.connect() as connection:
+        connection.exec_driver_sql("PRAGMA journal_mode=WAL")
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    monkeypatch.setattr(reconstruction, "RECONSTRUCTION_BATCH_SIZE", 2)
+    with factory() as db:
+        library = Library(name="source", path="/source", type=LibraryType.movies)
+        other = Library(name="other", path="/other", type=LibraryType.movies)
+        db.add_all([library, other])
+        db.flush()
+        source_id, other_id = library.id, other.id
+        for i in range(5):
+            media = _build_media_file(source_id)
+            media.filename = media.relative_path = f"movie-{i}.mkv"
+            media.mtime = (datetime.now(UTC) - timedelta(days=1)).timestamp()
+            db.add(media)
+        db.commit()
+
+    original_prepare = reconstruction._build_prepared_media_file
+    original_daily = reconstruction._build_reconstructed_library_snapshot
+    loaded = []
+    wrote = []
+    with factory() as db:
+        def prepare(media, *args, **kwargs):
+            loaded.append(sum(isinstance(obj, MediaFile) for obj in db.identity_map.values()))
+            return original_prepare(media, *args, **kwargs)
+
+        def daily(*args, **kwargs):
+            if not wrote:
+                with factory() as other_db:
+                    other_db.get(Library, other_id).name = "changed concurrently"
+                    other_db.commit()
+                wrote.append(True)
+            return original_daily(*args, **kwargs)
+
+        monkeypatch.setattr(reconstruction, "_build_prepared_media_file", prepare)
+        monkeypatch.setattr(reconstruction, "_build_reconstructed_library_snapshot", daily)
+        progress = []
+        result = reconstruct_history_from_media_files(db, library_ids=(source_id,), progress_callback=lambda **state: progress.append(state))
+        assert progress[-1]["phase"].value == "saving_history"
+        assert all(state["progress_percent"] <= 99 for state in progress)
+        assert result.created_file_history_entries == 5
+        assert max(loaded) <= 2
+        assert wrote == [True]
+    with factory() as db:
+        assert db.get(Library, other_id).name == "changed concurrently"
+        assert len(db.scalars(select(MediaFileHistory)).all()) == 5
+    engine.dispose()
+
+
+def test_reconstruction_rolls_back_staged_file_history_if_final_write_fails(tmp_path):
+    from sqlalchemy import event
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'history-atomic.db'}")
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    with factory() as db:
+        library = Library(name="source", path="/source", type=LibraryType.movies)
+        db.add(library)
+        db.flush()
+        media = _build_media_file(library.id)
+        media.mtime = (datetime.now(UTC) - timedelta(days=1)).timestamp()
+        db.add(media)
+        db.commit()
+
+    def fail_library_insert(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("INSERT INTO LIBRARY_HISTORY"):
+            raise RuntimeError("simulated final write failure")
+
+    event.listen(engine, "before_cursor_execute", fail_library_insert)
+    with factory() as db:
+        with pytest.raises(RuntimeError, match="simulated final write failure"):
+            reconstruct_history_from_media_files(db)
+        db.rollback()
+    event.remove(engine, "before_cursor_execute", fail_library_insert)
+    with factory() as db:
+        assert db.scalars(select(MediaFileHistory)).all() == []
+        assert db.scalars(select(LibraryHistory)).all() == []
+    engine.dispose()

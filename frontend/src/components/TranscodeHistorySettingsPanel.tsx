@@ -6,7 +6,7 @@ import { ChevronRight } from "lucide-react";
 import { api, type LibrarySummary, type TranscodeJob } from "../lib/api";
 import { formatDate } from "../lib/format";
 
-export function TranscodeHistorySettingsPanel({ libraries }: { libraries: LibrarySummary[] }) {
+export function TranscodeHistorySettingsPanel({ libraries, showHeading = true }: { libraries: LibrarySummary[]; showHeading?: boolean }) {
   const { t } = useTranslation();
   const [libraryId, setLibraryId] = useState("");
   const [status, setStatus] = useState<"" | TranscodeJob["status"]>("");
@@ -32,10 +32,7 @@ export function TranscodeHistorySettingsPanel({ libraries }: { libraries: Librar
 
   return (
     <section className="global-transcode-history">
-      <div>
-        <h3>{t("transcoding.globalHistory")}</h3>
-        <p className="field-hint">{t("transcoding.globalHistoryHint")}</p>
-      </div>
+      {showHeading ? <h3>{t("transcoding.globalHistory")}</h3> : null}
       <div className="global-transcode-history-filters">
         <label><span>{t("transcoding.filters.library")}</span><select className="settings-choice-input" value={libraryId} onChange={(event) => setLibraryId(event.target.value)}><option value="">{t("common.all")}</option>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>
         <label><span>{t("transcoding.filters.status")}</span><select className="settings-choice-input" value={status} onChange={(event) => setStatus(event.target.value as "" | TranscodeJob["status"])}><option value="">{t("common.all")}</option>{(["queued", "running", "completed", "canceled", "failed"] as const).map((value) => <option key={value} value={value}>{t(`transcoding.status.${value}`)}</option>)}</select></label>

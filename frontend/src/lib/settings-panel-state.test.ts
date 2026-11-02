@@ -12,10 +12,10 @@ describe("settings panel URL state", () => {
     expect(settingsPanelFromSection("quality-profiles")).toBe("qualityProfiles");
     expect(settingsPanelFromSection("compatibility-profiles")).toBe("compatibilityProfiles");
     expect(settingsPanelFromSection("application")).toBe("appSettings");
-    expect(settingsPanelFromSection("resolution-categories")).toBe("resolutionCategories");
+    expect(settingsPanelFromSection("resolution-categories")).toBe("qualityProfiles");
     expect(settingsPanelFromSection("pattern-recognition")).toBe("patternRecognition");
-    expect(settingsPanelFromSection("history-retention")).toBe("historyRetention");
-    expect(settingsPanelFromSection("scan-logs")).toBe("recentScanLogs");
+    expect(settingsPanelFromSection("history-retention")).toBe("logs");
+    expect(settingsPanelFromSection("scan-logs")).toBe("logs");
     expect(settingsPanelFromSection("telemetry")).toBe("telemetry");
   });
 

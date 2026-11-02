@@ -1,3 +1,4 @@
+import { preferenceStorage } from "./preference-storage";
 export const TRANSCODING_COLUMN_WIDTHS_STORAGE_KEY = "medialyze-transcoding-column-widths";
 
 export const TRANSCODING_COLUMN_KEYS = [
@@ -35,7 +36,7 @@ export function getTranscodingColumnWidths(): TranscodingColumnWidths {
     return {};
   }
 
-  const raw = window.localStorage.getItem(TRANSCODING_COLUMN_WIDTHS_STORAGE_KEY);
+  const raw = preferenceStorage.getItem(TRANSCODING_COLUMN_WIDTHS_STORAGE_KEY);
   if (!raw) {
     return {};
   }
@@ -50,7 +51,7 @@ export function getTranscodingColumnWidths(): TranscodingColumnWidths {
 export function saveTranscodingColumnWidths(widths: TranscodingColumnWidths): TranscodingColumnWidths {
   const normalized = normalizeTranscodingColumnWidths(widths);
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(TRANSCODING_COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify(normalized));
+    preferenceStorage.setItem(TRANSCODING_COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify(normalized));
   }
   return normalized;
 }

@@ -318,6 +318,8 @@ External-source and playback sections depend on matched capable connectors. Sync
 
 These behaviors are shared across currently supported media kinds.
 
+Manual account/Guest scan jobs require both metadata-read and scan permission for their library when queued and again before execution. Revoking either prerequisite cancels waiting work, including jobs with older saved authority records. Scheduled/watch/maintenance work keeps its installation-level authority; already running jobs may finish. See [Users and access](user-access.md#jobs-and-desktopmachine-trust).
+
 ### 7.1 Scan modes
 
 | Scan Mode | Meaning | Normalized `scan_config` fields |
@@ -383,5 +385,7 @@ The tables above should be extended whenever a new media kind becomes first-clas
 The configured scan-worker count remains the maximum. A process-wide admission gate also checks available host RAM and, on Linux, standard cgroup v1/v2 memory limits and usage. It reserves 64 MiB for backend work and budgets 128 MiB per admitted analysis worker; at least one worker can proceed. Queued work remains bounded, and waiting workers recheck memory and cancellation. Under memory pressure scans may run more slowly. These budgets are conservative scheduling estimates, not hard limits on ffprobe allocations or a guarantee against OOM. Transcoding and connector execution keep their independent scheduling.
 
 Canceling a scan signals active analysis workers. Running ffprobe processes are killed and reaped, output pipes are closed, and file hashing checks cancellation between chunks. Cancellation is not reported as a broken file. OS filesystem calls can still take time on an unresponsive mount.
+
+Manual history reconstruction prepares file snapshots in a temporary operating-system file and writes them atomically after aggregation; sufficient temporary disk space is therefore needed. Media and their stream relationships are loaded in bounded batches, while compact aggregate values still scale with library size. A dedicated history worker coordinates with retention, compression and compaction; ordinary SQLite writes can still briefly wait for the final commit.
 
 Database initialization and orphaned-job recovery still finish before startup readiness. History pruning is queued on the existing single-worker maintenance executor; the API can become available before pruning finishes, so expired history may briefly remain visible. Background retention failures are logged. Quality recomputation reuses the effective profile for each media type for the job, while reconstructed full history snapshots are inserted directly in the existing transaction and their source payloads are released per file.

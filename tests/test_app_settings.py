@@ -409,6 +409,17 @@ def test_update_app_settings_persists_ui_preferences(tmp_path) -> None:
     assert loaded.ui_preferences.color_theme == "dark"
 
 
+def test_partial_notifications_preserve_other_global_notification_settings(tmp_path) -> None:
+    session_factory = build_session_factory()
+    settings = build_settings(tmp_path)
+    with session_factory() as db:
+        update_app_settings(db, AppSettingsUpdate(ui_preferences={"notifications": {"palette": "contrast", "style": "tint"}}), settings)
+        updated = update_app_settings(db, AppSettingsUpdate(ui_preferences={"notifications": {"duration_seconds": 7}}), settings)
+        assert updated.ui_preferences.notifications.model_dump() == {
+            "palette": "contrast", "style": "tint", "duration_seconds": 7, "grouping": "topic",
+        }
+
+
 def test_update_app_settings_rejects_invalid_ui_preferences() -> None:
     with pytest.raises(ValidationError):
         AppSettingsUpdate(ui_preferences={"interface_language": "fr"})
@@ -604,10 +615,12 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
             "library_history": {"days": 730, "storage_limit_gb": 0.0},
             "scan_history": {"days": 45, "storage_limit_gb": 0.25},
             "transcode_history": {"days": 90, "storage_limit_gb": 0.0},
+            "notification_history_days": 30,
         },
         "ui_preferences": {
             "interface_language": "en",
             "color_theme": "system",
+            "notifications": {"palette": "medialyze", "style": "outline", "duration_seconds": 2.5, "grouping": "topic"},
         },
         "telemetry": {
             "mode": "none",

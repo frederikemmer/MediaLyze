@@ -7,7 +7,9 @@ guide describes the required steps for adding another UI language without
 breaking fallback behavior, settings persistence, or existing translation keys.
 
 Use English as the canonical source language. A new language is complete only
-when it contains the same key structure as `frontend/locales/en/common.json`.
+when it contains the same key structure as `frontend/locales/en/common.json`,
+with additional plural forms where the language needs them (for example,
+Ukrainian `group_few` and `group_many` alongside `group_one` and `group_other`).
 
 ## 1. Choose the language code
 
@@ -134,7 +136,12 @@ base_keys = flatten(json.loads(base_path.read_text()))
 for locale_path in sorted(Path("frontend/locales").glob("*/common.json")):
     keys = flatten(json.loads(locale_path.read_text()))
     missing = sorted(base_keys - keys)
-    extra = sorted(keys - base_keys)
+    # Additional language-specific plural forms are intentional.
+    plural_forms = ("zero", "one", "two", "few", "many", "other")
+    def is_plural_variant(key):
+        stem, _, suffix = key.rpartition("_")
+        return suffix in plural_forms and f"{stem}_other" in base_keys
+    extra = sorted(key for key in keys - base_keys if not is_plural_variant(key))
     if missing or extra:
         print(locale_path)
         if missing:

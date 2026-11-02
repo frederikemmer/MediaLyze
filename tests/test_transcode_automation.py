@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import sessionmaker
 
 from backend.app.db.base import Base
@@ -14,6 +14,7 @@ from backend.app.models.entities import (
     TranscodeRule,
 )
 from backend.app.schemas.transcoding import (
+    TranscodeAutomationScope,
     TranscodeCondition,
     TranscodeConditionGroup,
     TranscodePresetCreate,
@@ -447,3 +448,72 @@ def test_durable_record_skips_same_source_and_rule_version(tmp_path: Path) -> No
         )
         assert decision.status == "skipped"
         assert "already processed" in (decision.reason or "")
+
+
+def test_preview_batches_profiles_and_existing_decisions(tmp_path: Path, monkeypatch) -> None:
+    factory = _session_factory()
+    settings = _settings(tmp_path)
+    monkeypatch.setattr(automation, "get_transcode_capabilities", lambda _settings: _capabilities())
+    with factory() as db:
+        first_file = _media_file(db, tmp_path / "first")
+        first_file.library.name = "First Movies"
+        files = [first_file, _media_file(db, tmp_path / "second")]
+        automation.ensure_builtin_transcode_presets(db)
+        db.commit()
+        profile = db.scalar(select(TranscodePreset).where(TranscodePreset.builtin_key == "compatibility"))
+        assert profile is not None
+        rule = automation.create_transcode_rule(
+            db,
+            TranscodeRuleCreate(
+                name="Preview batch rule",
+                priority=0,
+                library_ids=[media_file.library_id for media_file in files],
+                profile_id=profile.id,
+            ),
+        )
+        rule_model = db.get(TranscodeRule, rule.id)
+        assert rule_model is not None
+        rule_model.enabled = True
+        for media_file in files:
+            db.add(
+                TranscodeAutomationRecord(
+                    identity_key=automation._identity_key(media_file),
+                    library_id=media_file.library_id,
+                    source_file_id=media_file.id,
+                    library_root_id=media_file.library_root_id,
+                    relative_path=media_file.relative_path,
+                    source_path_snapshot=str(
+                        Path(media_file.library_root.path) / media_file.relative_path
+                    ),
+                    source_size_snapshot=media_file.size_bytes,
+                    source_mtime_snapshot=media_file.mtime,
+                    rule_id=rule.id,
+                    rule_version=rule.version,
+                    profile_id=profile.id,
+                    profile_version=profile.version,
+                    status="completed",
+                    result_source_size=media_file.size_bytes,
+                    result_source_mtime=media_file.mtime,
+                )
+            )
+        db.commit()
+
+        statements: list[str] = []
+        event.listen(
+            db.get_bind(),
+            "before_cursor_execute",
+            lambda _conn, _cursor, statement, *_args: statements.append(statement),
+        )
+        preview = automation.preview_transcode_automation(
+            db,
+            settings,
+            TranscodeAutomationScope(library_ids=[media_file.library_id for media_file in files]),
+        )
+
+        assert preview.total_files == 2
+        assert [item.status for item in preview.items] == ["skipped", "skipped"]
+        assert sum("FROM transcode_profiles" in statement for statement in statements) == 1
+        assert (
+            sum("FROM transcode_automation_records" in statement for statement in statements)
+            == 1
+        )

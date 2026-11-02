@@ -1,3 +1,4 @@
+import { preferenceStorage } from "../lib/preference-storage";
 import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, Database, Frame, Hash, Percent } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -69,7 +70,7 @@ export function readHistoryRangeSelection(storageKey: string): HistoryRangeSelec
     return DEFAULT_HISTORY_RANGE_SELECTION;
   }
   try {
-    const raw = window.localStorage.getItem(storageKey);
+    const raw = preferenceStorage.getItem(storageKey);
     const parsed = raw ? JSON.parse(raw) : null;
     if (!parsed || !isHistoryRangeMode(parsed.mode)) {
       return DEFAULT_HISTORY_RANGE_SELECTION;
@@ -88,7 +89,7 @@ function saveHistoryRangeSelection(storageKey: string, selection: HistoryRangeSe
   if (typeof window === "undefined") {
     return;
   }
-  window.localStorage.setItem(storageKey, JSON.stringify(selection));
+  preferenceStorage.setItem(storageKey, JSON.stringify(selection));
 }
 
 function parseDateKey(value: string | undefined): Date | null {

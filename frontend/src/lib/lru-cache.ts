@@ -1,3 +1,4 @@
+import { identityGeneration } from "./access-session";
 type LruCacheEntry<V> = {
   value: V;
   expiresAt: number | null;
@@ -13,6 +14,12 @@ type LruCacheOptions<V> = {
 export class LruCache<K, V> {
   private values = new Map<K, LruCacheEntry<V>>();
   private totalWeight = 0;
+  private identityEpoch = identityGeneration();
+
+  private synchronizeIdentity(): void {
+    const next = identityGeneration();
+    if (next !== this.identityEpoch) { this.clear(); this.identityEpoch = next; }
+  }
 
   constructor(
     private readonly limit: number,
@@ -20,6 +27,7 @@ export class LruCache<K, V> {
   ) {}
 
   get(key: K): V | undefined {
+    this.synchronizeIdentity();
     const entry = this.values.get(key);
     if (entry === undefined) {
       return undefined;
@@ -34,6 +42,7 @@ export class LruCache<K, V> {
   }
 
   set(key: K, value: V): void {
+    this.synchronizeIdentity();
     this.pruneExpired();
     this.delete(key);
     const weight = Math.max(0, this.options.weigh?.(value) ?? 1);
@@ -55,6 +64,7 @@ export class LruCache<K, V> {
   }
 
   delete(key: K): boolean {
+    this.synchronizeIdentity();
     const entry = this.values.get(key);
     if (!entry) return false;
     this.totalWeight -= entry.weight;

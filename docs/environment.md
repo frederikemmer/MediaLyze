@@ -125,3 +125,13 @@ directory if an explicit `CONFIG_PATH` is not supplied.
 - Before changing `CONFIG_PATH`, `DATABASE_FILENAME`, or output mounts, stop
   only the MediaLyze service and verify the old paths are backed up and
   recoverable.
+
+## Local accounts and trusted proxies
+
+See [Users and access](user-access.md) for setup, upgrade, sessions and current restrictions. First-start environment bootstrap requires both `OWNER_USERNAME` and `OWNER_PASSWORD`. Existing owner fields reconcile separately on each restart. UI edits remain possible while variables are set but are replaced at the next startup unless the corresponding variables are changed or removed. `MEDIALYZE_TRUSTED_PROXY_IPS` defaults to empty (no forwarded-header trust); a TLS reverse proxy must preserve Host. Explicit proxy IPs are optional for Uvicorn's forwarded-header handling. `MEDIALYZE_DESKTOP_TOKEN` is an Electron-generated process credential, never a user-configured browser access key.
+
+`GUEST_ENABLED=true` or `false` sets the Guest enabled state on startup without changing its saved permissions. Leave it unset to retain the saved state; see [Guest defaults](user-access.md#entering-the-application) before enabling unauthenticated access.
+
+`NO_USERS=true` explicitly disables server accounts and grants every visitor full Owner-equivalent access; it defaults to `false`. See [account-free operation](user-access.md#entering-the-application) for restart and network implications.
+
+Passkeys use the current HTTPS browser origin automatically. The former `PUBLIC_URL` setting is ignored. See [Passkeys](user-access.md#passkeys) for setup, naming, login and revocation.

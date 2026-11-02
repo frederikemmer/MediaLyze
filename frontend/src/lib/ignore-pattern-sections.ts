@@ -1,3 +1,4 @@
+import { preferenceStorage } from "./preference-storage";
 export type IgnorePatternSectionState = {
   combinedExpanded: boolean;
 };
@@ -32,7 +33,7 @@ export function getIgnorePatternSectionState(): IgnorePatternSectionState {
     return DEFAULT_STATE;
   }
 
-  const raw = window.localStorage.getItem(STORAGE_KEY);
+  const raw = preferenceStorage.getItem(STORAGE_KEY);
   if (!raw) {
     return DEFAULT_STATE;
   }
@@ -50,7 +51,7 @@ export function saveIgnorePatternSectionState(
   const normalized = normalizeSectionState(state);
 
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+    preferenceStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
   }
 
   return normalized;

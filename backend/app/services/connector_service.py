@@ -58,6 +58,9 @@ def serialize_connector_connection(db: Session, connection: ConnectorConnection)
     payload = ConnectorConnectionRead.model_validate(connection)
     payload.config = public_connector_payload(payload.config)
     payload.has_secret = bool(read_connector_secret(db, connection.id))
+    from backend.app.services.access_context import restricted_request
+    if restricted_request():
+        payload.last_error = None
     return payload
 
 

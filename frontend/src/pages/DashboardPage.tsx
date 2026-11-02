@@ -1,3 +1,4 @@
+import { preferenceStorage } from "../lib/preference-storage";
 import {
   Clock3,
   Files,
@@ -150,7 +151,7 @@ function readDashboardHistoryPanelCollapsedPreference(): boolean {
   if (typeof window === "undefined") {
     return false;
   }
-  const storedPreference = window.localStorage.getItem(DASHBOARD_HISTORY_PANEL_COLLAPSE_STORAGE_KEY);
+  const storedPreference = preferenceStorage.getItem(DASHBOARD_HISTORY_PANEL_COLLAPSE_STORAGE_KEY);
   if (storedPreference === null) {
     return false;
   }
@@ -161,7 +162,7 @@ function readDashboardHistoryMetricPreference(): LibraryHistoryMetricId {
   if (typeof window === "undefined") {
     return DEFAULT_HISTORY_METRIC;
   }
-  const storedPreference = window.localStorage.getItem(DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY);
+  const storedPreference = preferenceStorage.getItem(DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY);
   if (isLibraryHistoryMetricId(storedPreference)) {
     return storedPreference;
   }
@@ -370,14 +371,14 @@ export function DashboardPage() {
   }, [layoutOptions]);
 
   useEffect(() => {
-    window.localStorage.setItem(
+    preferenceStorage.setItem(
       DASHBOARD_HISTORY_PANEL_COLLAPSE_STORAGE_KEY,
       isHistoryPanelCollapsed ? "true" : "false",
     );
   }, [isHistoryPanelCollapsed]);
 
   useEffect(() => {
-    window.localStorage.setItem(DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY, selectedHistoryMetric);
+    preferenceStorage.setItem(DASHBOARD_HISTORY_SELECTED_METRIC_STORAGE_KEY, selectedHistoryMetric);
   }, [selectedHistoryMetric]);
 
   const syncComparisonPanels = useEffectEvent((force = false) => {
@@ -641,32 +642,33 @@ export function DashboardPage() {
           </div>
           <SummaryMetrics
             className="dashboard-statistic-metrics"
+            loading={dashboard === null && !error}
             items={[
               {
                 id: "libraries",
                 label: t("dashboard.libraries"),
-                value: String(dashboard?.totals.libraries ?? 0),
+                value: dashboard ? String(dashboard.totals.libraries) : error ? "—" : t("dashboard.metricsLoading"),
                 description: t("dashboard.librariesMetricTooltip"),
                 Icon: Library,
               },
               {
                 id: "files",
                 label: t("dashboard.files"),
-                value: String(dashboard?.totals.files ?? 0),
+                value: dashboard ? String(dashboard.totals.files) : error ? "—" : t("dashboard.metricsLoading"),
                 description: t("dashboard.filesMetricTooltip"),
                 Icon: Files,
               },
               {
                 id: "storage",
                 label: t("dashboard.storage"),
-                value: formatBytes(dashboard?.totals.storage_bytes ?? 0),
+                value: dashboard ? formatBytes(dashboard.totals.storage_bytes) : error ? "—" : t("dashboard.metricsLoading"),
                 description: t("dashboard.storageMetricTooltip"),
                 Icon: HardDrive,
               },
               {
                 id: "duration",
                 label: t("dashboard.duration"),
-                value: formatDuration(dashboard?.totals.duration_seconds ?? 0),
+                value: dashboard ? formatDuration(dashboard.totals.duration_seconds) : error ? "—" : t("dashboard.metricsLoading"),
                 description: t("dashboard.durationMetricTooltip"),
                 Icon: Clock3,
               },

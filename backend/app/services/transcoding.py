@@ -17,7 +17,7 @@ from time import monotonic
 from typing import Callable
 from uuid import uuid4
 
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import delete, func, or_, select, update, text
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import Settings
@@ -3328,6 +3328,11 @@ def queue_transcode_job(
     db.add(job)
     db.commit()
     db.refresh(job)
+    from backend.app.services.access_jobs import record_job
+    requirements = [["library.read", job.library_id], ["transcode.view", job.library_id], ["transcode.run", job.library_id]]
+    if job.output_mode == "replace_original":
+        requirements.append(["transcode.replace", job.library_id])
+    job._access_origin = record_job(db, "transcode", job.id, requirements)
     return job, validation
 
 
@@ -3426,10 +3431,14 @@ def execute_transcode_job(
     process: subprocess.Popen[str] | None = None
     temporary_path: Path | None = None
     try:
+        db.execute(text("BEGIN IMMEDIATE"))
         job = db.get(TranscodeJob, job_id)
         if job is None:
             raise ValueError("Transcoding job not found")
         if job.status != JobStatus.queued:
+            return job.library_id
+        from backend.app.services.access_jobs import admit_job
+        if not admit_job(db, "transcode", job_id):
             return job.library_id
         job.status = JobStatus.running
         job.started_at = utc_now()
@@ -3743,6 +3752,8 @@ def serialize_transcode_job(
     job: TranscodeJob, source_file: MediaFile | TranscodeSourceMetadata | None = None,
 ) -> TranscodeJobRead:
     payload = TranscodeJobRead.model_validate(job)
+    from backend.app.services.access_jobs import origin_for
+    payload.origin = origin_for(job, "transcode")
     payload.status = job.status.value if hasattr(job.status, "value") else str(job.status)
     if source_file is not None:
         payload.source_video_codec = source_file.primary_video_codec

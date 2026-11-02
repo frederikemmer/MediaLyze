@@ -39,6 +39,8 @@ def item_duration(item: JellyfinItem) -> float | None:
 
 def library_read(db: Session, library: JellyfinLibrary) -> JellyfinLibraryRead:
     linked_name = None
+    restricted = "access_scope" in db.info
+    linked = None
     if library.linked_library_id is not None:
         from backend.app.models.entities import Library
 
@@ -57,15 +59,15 @@ def library_read(db: Session, library: JellyfinLibrary) -> JellyfinLibraryRead:
         name=library.name,
         collection_type=library.collection_type,
         locations=list(library.locations or []),
-        mapped_locations=list(library.mapped_locations or []),
-        mapped_status=library.mapped_status,
-        linked_library_id=library.linked_library_id,
+        mapped_locations=[] if restricted else list(library.mapped_locations or []),
+        mapped_status=library.mapped_status if not restricted or linked else "path_unmapped",
+        linked_library_id=library.linked_library_id if not restricted or linked else None,
         linked_library_name=linked_name,
-        link_method=library.link_method,
+        link_method=library.link_method if not restricted or linked else None,
         can_create_medialyze_library=(
-            library.mapped_status == "accessible" and bool(library.mapped_locations)
+            not restricted and library.mapped_status == "accessible" and bool(library.mapped_locations)
         ),
-        data_scope="linked" if library.linked_library_id is not None else "jellyfin_only",
+        data_scope="linked" if linked or (not restricted and library.linked_library_id is not None) else "jellyfin_only",
         item_count=item_count,
         last_synced_at=library.last_synced_at,
     )
@@ -177,6 +179,14 @@ def library_overview(db: Session, library: JellyfinLibrary, user_id: str | None)
     if user_id:
         played_query = played_query.where(JellyfinUserItemData.jellyfin_user_id == user_id)
     played = int(db.scalar(played_query) or 0)
+    playback_item_count = item_count
+    if "access_scope" in db.info:
+        # Catalog totals are external; playback distributions cover only readable local matches.
+        playback_item_count = int(db.scalar(select(func.count(JellyfinItem.id)).where(
+            item_filter, JellyfinItem.id.in_(select(JellyfinMediaMatch.jellyfin_item_id).where(
+                JellyfinMediaMatch.status == "matched"
+            )),
+        )) or 0)
     users = list(
         db.scalars(
             select(JellyfinUser)
@@ -198,7 +208,7 @@ def library_overview(db: Session, library: JellyfinLibrary, user_id: str | None)
         added_month_distribution=_distribution_rows(month_rows),
         playback_distribution=[
             JellyfinDistributionRead(label="played", value=played),
-            JellyfinDistributionRead(label="unplayed", value=item_count - played),
+            JellyfinDistributionRead(label="unplayed", value=max(0, playback_item_count - played)),
         ],
         users=[JellyfinUserRead.model_validate(user) for user in users],
     )
@@ -312,7 +322,7 @@ def library_items(
             played=bool(aggregated_played_count),
             played_user_count=int(aggregated_played_count or 0),
             favorite_user_count=int(aggregated_favorite_count or 0),
-            match_status=item.match_status,
+            match_status=(item.match_status if "access_scope" not in db.info or media_file_id is not None else "unmatched"),
             media_file_id=media_file_id,
         )
         for item, aggregated_play_count, aggregated_played_count, aggregated_favorite_count, media_file_id in db.execute(statement)

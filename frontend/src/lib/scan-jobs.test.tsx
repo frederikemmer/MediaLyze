@@ -1,150 +1,63 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import i18n from "../i18n";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
+import { ScanJobCard } from "../components/AppShell";
 import { api, type ScanJob } from "./api";
-import { ACTIVE_SCAN_JOBS_POLL_INTERVAL_MS, ScanJobsProvider, useScanJobs } from "./scan-jobs";
+import { emptyPolicy, type Identity } from "./auth";
+import { ScanJobsProvider, useScanJobs } from "./scan-jobs";
 
-function createJob(id: number): ScanJob {
-  return {
-    id,
-    library_id: id,
-    library_name: `Library ${id}`,
-    status: "running",
-    job_type: "incremental",
-    files_total: 100,
-    files_scanned: 10,
-    errors: 0,
-    started_at: "2026-03-11T10:00:00Z",
-    finished_at: null,
-    progress_percent: 10,
-    phase_label: "Analyzing media",
-    phase_detail: null,
-  };
-}
+const auth = vi.hoisted(() => ({ identity: null as Identity | null,
+  has: (_right: string, _id?: number): boolean => false }));
+vi.mock("./auth", async (original) => ({ ...await original<typeof import("./auth")>(), useAuth: () => auth }));
 
+const job: ScanJob = { id: 1, library_id: 7, library_name: "Movies", status: "running",
+  job_type: "quality_recompute", files_total: 10, files_scanned: 7, errors: 0,
+  started_at: null, finished_at: null, progress_percent: 70, progress_mode: "determinate",
+  phase_label: "Recomputing quality scores", phase_detail: null };
 function Probe() {
-  const { activeJobs, stopAll, trackJob } = useScanJobs();
-  return (
-    <>
-      <div data-testid="job-count">{activeJobs.length}</div>
-      <button type="button" onClick={() => trackJob(createJob(1))}>
-        track
-      </button>
-      <button type="button" onClick={() => void stopAll().catch(() => undefined)}>
-        stop
-      </button>
-    </>
-  );
+  const scans = useScanJobs();
+  return <>
+    <output data-testid="jobs">{scans.activeJobs.map(j => j.id).join(",")}</output>
+    <button onClick={() => scans.trackJob({ ...job, id: 2, library_id: 8 })}>Track hidden</button>
+    <button onClick={() => scans.stopAll()}>Stop all</button>
+    <button onClick={() => scans.refresh()}>Refresh</button>
+  </>;
 }
+beforeEach(async () => {
+  await i18n.changeLanguage("en");
+  auth.identity = { id: "reader", username: "Reader", kind: "account", owner: false,
+    revision: 1, must_change_password: false,
+    policy: { ...emptyPolicy(), libraries: { "7": ["library.read"] } } };
+  auth.has = (right, id) => right === "library.read" && id === 7;
+  vi.spyOn(api, "activeScanJobs").mockResolvedValue([job]);
+});
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-async function flushEffects() {
-  await act(async () => {
-    await Promise.resolve();
-  });
-}
-
-function setVisibilityState(state: DocumentVisibilityState) {
-  Object.defineProperty(document, "visibilityState", {
-    configurable: true,
-    value: state,
-  });
-  document.dispatchEvent(new Event("visibilitychange"));
-}
-
-describe("ScanJobsProvider", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    setVisibilityState("visible");
+describe("scan metadata access", () => {
+  it("loads scoped scan/quality progress for a non-owner and ignores hidden tracked jobs", async () => {
+    render(<ScanJobsProvider><Probe /></ScanJobsProvider>);
+    await waitFor(() => expect(screen.getByTestId("jobs")).toHaveTextContent("1"));
+    fireEvent.click(screen.getByText("Track hidden"));
+    expect(screen.getByTestId("jobs")).toHaveTextContent(/^1$/);
+    expect(api.activeScanJobs).toHaveBeenCalledTimes(1);
   });
 
-  afterEach(() => {
-    cleanup();
-    vi.restoreAllMocks();
-    vi.useRealTimers();
-    setVisibilityState("visible");
+  it("retains readable jobs that a bulk cancellation did not authorize", async () => {
+    vi.spyOn(api, "cancelActiveScanJobs").mockResolvedValue({ canceled_jobs: 0 });
+    render(<ScanJobsProvider><Probe /></ScanJobsProvider>);
+    await waitFor(() => expect(screen.getByTestId("jobs")).toHaveTextContent("1"));
+    await act(async () => { fireEvent.click(screen.getByText("Stop all")); });
+    expect(screen.getByTestId("jobs")).toHaveTextContent(/^1$/);
+    expect(api.activeScanJobs).toHaveBeenCalledTimes(2);
   });
 
-  it("refreshes once on mount but does not keep polling while no scan is tracked", async () => {
-    const activeScanJobsSpy = vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
-
-    render(
-      <ScanJobsProvider>
-        <Probe />
-      </ScanJobsProvider>,
-    );
-
-    await flushEffects();
-    const initialCallCount = activeScanJobsSpy.mock.calls.length;
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(60000);
-    });
-
-    expect(initialCallCount).toBeGreaterThan(0);
-    expect(activeScanJobsSpy).toHaveBeenCalledTimes(initialCallCount);
-  });
-
-  it("starts polling after a scan job is tracked", async () => {
-    const activeScanJobsSpy = vi.spyOn(api, "activeScanJobs").mockResolvedValue([createJob(1)]);
-
-    render(
-      <ScanJobsProvider>
-        <Probe />
-      </ScanJobsProvider>,
-    );
-
-    await flushEffects();
-    const initialCallCount = activeScanJobsSpy.mock.calls.length;
-
-    fireEvent.click(screen.getByRole("button", { name: "track" }));
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(ACTIVE_SCAN_JOBS_POLL_INTERVAL_MS);
-    });
-
-    await flushEffects();
-
-    expect(activeScanJobsSpy.mock.calls.length).toBeGreaterThan(initialCallCount);
-  });
-
-  it("refreshes again on focus only while a scan is tracked", async () => {
-    const activeScanJobsSpy = vi.spyOn(api, "activeScanJobs").mockResolvedValue([createJob(1)]);
-
-    render(
-      <ScanJobsProvider>
-        <Probe />
-      </ScanJobsProvider>,
-    );
-
-    await flushEffects();
-    const initialCallCount = activeScanJobsSpy.mock.calls.length;
-
-    fireEvent.click(screen.getByRole("button", { name: "track" }));
-
-    act(() => {
-      window.dispatchEvent(new Event("focus"));
-    });
-
-    await flushEffects();
-
-    expect(activeScanJobsSpy.mock.calls.length).toBeGreaterThan(initialCallCount);
-  });
-
-  it("keeps tracked scans visible when cancel fails", async () => {
-    vi.spyOn(api, "activeScanJobs").mockResolvedValue([]);
-    vi.spyOn(api, "cancelActiveScanJobs").mockRejectedValue(new Error("database busy"));
-
-    render(
-      <ScanJobsProvider>
-        <Probe />
-      </ScanJobsProvider>,
-    );
-
-    await flushEffects();
-    fireEvent.click(screen.getByRole("button", { name: "track" }));
-    fireEvent.click(screen.getByRole("button", { name: "stop" }));
-    await flushEffects();
-
-    expect(screen.getByTestId("job-count")).toHaveTextContent("1");
+  it("shows read-only progress without the cancellation action", () => {
+    const stop = vi.fn();
+    const { rerender } = render(<ScanJobCard job={job} stopping={false} onStop={stop} canStop={false} />);
+    expect(screen.getByText("Movies")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: i18n.t("scanBanner.metrics.stopJob") })).not.toBeInTheDocument();
+    rerender(<ScanJobCard job={job} stopping={false} onStop={stop} canStop />);
+    fireEvent.click(screen.getByRole("button", { name: i18n.t("scanBanner.metrics.stopJob") }));
+    expect(stop).toHaveBeenCalledOnce();
   });
 });

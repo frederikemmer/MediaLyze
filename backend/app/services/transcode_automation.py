@@ -69,6 +69,7 @@ class TranscodeAutomationError(ValueError):
 
 
 AUTOMATION_PAGE_SIZE = 50
+AUTOMATION_PREVIEW_QUERY_BATCH_SIZE = 400
 TERMINAL_AUTOMATION_STATUSES = {"completed", "failed", "canceled"}
 
 
@@ -1154,6 +1155,37 @@ def _existing_record(
     return None
 
 
+def _preview_profiles(db: Session, rules: list[TranscodeRule]) -> dict[int, TranscodePreset]:
+    """Load rule profiles in bounded queries for one preview."""
+    profile_ids = sorted({rule.profile_id for rule in rules})
+    profiles: dict[int, TranscodePreset] = {}
+    for start in range(0, len(profile_ids), AUTOMATION_PREVIEW_QUERY_BATCH_SIZE):
+        batch = profile_ids[start : start + AUTOMATION_PREVIEW_QUERY_BATCH_SIZE]
+        profiles.update(
+            (profile.id, profile)
+            for profile in db.scalars(select(TranscodePreset).where(TranscodePreset.id.in_(batch))).all()
+        )
+    return profiles
+
+
+def _preview_existing_records(
+    db: Session,
+    candidates: list[MediaFile],
+) -> dict[str, list[TranscodeAutomationRecord]]:
+    """Load durable decisions for one bounded candidate batch."""
+    records_by_identity: dict[str, list[TranscodeAutomationRecord]] = {}
+    identity_keys = list(dict.fromkeys(_identity_key(media_file) for media_file in candidates))
+    if identity_keys:
+        records = db.scalars(
+            select(TranscodeAutomationRecord)
+            .where(TranscodeAutomationRecord.identity_key.in_(identity_keys))
+            .order_by(TranscodeAutomationRecord.created_at.desc())
+        ).all()
+        for record in records:
+            records_by_identity.setdefault(record.identity_key, []).append(record)
+    return records_by_identity
+
+
 def _record_skip_reason(record: TranscodeAutomationRecord, retry_failed: bool) -> str | None:
     if record.status in {"queued", "running"}:
         return "A matching automation job is already queued or running"
@@ -1173,6 +1205,8 @@ def _decision_for_file(
     capabilities,
     *,
     retry_failed: bool,
+    profiles_by_id: dict[int, TranscodePreset] | None = None,
+    records_by_identity: dict[str, list[TranscodeAutomationRecord]] | None = None,
 ) -> TranscodeAutomationDecisionRead:
     base = dict(
         file_id=media_file.id,
@@ -1183,7 +1217,11 @@ def _decision_for_file(
     rule = _winning_rule(media_file, rules, app_settings)
     if rule is None:
         return TranscodeAutomationDecisionRead(**base, status="unmatched")
-    profile = db.get(TranscodePreset, rule.profile_id)
+    profile = (
+        profiles_by_id.get(rule.profile_id)
+        if profiles_by_id is not None
+        else db.get(TranscodePreset, rule.profile_id)
+    )
     if profile is None:
         return TranscodeAutomationDecisionRead(
             **base,
@@ -1208,7 +1246,30 @@ def _decision_for_file(
             status="blocked",
             reason="The winning replace-original rule needs approval for its current version",
         )
-    existing = _existing_record(db, media_file, rule, profile)
+    if records_by_identity is None:
+        existing = _existing_record(db, media_file, rule, profile)
+    else:
+        current_size, current_mtime = _current_source_state(media_file)
+        existing = None
+        for record in records_by_identity.get(_identity_key(media_file), []):
+            if (
+                record.rule_id != rule.id
+                or record.rule_version != rule.version
+                or record.profile_id != profile.id
+                or record.profile_version != profile.version
+            ):
+                continue
+            result_state = (record.result_source_size, record.result_source_mtime)
+            if record.status == "completed" and result_state[0] is not None and result_state[1] is not None:
+                if result_state[0] == current_size and float(result_state[1]) == current_mtime:
+                    existing = record
+                    break
+            if (
+                record.source_size_snapshot == current_size
+                and float(record.source_mtime_snapshot) == current_mtime
+            ):
+                existing = record
+                break
     if existing is not None:
         reason = _record_skip_reason(existing, retry_failed)
         if reason:
@@ -1281,18 +1342,25 @@ def preview_transcode_automation(
     total = _candidate_count(db, scope, rules)
     limit = min(scope.limit, 100000)
     items: list[TranscodeAutomationDecisionRead] = []
-    for media_file in _load_candidates(db, scope, rules, limit=limit):
-        items.append(
-            _decision_for_file(
-                db,
-                settings,
-                media_file,
-                rules,
-                app_settings,
-                capabilities,
-                retry_failed=scope.retry_failed,
+    candidates = _load_candidates(db, scope, rules, limit=limit)
+    profiles_by_id = _preview_profiles(db, rules)
+    for start in range(0, len(candidates), AUTOMATION_PREVIEW_QUERY_BATCH_SIZE):
+        candidate_batch = candidates[start : start + AUTOMATION_PREVIEW_QUERY_BATCH_SIZE]
+        records_by_identity = _preview_existing_records(db, candidate_batch)
+        for media_file in candidate_batch:
+            items.append(
+                _decision_for_file(
+                    db,
+                    settings,
+                    media_file,
+                    rules,
+                    app_settings,
+                    capabilities,
+                    retry_failed=scope.retry_failed,
+                    profiles_by_id=profiles_by_id,
+                    records_by_identity=records_by_identity,
+                )
             )
-        )
     counts = {key: 0 for key in ("matched", "queued", "blocked", "skipped", "unmatched")}
     for item in items:
         counts[item.status] = counts.get(item.status, 0) + 1

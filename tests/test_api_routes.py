@@ -85,10 +85,10 @@ def _build_test_app(db: Session, scan_runtime=None) -> TestClient:
         def cancel_active_jobs(self) -> list:
             return []
 
-        def get_history_reconstruction_status(self) -> HistoryReconstructionStatusRead:
+        def get_history_reconstruction_status(self, **kwargs) -> HistoryReconstructionStatusRead:
             return self.history_reconstruction_status
 
-        def request_history_reconstruction(self) -> HistoryReconstructionStatusRead:
+        def request_history_reconstruction(self, **kwargs) -> HistoryReconstructionStatusRead:
             self.history_reconstruction_status = HistoryReconstructionStatusRead(
                 status=HistoryReconstructionJobStatus.running,
                 phase=HistoryReconstructionPhase.loading_libraries,
@@ -895,6 +895,25 @@ def test_app_settings_telemetry_off_cancels_pending_send() -> None:
     assert response.status_code == 200
     assert runtime.scheduled_telemetry_sends == 0
     assert runtime.canceled_telemetry_sends == 1
+
+
+def test_app_settings_transcoding_update_accepts_auto_cpu_parallel_jobs() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    with session_factory() as db:
+        client = _build_test_app(db)
+        response = client.patch(
+            "/api/app-settings",
+            json={"transcoding": {"execution_mode": "cpu_only", "cpu_parallel_jobs": "auto"}},
+        )
+        out_of_range_response = client.patch("/api/app-settings", json={"transcoding": {"cpu_parallel_jobs": 65}})
+
+    assert response.status_code == 200
+    assert response.json()["transcoding"]["execution_mode"] == "cpu_only"
+    assert response.json()["transcoding"]["cpu_parallel_jobs"] == "auto"
+    assert out_of_range_response.status_code == 422
 
 
 def test_telemetry_send_now_posts_normal_payload_and_returns_updated_settings(monkeypatch) -> None:
@@ -1888,6 +1907,10 @@ def test_library_storage_map_groups_folders_and_drills_into_files() -> None:
     assert root_payload["items"][0]["color_distributions"]["quality"] == [
         {"value": 96.0, "size_bytes": 100},
         {"value": 84.0, "size_bytes": 20},
+    ]
+    assert root_payload["items"][0]["color_distributions"]["size"] == [
+        {"value": 100, "size_bytes": 100},
+        {"value": 20, "size_bytes": 20},
     ]
     assert root_payload["items"][0]["color_distributions"]["hdr"] == [
         {"value": "dolby_vision", "size_bytes": 100},

@@ -1,3 +1,7 @@
+import { useLocation } from "react-router";
+import { useNotifications, type NotificationType } from "../lib/notifications";
+import { useAuth, type Identity } from "../lib/auth";
+import { trackExplicitJobStart } from "../lib/notification-job-tracking";
 import {
   Check,
   ChevronDown,
@@ -35,6 +39,44 @@ type ConnectionDraft = {
   syncInterval: string;
 };
 
+function connectorTestDiagnosticKey(identity: Identity | null, connectionId: number) {
+  const identityKey = identity ? `${identity.kind}:${identity.id}` : "anonymous";
+  return `medialyze-connector-test-diagnostic:${identityKey}:${connectionId}`;
+}
+
+type ConnectorTestDiagnostic = { diagnostic: string; testedSavedUrl: boolean };
+
+function readConnectorTestDiagnostic(key: string, connectionRevision: string): ConnectorTestDiagnostic | null {
+  try {
+    const stored = window.localStorage.getItem(key);
+    if (!stored) return null;
+    const parsed = JSON.parse(stored) as { connection_revision?: unknown; diagnostic?: unknown; tested_saved_url?: unknown };
+    if (parsed.connection_revision !== connectionRevision || typeof parsed.diagnostic !== "string" || !parsed.diagnostic) {
+      window.localStorage.removeItem(key);
+      return null;
+    }
+    return {
+      diagnostic: parsed.diagnostic.slice(0, 2048),
+      testedSavedUrl: parsed.tested_saved_url !== false,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeConnectorTestDiagnostic(key: string, connectionRevision: string, value: ConnectorTestDiagnostic | null) {
+  try {
+    if (value) window.localStorage.setItem(key, JSON.stringify({
+      connection_revision: connectionRevision,
+      diagnostic: value.diagnostic.slice(0, 2048),
+      tested_saved_url: value.testedSavedUrl,
+    }));
+    else window.localStorage.removeItem(key);
+  } catch {
+    // Keep the in-memory diagnostic available if browser storage is blocked.
+  }
+}
+
 function providerLabel(provider: string) {
   return provider ? `${provider[0].toUpperCase()}${provider.slice(1)}` : provider;
 }
@@ -63,8 +105,8 @@ function ConnectionUsers({ connection }: { connection: ConnectorConnection }) {
   }, [connection.id]);
 
   useEffect(() => {
-    if (expanded && !loaded) void load();
-  }, [expanded, load, loaded]);
+    if (!loaded) void load();
+  }, [load, loaded]);
 
   async function save(enabledIds: string[]) {
     setPending(true);
@@ -86,6 +128,7 @@ function ConnectionUsers({ connection }: { connection: ConnectorConnection }) {
   ).sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
   const selectedUsers = visibleUsers.filter((user) => user.enabled_for_sync);
   const unselectedUsers = visibleUsers.filter((user) => !user.enabled_for_sync);
+  const usersSectionId = `connector-${connection.id}-users-body`;
 
   function renderGroup(group: "selected" | "unselected", groupUsers: ConnectorUser[]) {
     if (!groupUsers.length) return null;
@@ -119,29 +162,49 @@ function ConnectionUsers({ connection }: { connection: ConnectorConnection }) {
 
   return (
     <section className="connector-detail-section connector-users-section">
-      <button
-        type="button"
-        className="connector-users-toggle"
-        aria-expanded={expanded}
-        aria-controls={`connector-${connection.id}-users-body`}
-        onClick={() => setExpanded((current) => !current)}
-      >
-        <div>
-          <h4>{t("connectors.users.title")}</h4>
-          <p>{loaded ? t("connectors.users.summary", { selected: enabledIds.length, total: users.length }) : t("connectors.users.description")}</p>
+      <div className="connector-mapping-section-header connector-users-section-header">
+        <div className="connector-mapping-section-title">
+          <button
+            type="button"
+            className="connector-users-toggle connector-users-section-copy-toggle"
+            aria-expanded={expanded}
+            aria-controls={usersSectionId}
+            onClick={() => setExpanded((current) => !current)}
+          >
+            <h4>{t("connectors.users.title")}</h4>
+          </button>
+          <TooltipTrigger
+            ariaLabel={t("connectors.users.descriptionAria")}
+            content={t("connectors.users.description")}
+            className="settings-heading-tooltip connector-users-description-tooltip"
+          />
         </div>
-        {expanded ? <ChevronDown aria-hidden="true" className="nav-icon" /> : <ChevronRight aria-hidden="true" className="nav-icon" />}
-      </button>
+        {loaded ? (
+          <span className="connector-users-summary" aria-live="polite">
+            {t("connectors.users.summary", { selected: enabledIds.length, total: users.length })}
+          </span>
+        ) : null}
+        <button
+          type="button"
+          className="connector-mapping-expand-toggle"
+          aria-label={t("connectors.users.toggleAria")}
+          aria-expanded={expanded}
+          aria-controls={usersSectionId}
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {expanded ? <ChevronDown aria-hidden="true" className="nav-icon" /> : <ChevronRight aria-hidden="true" className="nav-icon" />}
+        </button>
+      </div>
       {expanded ? (
-        <div className="connector-users-body" id={`connector-${connection.id}-users-body`}>
+        <div className="connector-users-body" id={usersSectionId}>
           {loading ? <div className="progress is-indeterminate"><span /></div> : null}
           {error ? <div className="alert" role="alert">{error}</div> : null}
           {!loading && loaded && !users.length ? <div className="notice">{t("connectors.users.empty")}</div> : null}
           {users.length ? (
             <div className="jellyfin-user-selection" aria-busy={pending}>
               <div className="jellyfin-user-selection-toolbar">
-                <label className="jellyfin-user-search">
-                  <Search aria-hidden="true" />
+                <label className="settings-navigation-search connector-user-search">
+                  <Search aria-hidden="true" className="nav-icon" />
                   <span className="sr-only">{t("connectors.users.searchLabel")}</span>
                   <input type="search" value={search} placeholder={t("connectors.users.searchPlaceholder")} onChange={(event) => setSearch(event.target.value)} />
                 </label>
@@ -288,9 +351,16 @@ function ConnectionMappings({
     const isExpanded = expanded[kind];
     return (
       <div className="connector-mapping-section-header">
-        <button type="button" className="connector-users-toggle connector-mapping-section-copy-toggle" aria-expanded={isExpanded} onClick={() => setExpanded((current) => ({ ...current, [kind]: !current[kind] }))}>
-          <div><h4>{title}</h4><p>{description}</p></div>
-        </button>
+        <div className="connector-mapping-section-title">
+          <button type="button" className="connector-users-toggle connector-mapping-section-copy-toggle" aria-expanded={isExpanded} onClick={() => setExpanded((current) => ({ ...current, [kind]: !current[kind] }))}>
+            <h4>{title}</h4>
+          </button>
+          <TooltipTrigger
+            ariaLabel={t("connectors.mapping.descriptionAria", { title })}
+            content={description}
+            className="settings-heading-tooltip connector-mapping-description-tooltip"
+          />
+        </div>
         {modeControl(kind)}
         <button
           type="button"
@@ -377,6 +447,9 @@ function ConnectionCard({
   onCatalogChanged?: () => void;
 }) {
   const { t } = useTranslation();
+  const { notify } = useNotifications();
+  const { identity } = useAuth();
+  const diagnosticStorageKey = connectorTestDiagnosticKey(identity, connection.id);
   const legacyDefault = connection.config.legacy_default === true;
   const [draft, setDraft] = useState<ConnectionDraft>({
     name: connection.name,
@@ -384,9 +457,12 @@ function ConnectionCard({
     syncInterval: String(connection.sync_interval_minutes),
   });
   const [pending, setPending] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [secretDialogOpen, setSecretDialogOpen] = useState(false);
+  const [testDiagnostic, setTestDiagnostic] = useState<ConnectorTestDiagnostic | null>(() => readConnectorTestDiagnostic(diagnosticStorageKey, connection.updated_at));
+
+  useEffect(() => {
+    setTestDiagnostic(readConnectorTestDiagnostic(diagnosticStorageKey, connection.updated_at));
+  }, [connection.updated_at, diagnosticStorageKey]);
 
   useEffect(() => {
     setDraft({
@@ -403,96 +479,112 @@ function ConnectionCard({
     || (validInterval && interval !== connection.sync_interval_minutes);
   const syncRunning = job?.status === "queued" || job?.status === "running";
 
-  async function save() {
-    setPending("save");
-    setError(null);
-    setNotice(null);
+  type Feedback = { key: string; type: NotificationType };
+
+  function showFeedback(feedback: Feedback, removed = false) {
+    notify({
+      type: feedback.type,
+      message: t(`notifications.connector.${feedback.key}`, { name: connection.name }),
+      topicKey: `connector:${connection.id}`,
+      source: {
+        area: "connectors",
+        href: removed ? "/settings?section=jellyfin" : `/settings?section=jellyfin#connector-${connection.id}`,
+        label: removed ? t("connectors.title") : t("notifications.connector.open", { name: connection.name }),
+      },
+    });
+  }
+
+  async function performAction(
+    action: string,
+    mutate: () => Promise<Feedback | void>,
+    feedback: Feedback,
+    { refresh = true, removed = false } = {},
+  ) {
+    setPending(action);
     try {
+      let outcome: Feedback | void;
+      try {
+        outcome = await mutate();
+      } catch {
+        // Never expose raw API diagnostics, URLs or secrets in a global toast.
+        notify({
+          type: "error",
+          message: t("notifications.connector.actionFailed", {
+            name: connection.name, action: t(`notifications.connector.actions.${action}`),
+          }),
+          topicKey: `connector:${connection.id}`,
+          source: { area: "connectors", href: `/settings?section=jellyfin#connector-${connection.id}`, label: t("notifications.connector.open", { name: connection.name }) },
+        });
+        return;
+      }
+      showFeedback(outcome ?? feedback, removed);
+      if (refresh) {
+        try { await onChanged(); }
+        catch { showFeedback({ key: "refreshFailed", type: "warning" }, removed); }
+      }
+      if (removed) onCatalogChanged?.();
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function save() {
+    await performAction("save", async () => {
       await api.updateConnector(connection.id, {
         ...(!legacyDefault ? { name: draft.name.trim() } : {}),
         base_url: draft.baseUrl.trim(),
         sync_interval_minutes: interval,
       });
-      await onChanged();
-      setNotice(t("connectors.saved"));
-    } catch (reason) {
-      setError((reason as Error).message);
-    } finally {
-      setPending(null);
-    }
+    }, { key: "saved", type: "success" });
   }
 
   async function testConnection() {
-    setPending("test");
-    setError(null);
-    setNotice(null);
-    try {
-      const result = await api.testConnector(connection.id, {
-        base_url: draft.baseUrl.trim(),
-      });
-      if (!result.success) throw new Error(result.error || t("connectors.testFailed"));
-      setNotice(t("connectors.testSucceeded", { name: result.server_name || connection.name }));
-    } catch (reason) {
-      setError((reason as Error).message);
-    } finally {
-      setPending(null);
-    }
+    setTestDiagnostic(null);
+    writeConnectorTestDiagnostic(diagnosticStorageKey, connection.updated_at, null);
+    await performAction("test", async () => {
+      const result = await api.testConnector(connection.id, { base_url: draft.baseUrl.trim() });
+      const diagnostic = result.success ? null : result.error?.trim() || null;
+      const testedSavedUrl = draft.baseUrl.trim() === connection.base_url.trim();
+      const storedDiagnostic = diagnostic ? { diagnostic, testedSavedUrl } : null;
+      setTestDiagnostic(storedDiagnostic);
+      writeConnectorTestDiagnostic(
+        diagnosticStorageKey,
+        connection.updated_at,
+        storedDiagnostic,
+      );
+      return { key: result.success ? "testSucceeded" : "testFailed", type: result.success ? "success" : "error" };
+    }, { key: "testSucceeded", type: "success" }, { refresh: false });
   }
 
   async function toggleEnabled() {
-    setPending("toggle");
-    setError(null);
-    try {
+    await performAction("toggle", async () => {
       await api.updateConnector(connection.id, { enabled: !connection.enabled });
-      await onChanged();
-    } catch (reason) {
-      setError((reason as Error).message);
-    } finally {
-      setPending(null);
-    }
+    }, { key: connection.enabled ? "disabled" : "enabled", type: "success" });
   }
 
   async function syncNow() {
-    setPending("sync");
-    setError(null);
-    setNotice(null);
-    try {
-      await api.syncConnector(connection.id);
-      await onChanged();
-    } catch (reason) {
-      setError((reason as Error).message);
-    } finally {
-      setPending(null);
-    }
+    await performAction("sync", async () => {
+      const result = await api.syncConnector(connection.id);
+      if (result.accepted) trackExplicitJobStart({ kind: "connector_sync", connectionId: connection.id, connectionName: connection.name, jobId: result.job_id });
+      return { key: result.accepted ? "syncAccepted" : "syncAlreadyActive", type: "info" };
+    }, { key: "syncAccepted", type: "info" });
   }
 
   async function cancelSync() {
-    setPending("cancel");
-    setError(null);
-    setNotice(null);
-    try {
-      await api.cancelConnectorSync(connection.id, job?.id);
-      await onChanged();
-    } catch (reason) {
-      setError((reason as Error).message);
-    } finally {
-      setPending(null);
-    }
+    await performAction("cancel", async () => {
+      const result = await api.cancelConnectorSync(connection.id, job?.id);
+      return { key: result.cancellation_requested ? "cancelRequested" : "cancelNotRequested", type: "info" };
+    }, { key: "cancelRequested", type: "info" });
   }
 
   async function remove() {
     if (!window.confirm(t("connectors.deleteConfirm", { name: connection.name }))) return;
-    setPending("delete");
-    setError(null);
-    try {
+    await performAction("delete", async () => {
       await api.deleteConnector(connection.id);
-      await onChanged();
-      onCatalogChanged?.();
-    } catch (reason) {
-      setError((reason as Error).message);
-    } finally {
-      setPending(null);
-    }
+      setTestDiagnostic(null);
+      writeConnectorTestDiagnostic(diagnosticStorageKey, connection.updated_at, null);
+    },
+      { key: "deleted", type: "success" }, { removed: true });
   }
 
   return (
@@ -550,7 +642,7 @@ function ConnectionCard({
           <section className="connector-detail-section">
             <div className="connector-form-grid">
               <label><span>{t("connectors.name")}</span><input className="settings-choice-input" value={draft.name} disabled={legacyDefault} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} /></label>
-              <label><span>{t("connectors.serverUrl")}</span><input className="settings-choice-input" type="url" value={draft.baseUrl} onChange={(event) => setDraft((current) => ({ ...current, baseUrl: event.target.value }))} /></label>
+              <label><span>{t("connectors.serverUrl")}</span><input className="settings-choice-input" type="url" value={draft.baseUrl} onChange={(event) => { setTestDiagnostic(null); writeConnectorTestDiagnostic(diagnosticStorageKey, connection.updated_at, null); setDraft((current) => ({ ...current, baseUrl: event.target.value })); }} /></label>
               <label><span>{t("connectors.syncInterval")}</span><input className="settings-choice-input" type="number" min={5} max={10080} value={draft.syncInterval} onChange={(event) => setDraft((current) => ({ ...current, syncInterval: event.target.value }))} /></label>
             </div>
             <div className="jellyfin-actions">
@@ -561,14 +653,19 @@ function ConnectionCard({
               <button type="button" className="secondary small connector-action-button connector-secret-action-button" disabled={pending !== null || syncRunning} onClick={() => setSecretDialogOpen(true)}><KeyRound aria-hidden="true" />{t(connection.has_secret ? "connectors.secretDialog.replaceButton" : "connectors.secretDialog.setButton")}</button>
               <button type="button" className="secondary small danger connector-action-button" disabled={pending !== null || syncRunning} onClick={() => void remove()}><Trash2 aria-hidden="true" />{t("connectors.delete")}</button>
             </div>
-            {error ? <div className="alert" role="alert">{error}</div> : null}
-            {notice ? <div className="notice success" role="status">{notice}</div> : null}
+            {testDiagnostic ? (
+              <details className="connector-technical-details connector-test-diagnostic">
+                <summary>{t("connectors.testDiagnosticTitle")}</summary>
+                {!testDiagnostic.testedSavedUrl ? <p className="field-hint">{t("connectors.testDiagnosticUnsavedUrl")}</p> : null}
+                <pre tabIndex={0}>{testDiagnostic.diagnostic}</pre>
+              </details>
+            ) : null}
           </section>
           <ConnectionMappings connection={connection} onChanged={onChanged} />
           {connection.capabilities.users ? <ConnectionUsers connection={connection} /> : null}
         </div>
       ) : null}
-      {secretDialogOpen ? <SetConnectorSecretDialog connection={connection} onClose={() => setSecretDialogOpen(false)} onSaved={onChanged} /> : null}
+      {secretDialogOpen ? <SetConnectorSecretDialog connection={connection} onClose={() => setSecretDialogOpen(false)} onSaved={async () => { setTestDiagnostic(null); writeConnectorTestDiagnostic(diagnosticStorageKey, connection.updated_at, null); await onChanged(); }} /> : null}
     </article>
   );
 }
@@ -696,12 +793,24 @@ function AddConnectorDialog({
 
 export function ConnectorSettingsPanel({ onCatalogChanged }: { onCatalogChanged?: () => void }) {
   const { t } = useTranslation();
+  const location = useLocation();
   const [connections, setConnections] = useState<ConnectorConnection[]>([]);
   const [jobs, setJobs] = useState<Record<number, ConnectorSyncJob | null>>({});
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const connectionIds = connections.map((connection) => connection.id).join(",");
+
+  useEffect(() => {
+    const id = Number(location.hash.match(/^#connector-(\d+)$/)?.[1]);
+    if (!id || !connectionIds.split(",").includes(String(id))) return;
+    setExpanded((current) => ({ ...current, [id]: true }));
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`connector-${id}`)?.scrollIntoView({ block: "nearest" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.hash, location.key, connectionIds]);
 
   const load = useCallback(async () => {
     const nextConnections = await api.connectors();
@@ -740,6 +849,7 @@ export function ConnectorSettingsPanel({ onCatalogChanged }: { onCatalogChanged?
           <TooltipTrigger
             ariaLabel={t("connectors.descriptionAria")}
             content={t("connectors.description")}
+            className="settings-heading-tooltip"
           >
             ?
           </TooltipTrigger>

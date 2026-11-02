@@ -557,6 +557,7 @@ export function StorageMapPage() {
     new LruCache<string, LibraryStorageMap>(32, { ttlMs: 2 * 60 * 1000 }),
   );
   const [data, setData] = useState<LibraryStorageMap | null>(null);
+  const [dataKey, setDataKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const selectedLibraryId = Number(searchParams.get("library")) || libraries[0]?.id || null;
@@ -598,6 +599,7 @@ export function StorageMapPage() {
     const cached = force ? undefined : storageMapCacheRef.current.get(cacheKey);
     if (cached) {
       setData(cached);
+      setDataKey(cacheKey);
       setLoading(false);
       setError(null);
       return () => undefined;
@@ -608,8 +610,10 @@ export function StorageMapPage() {
     api
       .libraryStorageMap(selectedLibraryId, { path: currentPath, signal: controller.signal })
       .then((payload) => {
+        if (controller.signal.aborted) return;
         storageMapCacheRef.current.set(cacheKey, payload);
         setData(payload);
+        setDataKey(cacheKey);
       })
       .catch((requestError: unknown) => {
         if (controller.signal.aborted) return;
@@ -623,9 +627,10 @@ export function StorageMapPage() {
 
   useEffect(() => loadMap(), [loadMap]);
 
+  const visibleData = dataKey === `${selectedLibraryId}:${currentPath}` ? data : null;
   const sortedItems = useMemo(() => {
-    if (!data) return [];
-    return [...data.items].sort((left, right) => {
+    if (!visibleData) return [];
+    return [...visibleData.items].sort((left, right) => {
       if (sortMode === "name") {
         return displayNameForNode(left, nameSource).localeCompare(displayNameForNode(right, nameSource));
       }
@@ -640,7 +645,7 @@ export function StorageMapPage() {
         displayNameForNode(left, nameSource).localeCompare(displayNameForNode(right, nameSource))
       );
     });
-  }, [data, nameSource, sortMode]);
+  }, [visibleData, nameSource, sortMode]);
   const parentPath = currentPath.includes("/") ? currentPath.slice(0, currentPath.lastIndexOf("/")) : "";
 
   function openNode(node: StorageMapNode) {
@@ -716,7 +721,7 @@ export function StorageMapPage() {
             <div className="storage-map-content">
               <div className={`storage-map-breadcrumb-row${currentPath ? "" : " is-root"}`}>
                 <nav className="storage-map-breadcrumbs" aria-label={t("storageMap.breadcrumbAria")}>
-                  {(data?.breadcrumbs ?? []).map((breadcrumb, index) => (
+                  {(visibleData?.breadcrumbs ?? []).map((breadcrumb, index) => (
                     <span key={breadcrumb.path || "root"}>
                       {index > 0 ? <ChevronRight aria-hidden="true" /> : null}
                       <button type="button" onClick={() => updateQuery({ path: breadcrumb.path })}>
@@ -791,7 +796,7 @@ export function StorageMapPage() {
                     <ArrowUp aria-hidden="true" />
                   </button>
                 ) : null}
-                {loading && !data ? (
+                {(loading || (!visibleData && !error)) ? (
                   <div className="storage-map-empty" aria-busy="true">
                     <RefreshCw aria-hidden="true" className="storage-map-spinner" />
                     <p>{t("storageMap.loading")}</p>

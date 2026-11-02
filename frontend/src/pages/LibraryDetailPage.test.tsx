@@ -27,6 +27,7 @@ import {
 } from "../lib/api";
 import { ScanJobsProvider } from "../lib/scan-jobs";
 import { buildFileColumns, LibraryDetailPage } from "./LibraryDetailPage";
+import * as auth from "../lib/auth";
 
 const scrollIntoViewMock = vi.fn();
 
@@ -1788,6 +1789,26 @@ describe("LibraryDetailPage", () => {
     expect(await screen.findByText("File detail 1")).toBeInTheDocument();
   });
 
+  it("keeps duplicate groups readable without offering suppression to metadata-only readers", async () => {
+    const libraryId = 124;
+    vi.spyOn(auth, "useAuth").mockReturnValue({ identity: {
+      id: "reader", username: "Reader", kind: "account", owner: false,
+      revision: 1, must_change_password: false,
+      policy: { ...auth.emptyPolicy(), libraries: { [libraryId]: ["library.read"] } },
+    }, status: null, has: right => right === "library.read",
+      refresh: async () => {}, logout: async () => {} });
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryDuplicates").mockResolvedValue(createDuplicateGroupPage());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+    renderPage(libraryId);
+    fireEvent.click(await screen.findByRole("button", { name: "Duplications" }));
+    expect(await screen.findByRole("button", { name: "Open details for episode-01.mkv" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Mark as not duplicate" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Restore duplicate" })).not.toBeInTheDocument();
+  });
+
   it("marks duplicate groups as not duplicate and reloads the panel", async () => {
     const libraryId = 124;
     mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
@@ -2540,6 +2561,21 @@ describe("LibraryDetailPage", () => {
         }),
       ),
     );
+  });
+
+  it("starts a valid file search immediately on Enter", async () => {
+    const libraryId = 1405;
+    mockAppSettings({ feature_flags: { show_analyzed_files_csv_export: true } });
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    const libraryFilesSpy = vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+    renderPage(libraryId);
+    await screen.findByText("2 of 2 entries rendered");
+    const input = screen.getByPlaceholderText("Search file and path");
+    fireEvent.change(input, { target: { value: "needle" } });
+    fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+    expect(libraryFilesSpy).toHaveBeenCalledWith(String(libraryId),
+      expect.objectContaining({ filters: expect.objectContaining({ file: "needle" }) }));
   });
 
   it("debounces rapid file-search input before requesting a new page", async () => {

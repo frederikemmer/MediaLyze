@@ -403,6 +403,8 @@ def _replace_library_roots_preserving_media(
     unmatched_existing = [
         root for root in existing_roots if root.path_key not in resolved_path_keys
     ]
+    # New roots are flushed before aliases are reconciled, so they must not collide on insert.
+    used_aliases = {root.display_name.casefold() for root in existing_roots}
 
     for resolved_root in resolved_roots:
         root = existing_by_key.get(resolved_root.path_key)
@@ -421,7 +423,7 @@ def _replace_library_roots_preserving_media(
             root = LibraryRoot(
                 library_id=library.id,
                 path=str(resolved_root.path),
-                display_name=resolved_root.display_name,
+                display_name=_unique_root_alias(resolved_root.display_name, used_aliases),
                 path_key=resolved_root.path_key,
             )
             db.add(root)
@@ -523,12 +525,13 @@ def create_library(db: Session, settings: Settings, payload: LibraryCreate) -> L
     )
     db.add(library)
     db.flush()
+    used_aliases: set[str] = set()
     for root in resolved_roots:
         db.add(
             LibraryRoot(
                 library_id=library.id,
                 path=str(root.path),
-                display_name=root.display_name,
+                display_name=_unique_root_alias(root.display_name, used_aliases),
                 path_key=root.path_key,
             )
         )
