@@ -8,8 +8,10 @@ import { AppDataProvider } from "../lib/app-data";
 import { api, type AppSettings, type LibrarySummary } from "../lib/api";
 import { ScanJobsProvider } from "../lib/scan-jobs";
 import { AppShell } from "./AppShell";
+import * as notifications from "../lib/notifications";
 import * as authModule from "../lib/auth";
 
+const notify = vi.fn();
 const appVersionMock = vi.hoisted(() => ({ value: "0.8.3" }));
 
 vi.mock("../lib/app-version", () => ({
@@ -83,6 +85,8 @@ function renderShell(initialEntries = ["/"]) {
 }
 
 beforeEach(() => {
+  notify.mockReset();
+  vi.spyOn(notifications, "useOptionalNotifications").mockReturnValue({ notify } as unknown as ReturnType<typeof notifications.useOptionalNotifications>);
   appVersionMock.value = "0.8.3";
   window.localStorage.clear();
   vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
@@ -493,9 +497,7 @@ describe("AppShell", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Stop this scan" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Stop was requested, but the database is still busy. Try again shortly.",
-    );
+    await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: "error" })));
     expect(screen.getByText("Movies")).toBeInTheDocument();
   });
 

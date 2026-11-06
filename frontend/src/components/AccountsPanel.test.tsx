@@ -11,6 +11,12 @@ import {
 import * as authModule from "../lib/auth";
 import * as accessApi from "../lib/access-session";
 import { useState } from "react";
+import * as notifications from "../lib/notifications";
+const notify = vi.fn();
+function mockNotifications() {
+  vi.spyOn(notifications, "useNotifications").mockReturnValue({ notify, dismiss: vi.fn(), clearAll: vi.fn(), retryHistory: vi.fn(), historyRevision: 0, historyWriteFailed: false });
+}
+mockNotifications();
 import { emptyPolicy, type AccessPolicy, type Identity } from "../lib/auth";
 const actor: Identity = {
   id: "owner",
@@ -28,7 +34,34 @@ const libraries = [
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  mockNotifications();
+  notify.mockClear();
   window.history.replaceState(null, "", "/");
+});
+describe("Account notification outcomes", () => {
+  it("reports a confirmed password save separately from a failed refresh", async () => {
+    const refresh = vi.fn().mockRejectedValue(new Error("private refresh detail"));
+    vi.spyOn(authModule, "useAuth").mockReturnValue({ identity: actor, status: null, has: () => true, refresh, refreshAfterCredentialChange: refresh, logout: vi.fn() });
+    vi.spyOn(accessApi, "accessRequest").mockImplementation(async (path) => path === "/me/passkeys" ? { enabled: false, items: [] } : undefined);
+    render(<PersonalAccountPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Change password" }));
+    fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "secret" } });
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "NewPassword1!" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: "warning", message: "Changes were saved, but the account could not be refreshed." })));
+    expect(notify).not.toHaveBeenCalledWith(expect.objectContaining({ type: "success" }));
+    expect(JSON.stringify(notify.mock.calls)).not.toContain("private refresh detail");
+  });
+  it("does not delete or notify when confirmation is canceled", async () => {
+    vi.spyOn(authModule, "useAuth").mockReturnValue({ identity: actor, status: null, has: () => true, refresh: vi.fn(), refreshAfterCredentialChange: vi.fn(), logout: vi.fn() });
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const request = vi.spyOn(accessApi, "accessRequest").mockImplementation(async (path) => path === "/users" ? [{ id: "a", username: "Alex", owner: false, active: true, editable: true, policy: emptyPolicy(), must_change_password: false }] : path === "/access/libraries" ? libraries : { enabled: false, policy: emptyPolicy(), editable: true });
+    render(<AccountsPanel />);
+    fireEvent.click(await screen.findByRole("button", { name: /Alex/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(request.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+    expect(notify).not.toHaveBeenCalled();
+  });
 });
 describe("Managed-account password feedback", () => {
   it("updates both requirements, uses native validation without an alert and accepts a corrected password", async () => {
@@ -385,7 +418,7 @@ describe("Account permissions", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
   it("uses the created account ID for subsequent saves and keeps failed drafts available for retry", async () => {
-    vi.spyOn(authModule, "useAuth").mockReturnValue({ identity: actor, status: null, has: () => true, refresh: vi.fn(), logout: vi.fn() });
+    vi.spyOn(authModule, "useAuth").mockReturnValue({ identity: actor, status: null, has: () => true, refresh: vi.fn(), refreshAfterCredentialChange: vi.fn(), logout: vi.fn() });
     let account = { id: "created-id", username: "NewUser", active: true, owner: false, editable: true, policy: emptyPolicy(), must_change_password: true };
     let failSave = false;
     const request = vi.spyOn(accessApi, "accessRequest").mockImplementation(async (path, init) => {
@@ -409,7 +442,8 @@ describe("Account permissions", () => {
     failSave = true;
     fireEvent.change(screen.getByLabelText("Username"), { target: { value: "Renamed" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(i18n.t("access.saveError"));
+    await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: "error", message: "Could not save account changes." })));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Username")).toHaveValue("Renamed");
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
     failSave = false;
@@ -523,7 +557,8 @@ describe("Account permissions", () => {
     fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "incorrect" } });
     fireEvent.change(screen.getByLabelText("New password"), { target: { value: "new-password1" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Could not change the password");
+    await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: "error", message: "Could not save account changes." })));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
   it.each([[false, false], [true, false], [false, true], [true, true]])(

@@ -4,16 +4,19 @@ import i18n from "../i18n";
 import { PasskeysPanel } from "./PasskeysPanel";
 import * as auth from "../lib/auth";
 import * as access from "../lib/access-session";
+import * as notifications from "../lib/notifications";
 import * as passkeys from "../lib/passkeys";
 
 const item: passkeys.Passkey = { id: "one", name: "MacBook", rp_id: "medialyze.test", created_at: 1793095200, last_used_at: null };
 const refresh = vi.fn();
+const notify = vi.fn();
 beforeEach(async () => {
   await i18n.changeLanguage("en");
+  vi.spyOn(notifications, "useOptionalNotifications").mockReturnValue({ notify } as unknown as ReturnType<typeof notifications.useOptionalNotifications>);
   vi.spyOn(auth, "useAuth").mockReturnValue({ identity: { id: "user", kind: "account", username: "Alex", owner: false, revision: 1, must_change_password: false, policy: auth.emptyPolicy() }, status: null, has: () => false, refresh, logout: vi.fn() });
   vi.spyOn(passkeys, "supportsPasskeys").mockReturnValue(true);
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); refresh.mockClear(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); refresh.mockReset(); notify.mockReset(); });
 function open() { fireEvent.click(screen.getByRole("button", { name: "Expand Passkeys" })); }
 
 describe("Own-account passkeys", () => {
@@ -57,7 +60,7 @@ describe("Own-account passkeys", () => {
     fireEvent.click(screen.getByRole("button", { name: "Rename Laptop" }));
     fireEvent.change(screen.getByLabelText("Passkey name"), { target: { value: "Renamed" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: "error", message: "Could not rename the passkey." })));
     expect(screen.getByLabelText("Passkey name")).toHaveValue("Renamed");
   });
   it("confirms deletion, keeps canceled deletions and refreshes the session after removal", async () => {
@@ -73,6 +76,17 @@ describe("Own-account passkeys", () => {
     await waitFor(() => expect(screen.queryByText("MacBook")).not.toBeInTheDocument());
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Sessions signed in with this passkey"));
     expect(refresh).toHaveBeenCalledOnce();
+  });
+  it("reports refresh failure separately after deletion", async () => {
+    vi.spyOn(access, "accessRequest").mockImplementation(async (_path, init) => init ? undefined : { enabled: true, reason: "ready", items: [item] });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    refresh.mockRejectedValueOnce(new Error("secret"));
+    render(<PasskeysPanel />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Passkey" })).toBeEnabled());
+    open(); fireEvent.click(screen.getByRole("button", { name: "Delete MacBook" }));
+    await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: "warning", message: expect.stringContaining("could not be refreshed") })));
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: "success" }));
+    expect(JSON.stringify(notify.mock.calls)).not.toContain("secret");
   });
   it("does not report canceled browser ceremonies as failures", async () => {
     vi.spyOn(access, "accessRequest").mockResolvedValue({ enabled: true, reason: "ready", items: [] });

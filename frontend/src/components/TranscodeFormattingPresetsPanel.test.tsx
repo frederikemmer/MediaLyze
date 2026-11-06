@@ -1,3 +1,4 @@
+vi.mock("../lib/notifications", () => ({ useNotifications: () => ({ notify: vi.fn() }), useOptionalNotifications: () => ({ notify: vi.fn() }) }));
 import "../i18n";
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";

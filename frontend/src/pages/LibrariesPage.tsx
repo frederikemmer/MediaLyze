@@ -1,3 +1,5 @@
+import { useAutosaveNotifications } from "../lib/notification-actions";
+import { identityGeneration } from "../lib/access-session";
 import { NotificationHistoryPanel, NotificationRetentionControl } from "../components/NotificationHistoryPanel";
 import { LogsSection, SettingsSection } from "../components/LogsSection";
 import { NotificationSettingsPanel } from "../components/NotificationSettingsPanel";
@@ -6,7 +8,7 @@ import { useAuth, hasLibraryPermission } from "../lib/auth";
 import { preferenceStorage } from "../lib/preference-storage";
 import { trackExplicitJobStart } from "../lib/notification-job-tracking";
 import { useNotifications } from "../lib/notifications";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import {
@@ -1121,6 +1123,20 @@ function ScanLogDetailSection({
 export function LibrariesPage() {
   const auth = useAuth();
   const { notify } = useNotifications();
+  const notificationIdentity = identityGeneration();
+  function actionNotice(type: "success" | "error" | "warning" | "info", key: string, fallback: string, libraryId?: number) {
+    if (notificationIdentity !== identityGeneration()) return;
+    const library = libraries.find((item) => item.id === libraryId);
+    notify({
+      type,
+      message: t(`notifications.actions.${["ignoreSaved", "ignoreSaveFailed", "copied", "copyFailed"].includes(key) ? "integration" : "libraries"}.${key}`, { defaultValue: fallback }),
+      topicKey: `libraries:${key}:${libraryId ?? "settings"}`,
+      source: library
+        ? { area: "library", href: `/libraries/${library.id}`, label: library.name }
+        : { area: "settings", href: "/settings?section=libraries", label: t("settings.title", { defaultValue: "Settings" }) },
+    });
+  }
+
   const canViewQualityProfiles = !auth.identity || auth.has("settings.quality.view");
   const canViewResolutionCategories = !auth.identity || auth.has("settings.app.view") || canViewQualityProfiles;
   const canEditResolutionCategories = !auth.identity || (auth.has("settings.app.view") && auth.has("settings.app.edit"));
@@ -1198,6 +1214,14 @@ export function LibrariesPage() {
     const requested = settingsPanelFromSection(searchParams.get("section"));
     const initial = requested ?? getActiveSettingsPanel("configuredLibraries");
     return desktopApp && initial === "accounts" ? "configuredLibraries" : initial;
+  });
+  const { trackSave } = useAutosaveNotifications({
+    scopeKey: `settings:${activeSettingsPanelId}`,
+    topicKey: `settings-autosave:${activeSettingsPanelId}`,
+    source: { area: "settings", href: `/settings?section=${settingsSectionForPanel(activeSettingsPanelId)}`, label: t("settings.title", { defaultValue: "Settings" }) },
+    successMessage: t("notifications.actions.libraries.autosaveSaved", { defaultValue: "Settings saved." }),
+    errorMessage: t("notifications.actions.libraries.autosaveFailed", { defaultValue: "Could not save settings." }),
+    partialMessage: t("notifications.actions.libraries.autosavePartial", { defaultValue: "Some settings could not be saved." }),
   });
   const [accountsOverviewResetKey, setAccountsOverviewResetKey] = useState(0);
   const [settingsSearchQuery, setSettingsSearchQuery] = useState("");
@@ -1331,6 +1355,9 @@ export function LibrariesPage() {
   const [isLoadingTelemetryPreview, setIsLoadingTelemetryPreview] = useState(false);
   const [isSavingTelemetry, setIsSavingTelemetry] = useState(false);
   const ignorePatternsSaveTimer = useRef<number | null>(null);
+  const pendingLibrarySaves = useRef<Record<number, () => void>>({});
+  const pendingAliasSaves = useRef<Record<string, () => void>>({});
+  const pendingIgnoreSave = useRef<(() => void) | null>(null);
   const copiedScanDiagnosticResetTimer = useRef<number | null>(null);
   const scanWorkerCountInputRef = useRef("4");
   const parallelScanJobsInputRef = useRef("2");
@@ -1572,7 +1599,10 @@ export function LibrariesPage() {
     if (!telemetryInstallationId || !navigator.clipboard?.writeText) {
       return;
     }
-    await navigator.clipboard.writeText(telemetryInstallationId);
+    try {
+      await navigator.clipboard.writeText(telemetryInstallationId);
+      actionNotice("success", "copied", "Copied to the clipboard.");
+    } catch { actionNotice("error", "copyFailed", "Could not copy to the clipboard."); return; }
     setTelemetryIdCopied(true);
     window.setTimeout(() => setTelemetryIdCopied(false), 2000);
   }
@@ -1618,12 +1648,12 @@ export function LibrariesPage() {
     await i18n.changeLanguage(nextLanguage);
     if (auth.identity?.kind === "guest") return;
     try {
-      const updated = await api.updateAppSettings({
+      const updated = await trackSave(api.updateAppSettings({
         ui_preferences: { interface_language: nextLanguage },
-      });
+      }));
       applyUpdatedAppSettingsState(updated);
     } catch {
-      // Keep the local language preference even if the backend sync fails.
+
     }
   }
 
@@ -1631,12 +1661,12 @@ export function LibrariesPage() {
     setThemePref(nextTheme);
     if (auth.identity?.kind === "guest") return;
     try {
-      const updated = await api.updateAppSettings({
+      const updated = await trackSave(api.updateAppSettings({
         ui_preferences: { color_theme: nextTheme },
-      });
+      }));
       applyUpdatedAppSettingsState(updated);
     } catch {
-      // Keep the local theme preference even if the backend sync fails.
+
     }
   }
 
@@ -1676,10 +1706,10 @@ export function LibrariesPage() {
     setPendingTelemetryMode(mode);
     setTelemetryStatus(null);
     try {
-      const updated = await api.updateAppSettings({ telemetry: { mode } });
+      const updated = await trackSave(api.updateAppSettings({ telemetry: { mode } }));
       applyUpdatedAppSettingsState(updated);
     } catch {
-      setTelemetryStatus(t("telemetry.saveFailed"));
+
     } finally {
       setIsSavingTelemetry(false);
       setPendingTelemetryMode(null);
@@ -1851,10 +1881,11 @@ export function LibrariesPage() {
         media_type: mediaType,
         profile: source ? cloneQualityProfile(source.profile) : cloneQualityProfile(DEFAULT_QUALITY_PROFILE),
       });
-      await refreshQualityProfiles(false);
+      await refreshQualityProfiles(false).catch(() => { actionNotice("warning", "refreshFailed", "Saved, but the view could not be refreshed."); });
       selectQualityProfile(created);
+      actionNotice("success", "profileCreated", "Quality profile created.");
     } catch (reason) {
-      setQualityProfileMessage((reason as Error).message);
+      actionNotice("error", "profileFailed", "Could not update the quality profile.");
     } finally {
       setQualityProfileSaving(false);
     }
@@ -1872,13 +1903,13 @@ export function LibrariesPage() {
         profile: qualityProfileDraft.profile,
         is_default: qualityProfileDraft.is_default,
       });
-      await refreshQualityProfiles(false);
+      await refreshQualityProfiles(false).catch(() => { actionNotice("warning", "refreshFailed", "Saved, but the view could not be refreshed."); });
       selectQualityProfile(updated);
-      setQualityProfileMessage(t("libraries.qualityProfiles.saved"));
+      actionNotice("success", "profileSaved", "Quality profile saved.");
       setIsRenamingQualityProfile(false);
-      void refreshLibraries(false, true).catch(() => undefined);
+      void refreshLibraries(false, true).catch(() => actionNotice("warning", "refreshFailed", "Saved, but the view could not be refreshed."));
     } catch (reason) {
-      setQualityProfileMessage((reason as Error).message);
+      actionNotice("error", "profileFailed", "Could not update the quality profile.");
     } finally {
       setQualityProfileSaving(false);
     }
@@ -1892,10 +1923,11 @@ export function LibrariesPage() {
     setQualityProfileMessage(null);
     try {
       await api.deleteQualityProfile(profile.id);
-      await refreshQualityProfiles(false);
-      void refreshLibraries(false, true).catch(() => undefined);
+      actionNotice("success", "profileDeleted", "Quality profile deleted.");
+      await refreshQualityProfiles(false).catch(() => { actionNotice("warning", "refreshFailed", "Saved, but the view could not be refreshed."); });
+      void refreshLibraries(false, true).catch(() => actionNotice("warning", "refreshFailed", "Saved, but the view could not be refreshed."));
     } catch (reason) {
-      setQualityProfileMessage((reason as Error).message);
+      actionNotice("error", "profileFailed", "Could not update the quality profile.");
     } finally {
       setQualityProfileSaving(false);
     }
@@ -1913,10 +1945,11 @@ export function LibrariesPage() {
         media_type: profile.media_type,
         profile: cloneQualityProfile(profile.profile),
       });
-      await refreshQualityProfiles(false);
+      await refreshQualityProfiles(false).catch(() => { actionNotice("warning", "refreshFailed", "Saved, but the view could not be refreshed."); });
       selectQualityProfile(created);
+      actionNotice("success", "profileCreated", "Quality profile created.");
     } catch (reason) {
-      setQualityProfileMessage((reason as Error).message);
+      actionNotice("error", "profileFailed", "Could not update the quality profile.");
     } finally {
       setQualityProfileSaving(false);
     }
@@ -1934,11 +1967,12 @@ export function LibrariesPage() {
         profile: profile.profile,
         is_default: true,
       });
-      await refreshQualityProfiles(false);
+      await refreshQualityProfiles(false).catch(() => { actionNotice("warning", "refreshFailed", "Saved, but the view could not be refreshed."); });
       selectQualityProfile(updated);
-      void refreshLibraries(false, true).catch(() => undefined);
+      actionNotice("success", "profileSaved", "Quality profile saved.");
+      void refreshLibraries(false, true).catch(() => actionNotice("warning", "refreshFailed", "Saved, but the view could not be refreshed."));
     } catch (reason) {
-      setQualityProfileMessage((reason as Error).message);
+      actionNotice("error", "profileFailed", "Could not update the quality profile.");
     } finally {
       setQualityProfileSaving(false);
     }
@@ -2365,19 +2399,20 @@ export function LibrariesPage() {
     setComparisonScatterPointLimitInput(comparisonScatterPointLimitInputRef.current);
   }, [appScanPerformance, appSettings, appSettingsLoaded]);
 
-  useEffect(() => {
-    return () => {
-      for (const timer of Object.values(autoSaveTimers.current)) {
-        window.clearTimeout(timer);
-      }
-      for (const timer of Object.values(libraryRootAliasSaveTimers.current)) {
-        window.clearTimeout(timer);
-      }
-      if (ignorePatternsSaveTimer.current) {
-        window.clearTimeout(ignorePatternsSaveTimer.current);
-      }
-    };
-  }, []);
+  useLayoutEffect(() => () => {
+    if (notificationIdentity !== identityGeneration()) {
+      for (const timer of Object.values(autoSaveTimers.current)) window.clearTimeout(timer);
+      for (const timer of Object.values(libraryRootAliasSaveTimers.current)) window.clearTimeout(timer);
+      if (ignorePatternsSaveTimer.current) window.clearTimeout(ignorePatternsSaveTimer.current);
+      pendingLibrarySaves.current = {};
+      pendingAliasSaves.current = {};
+      pendingIgnoreSave.current = null;
+      return;
+    }
+    for (const save of Object.values(pendingLibrarySaves.current)) save();
+    for (const save of Object.values(pendingAliasSaves.current)) save();
+    pendingIgnoreSave.current?.();
+  }, [activeSettingsPanelId]);
 
   const hasOpenLibraryDialog = isCreateLibraryDialogOpen || Boolean(pathDialogForm) || Boolean(libraryPendingDeletion);
 
@@ -2456,11 +2491,11 @@ export function LibrariesPage() {
       if (selectedJellyfinLibraryId !== null) {
         try {
           await api.updateJellyfinLibraryLink(selectedJellyfinLibraryId, created.id);
-          await loadJellyfinLibraries(true);
+          await loadJellyfinLibraries(true).catch(() => actionNotice("warning", "refreshFailed", "Saved, but the view could not be refreshed.", created.id));
         } catch (reason) {
           setSelectedJellyfinLibraryId(null);
           setForm(createEmptyForm(desktopApp));
-          setSubmitError(t("jellyfin.libraryCreatedLinkFailed", { message: (reason as Error).message }));
+          actionNotice("warning", "createdLinkFailed", "Library created, but the connector link could not be updated.", created.id);
           return;
         }
       }
@@ -2470,8 +2505,9 @@ export function LibrariesPage() {
       setSubmitError(null);
       setSelectedJellyfinLibraryId(null);
       setIsCreateLibraryDialogOpen(false);
+      actionNotice("success", "created", "Library created.", created.id);
     } catch (reason) {
-      setSubmitError((reason as Error).message);
+      actionNotice("error", "createFailed", "Could not create the library.");
     } finally {
       setSubmitting(false);
     }
@@ -2598,8 +2634,9 @@ export function LibrariesPage() {
       setPathDialogForm(null);
       setPathDialogError(null);
       setLibraryMessages((messages) => ({ ...messages, [updated.id]: null }));
+      actionNotice("success", "rootsSaved", "Library paths saved.", updated.id);
     } catch (reason) {
-      setPathDialogError((reason as Error).message);
+      actionNotice("error", "rootsFailed", "Could not save library paths.", pathDialogForm.libraryId);
     } finally {
       setIsSavingPathDialog(false);
     }
@@ -2649,14 +2686,17 @@ export function LibrariesPage() {
       window.clearTimeout(autoSaveTimers.current[libraryId]);
     }
 
-    autoSaveTimers.current[libraryId] = window.setTimeout(async () => {
+    const save = async () => {
+      window.clearTimeout(autoSaveTimers.current[libraryId]);
+      delete autoSaveTimers.current[libraryId];
+      delete pendingLibrarySaves.current[libraryId];
       try {
-        const updated = await api.updateLibrarySettings(libraryId, {
+        const updated = await trackSave(api.updateLibrarySettings(libraryId, {
           scan_mode: next.scan_mode,
           duplicate_detection_mode: next.duplicate_detection_mode,
           scan_config: buildScanConfig(next),
           quality_profile_id: next.quality_profile_id,
-        });
+        }));
         upsertLibrary(updated);
         setSettingsForms((forms) => ({
           ...forms,
@@ -2664,11 +2704,11 @@ export function LibrariesPage() {
         }));
         setLibraryMessages((messages) => ({ ...messages, [libraryId]: null }));
       } catch (reason) {
-        setLibraryMessages((messages) => ({ ...messages, [libraryId]: (reason as Error).message }));
-      } finally {
-        delete autoSaveTimers.current[libraryId];
+        // trackSave reports the failure.
       }
-    }, 450);
+    };
+    pendingLibrarySaves.current[libraryId] = () => { void save(); };
+    autoSaveTimers.current[libraryId] = window.setTimeout(save, 450);
   }
 
   function updateLibraryQualityProfile(
@@ -2714,19 +2754,19 @@ export function LibrariesPage() {
 
     window.clearTimeout(autoSaveTimers.current[libraryId]);
     delete autoSaveTimers.current[libraryId];
+    delete pendingLibrarySaves.current[libraryId];
     try {
-      const updated = await api.updateLibrarySettings(libraryId, {
+      const updated = await trackSave(api.updateLibrarySettings(libraryId, {
         scan_mode: current.scan_mode,
         duplicate_detection_mode: current.duplicate_detection_mode,
         scan_config: buildScanConfig(current),
         quality_profile_id: current.quality_profile_id,
-      });
+      }));
       upsertLibrary(updated);
       return null;
     } catch (reason) {
-      const message = (reason as Error).message;
-      setLibraryMessages((messages) => ({ ...messages, [libraryId]: message }));
-      return message;
+
+      return "settings failed";
     }
   }
 
@@ -2740,12 +2780,12 @@ export function LibrariesPage() {
       const job = await api.scanLibrary(libraryId, scanType);
       trackJob(job);
       trackExplicitJobStart({ kind: "scan", job });
+      actionNotice("info", "scanRequested", "Scan requested.", libraryId);
       setLibraryMessages((messages) => ({ ...messages, [libraryId]: null }));
       return null;
     } catch (reason) {
-      const message = (reason as Error).message;
-      setLibraryMessages((messages) => ({ ...messages, [libraryId]: message }));
-      return message;
+      actionNotice("error", "scanFailed", "Could not request the scan.", libraryId);
+      return "scan failed";
     }
   }
 
@@ -2779,7 +2819,7 @@ export function LibrariesPage() {
       const connections = await api.connectors();
       const enabledConnections = connections.filter((connection) => connection.enabled);
       if (!enabledConnections.length) {
-        setConnectorSyncFeedback(t("connectors.empty"));
+        actionNotice("info", "noConnections", "No enabled connectors to sync.");
         return;
       }
 
@@ -2796,9 +2836,9 @@ export function LibrariesPage() {
       if (failedResult?.status === "rejected") {
         throw failedResult.reason;
       }
-      setConnectorSyncFeedback(t("connectors.syncQueued"));
+      actionNotice("info", "syncRequested", "Connector sync requested.");
     } catch (reason) {
-      setConnectorSyncFeedback((reason as Error).message);
+      actionNotice("error", "syncFailed", "Some connector sync requests could not be sent.");
     } finally {
       setIsSyncingConnectors(false);
     }
@@ -2814,15 +2854,15 @@ export function LibrariesPage() {
     upsertLibrary({ ...library, show_on_dashboard: nextShowOnDashboard });
 
     try {
-      const updated = await api.updateLibrarySettings(library.id, {
+      const updated = await trackSave(api.updateLibrarySettings(library.id, {
         show_on_dashboard: nextShowOnDashboard,
-      });
+      }));
       upsertLibrary(updated);
       setLibraryMessages((messages) => ({ ...messages, [library.id]: null }));
-      await loadDashboard(true);
+      await loadDashboard(true).catch(() => actionNotice("warning", "refreshFailed", "Saved, but the view could not be refreshed.", library.id));
     } catch (reason) {
       upsertLibrary(library);
-      setLibraryMessages((messages) => ({ ...messages, [library.id]: (reason as Error).message }));
+
     } finally {
       setDashboardVisibilityPending((current) => {
         const next = { ...current };
@@ -2837,11 +2877,11 @@ export function LibrariesPage() {
     if (historySourcePending[library.id] || source === library.history_added_date_source) return;
     setHistorySourcePending((current) => ({ ...current, [library.id]: true }));
     try {
-      const updated = await api.updateLibrarySettings(library.id, { history_added_date_source: source });
+      const updated = await trackSave(api.updateLibrarySettings(library.id, { history_added_date_source: source }));
       upsertLibrary(updated);
       setLibraryMessages((messages) => ({ ...messages, [library.id]: null }));
     } catch (reason) {
-      setLibraryMessages((messages) => ({ ...messages, [library.id]: (reason as Error).message }));
+
     } finally {
       setHistorySourcePending((current) => {
         const next = { ...current };
@@ -2859,13 +2899,13 @@ export function LibrariesPage() {
     const aliasKey = libraryRootAliasKey(library.id, rootId);
     setLibraryRootAliasPending((pending) => ({ ...pending, [aliasKey]: true }));
     try {
-      const updated = await api.updateLibrarySettings(library.id, {
+      const updated = await trackSave(api.updateLibrarySettings(library.id, {
         roots: roots.map((root) => ({
           id: root.id,
           path: root.path,
           display_name: root.id === rootId ? normalized : root.display_name,
         })),
-      });
+      }));
       upsertLibrary(updated);
       setLibraryMessages((messages) => ({ ...messages, [library.id]: null }));
       setLibraryRootAliasDrafts((drafts) => {
@@ -2874,7 +2914,7 @@ export function LibrariesPage() {
         return next;
       });
     } catch (reason) {
-      setLibraryMessages((messages) => ({ ...messages, [library.id]: (reason as Error).message }));
+
     } finally {
       setLibraryRootAliasPending((pending) => {
         const next = { ...pending };
@@ -2890,6 +2930,7 @@ export function LibrariesPage() {
     if (existingTimer) {
       window.clearTimeout(existingTimer);
       delete libraryRootAliasSaveTimers.current[aliasKey];
+      delete pendingAliasSaves.current[aliasKey];
     }
 
     const normalized = displayName.trim();
@@ -2907,6 +2948,7 @@ export function LibrariesPage() {
     if (existingTimer) {
       window.clearTimeout(existingTimer);
       delete libraryRootAliasSaveTimers.current[aliasKey];
+      delete pendingAliasSaves.current[aliasKey];
     }
 
     const normalized = displayName.trim();
@@ -2915,22 +2957,26 @@ export function LibrariesPage() {
       return;
     }
 
-    libraryRootAliasSaveTimers.current[aliasKey] = window.setTimeout(() => {
+    const save = () => {
+      window.clearTimeout(libraryRootAliasSaveTimers.current[aliasKey]);
       delete libraryRootAliasSaveTimers.current[aliasKey];
+      delete pendingAliasSaves.current[aliasKey];
       flushLibraryRootAliasSave(library, rootId, displayName);
-    }, 450);
+    };
+    pendingAliasSaves.current[aliasKey] = save;
+    libraryRootAliasSaveTimers.current[aliasKey] = window.setTimeout(save, 450);
   }
 
   async function updatePreferredConnector(library: LibrarySummary, connectionId: number | null) {
     if (!canEditLibraryConnectorSettings) return;
     try {
-      const updated = await api.updateLibrarySettings(library.id, {
+      const updated = await trackSave(api.updateLibrarySettings(library.id, {
         preferred_connector_connection_id: connectionId,
-      });
+      }));
       upsertLibrary(updated);
       setLibraryMessages((messages) => ({ ...messages, [library.id]: null }));
     } catch (reason) {
-      setLibraryMessages((messages) => ({ ...messages, [library.id]: (reason as Error).message }));
+
     }
   }
 
@@ -3001,8 +3047,9 @@ export function LibrariesPage() {
       upsertLibrary(updated);
       stopEditingLibraryIdentity(library.id);
       setLibraryMessages((messages) => ({ ...messages, [library.id]: null }));
+      actionNotice("success", "identitySaved", "Library details saved.", library.id);
     } catch (reason) {
-      setLibraryMessages((messages) => ({ ...messages, [library.id]: (reason as Error).message }));
+      actionNotice("error", "settingsFailed", "Could not save library settings.", library.id);
     } finally {
       setLibraryIdentityPending((current) => {
         const next = { ...current };
@@ -3048,9 +3095,10 @@ export function LibrariesPage() {
       stopEditingLibraryIdentity(libraryId);
       setLibraryPendingDeletion((current) => (current?.id === libraryId ? null : current));
       setDeleteConfirmationInput("");
-      await refresh();
+      actionNotice("success", "deleted", "Library deleted.");
+      await refresh().catch(() => actionNotice("warning", "refreshFailed", "Saved, but the view could not be refreshed."));
     } catch (reason) {
-      setLibraryMessages((messages) => ({ ...messages, [libraryId]: (reason as Error).message }));
+      actionNotice("error", "deleteFailed", "Could not delete the library.", libraryId);
     } finally {
       setDeletingLibraryIds((current) => {
         const next = { ...current };
@@ -3217,6 +3265,7 @@ export function LibrariesPage() {
     nextShowMusicQualityScore = showMusicQualityScore,
     nextInDepthDolbyVisionProfiles = inDepthDolbyVisionProfiles,
     fallbackToAppSettingsPatterns = true,
+    trackAutosave = true,
   ) {
     const effectiveUserPatterns =
       fallbackToAppSettingsPatterns && nextUserPatterns.length === 0
@@ -3226,7 +3275,7 @@ export function LibrariesPage() {
       fallbackToAppSettingsPatterns && nextDefaultPatterns.length === 0
         ? (appSettings.default_ignore_patterns ?? [])
         : nextDefaultPatterns;
-    return api.updateAppSettings({
+    const request = api.updateAppSettings({
       user_ignore_patterns: normalizeIgnorePatterns(effectiveUserPatterns),
       default_ignore_patterns: normalizeIgnorePatterns(effectiveDefaultPatterns),
       ...(nextResolutionCategories ? { resolution_categories: normalizeResolutionCategories(nextResolutionCategories) } : {}),
@@ -3250,6 +3299,7 @@ export function LibrariesPage() {
         show_all_playbacks_when_unstacked: showAllPlaybacksWhenUnstacked,
       },
     });
+    return trackAutosave ? trackSave(request) : request;
   }
 
   async function persistIgnorePatterns(
@@ -3260,6 +3310,7 @@ export function LibrariesPage() {
     nextHideQualityScoreMeter = hideQualityScoreMeter,
     nextUnlimitedPanelSize = unlimitedPanelSize,
     nextResolutionCategories?: ResolutionCategory[],
+    explicit = false,
   ) {
     const requestId = ignorePatternsRequestId.current + 1;
     ignorePatternsRequestId.current = requestId;
@@ -3278,7 +3329,9 @@ export function LibrariesPage() {
         showMusicQualityScore,
         inDepthDolbyVisionProfiles,
         false,
+        !explicit,
       );
+      if (explicit) actionNotice("success", "ignoreSaved", "Ignore rules saved.");
       const persisted = toPersistedIgnorePatterns(updated);
       if (requestId > ignorePatternsSuccessId.current) {
         ignorePatternsSuccessId.current = requestId;
@@ -3297,10 +3350,11 @@ export function LibrariesPage() {
       void refreshHistoryStorage().catch(() => undefined);
       return persisted;
     } catch (reason) {
+      if (explicit) actionNotice("error", "ignoreSaveFailed", "Could not save ignore rules.");
       if (requestId === ignorePatternsRequestId.current) {
         setUserIgnorePatternInputs(persistedIgnorePatterns.current.user);
         setDefaultIgnorePatternInputs(persistedIgnorePatterns.current.default);
-        setIgnorePatternsStatus((reason as Error).message);
+
       }
       return null;
     } finally {
@@ -3331,7 +3385,7 @@ export function LibrariesPage() {
       void refreshHistoryStorage().catch(() => undefined);
     } catch (reason) {
       setShowAnalyzedFilesCsvExport(previousValue);
-      setFeatureFlagsStatus((reason as Error).message);
+
     } finally {
       setIsSavingFeatureFlags(false);
     }
@@ -3343,14 +3397,14 @@ export function LibrariesPage() {
     setFeatureFlagsStatus(null);
     setIsSavingFeatureFlags(true);
     try {
-      const updated = await api.updateAppSettings({
+      const updated = await trackSave(api.updateAppSettings({
         feature_flags: { hide_automatic_update_reminders: hidden },
-      });
+      }));
       applyUpdatedAppSettingsState(updated);
       setFeatureFlagsStatus(null);
     } catch (reason) {
       setHideAutomaticUpdateReminders(previousValue);
-      setFeatureFlagsStatus((reason as Error).message);
+
     } finally {
       setIsSavingFeatureFlags(false);
     }
@@ -3377,7 +3431,7 @@ export function LibrariesPage() {
       void refreshHistoryStorage().catch(() => undefined);
     } catch (reason) {
       setShowFullWidthAppShell(previousValue);
-      setFeatureFlagsStatus((reason as Error).message);
+
     } finally {
       setIsSavingFeatureFlags(false);
     }
@@ -3408,7 +3462,7 @@ export function LibrariesPage() {
       void refreshHistoryStorage().catch(() => undefined);
     } catch (reason) {
       setShowMusicQualityScore(previousValue);
-      setFeatureFlagsStatus((reason as Error).message);
+
     } finally {
       setIsSavingFeatureFlags(false);
     }
@@ -3435,7 +3489,7 @@ export function LibrariesPage() {
       void refreshHistoryStorage().catch(() => undefined);
     } catch (reason) {
       setUnlimitedPanelSize(previousValue);
-      setFeatureFlagsStatus((reason as Error).message);
+
     } finally {
       setIsSavingFeatureFlags(false);
     }
@@ -3467,7 +3521,7 @@ export function LibrariesPage() {
       void refreshHistoryStorage().catch(() => undefined);
     } catch (reason) {
       setInDepthDolbyVisionProfiles(previousValue);
-      setFeatureFlagsStatus((reason as Error).message);
+
     } finally {
       setIsSavingFeatureFlags(false);
     }
@@ -3479,14 +3533,14 @@ export function LibrariesPage() {
     setFeatureFlagsStatus(null);
     setIsSavingFeatureFlags(true);
     try {
-      const updated = await api.updateAppSettings({
+      const updated = await trackSave(api.updateAppSettings({
         feature_flags: { show_all_playbacks_when_unstacked: enabled },
-      });
+      }));
       applyUpdatedAppSettingsState(updated);
       setFeatureFlagsStatus(null);
     } catch (reason) {
       setShowAllPlaybacksWhenUnstacked(previousValue);
-      setFeatureFlagsStatus((reason as Error).message);
+
     } finally {
       setIsSavingFeatureFlags(false);
     }
@@ -3569,16 +3623,7 @@ export function LibrariesPage() {
       const revertedInputs = historyRetentionInputsFromSettings(appHistoryRetention);
       historyRetentionInputsRef.current = revertedInputs;
       setHistoryRetentionInputs(revertedInputs);
-      notify({
-        type: "error",
-        message: t("libraries.historyRetention.saveFailed"),
-        topicKey: `history-retention-save:${bucket}`,
-        source: {
-          area: "settings",
-          href: "/settings?section=logs&settingsFocus=settings-panel-historyRetention",
-          label: t("libraries.historyRetention.title"),
-        },
-      });
+
     } finally {
       setIsSavingHistoryRetention(false);
     }
@@ -3612,6 +3657,7 @@ export function LibrariesPage() {
         hideQualityScoreMeter,
         unlimitedPanelSize,
         nextCategories,
+        undefined, undefined, undefined, undefined, true, false,
       );
       const normalized = normalizeResolutionCategories(updated.resolution_categories);
       persistedResolutionCategories.current = normalized;
@@ -3623,9 +3669,11 @@ export function LibrariesPage() {
       setScanPerformanceStatus(null);
       applyUpdatedAppSettingsState(updated);
       void refreshHistoryStorage().catch(() => undefined);
+      actionNotice("success", "resolutionSaved", "Resolution categories saved.");
       return true;
     } catch (reason) {
-      setResolutionCategoriesStatus((reason as Error).message);
+      actionNotice("error", "resolutionFailed", "Could not save resolution categories.");
+
       return false;
     } finally {
       setIsSavingResolutionCategories(false);
@@ -3688,7 +3736,7 @@ export function LibrariesPage() {
       setScanWorkerCountInput(scanWorkerCountInputRef.current);
       setParallelScanJobsInput(parallelScanJobsInputRef.current);
       setComparisonScatterPointLimitInput(comparisonScatterPointLimitInputRef.current);
-      setScanPerformanceStatus((reason as Error).message);
+
     } finally {
       setIsSavingScanPerformance(false);
     }
@@ -3774,18 +3822,23 @@ export function LibrariesPage() {
     if (ignorePatternsSaveTimer.current) {
       window.clearTimeout(ignorePatternsSaveTimer.current);
     }
-    ignorePatternsSaveTimer.current = window.setTimeout(() => {
+    const save = () => {
+      if (ignorePatternsSaveTimer.current) window.clearTimeout(ignorePatternsSaveTimer.current);
       ignorePatternsSaveTimer.current = null;
+      pendingIgnoreSave.current = null;
       void persistIgnorePatterns(nextPatterns, nextDefaultPatterns);
-    }, 450);
+    };
+    pendingIgnoreSave.current = save;
+    ignorePatternsSaveTimer.current = window.setTimeout(save, 450);
   }
 
-  function flushIgnorePatternsSave(nextPatterns: string[], nextDefaultPatterns: string[] = []) {
+  function flushIgnorePatternsSave(nextPatterns: string[], nextDefaultPatterns: string[] = [], explicit = false) {
     if (ignorePatternsSaveTimer.current) {
       window.clearTimeout(ignorePatternsSaveTimer.current);
       ignorePatternsSaveTimer.current = null;
+      pendingIgnoreSave.current = null;
     }
-    return persistIgnorePatterns(nextPatterns, nextDefaultPatterns);
+    return persistIgnorePatterns(nextPatterns, nextDefaultPatterns, undefined, undefined, undefined, undefined, undefined, explicit);
   }
 
   async function addIgnorePattern() {
@@ -3793,7 +3846,7 @@ export function LibrariesPage() {
     if (!candidate) {
       return;
     }
-    const updated = await flushIgnorePatternsSave([...combinedIgnorePatterns(), candidate]);
+    const updated = await flushIgnorePatternsSave([...combinedIgnorePatterns(), candidate], [], true);
     if (updated) {
       setIgnorePatternDraft("");
     }
@@ -3803,7 +3856,7 @@ export function LibrariesPage() {
     const nextPatterns = combinedIgnorePatterns().filter((_, rowIndex) => rowIndex !== index);
     setUserIgnorePatternInputs(nextPatterns);
     setDefaultIgnorePatternInputs([]);
-    await flushIgnorePatternsSave(nextPatterns);
+    await flushIgnorePatternsSave(nextPatterns, [], true);
   }
 
   function updateIgnorePattern(index: number, value: string) {
@@ -3887,7 +3940,7 @@ export function LibrariesPage() {
     setIsSavingPatternRecognition(true);
     setPatternRecognitionStatus(null);
     try {
-      const updated = await api.updateAppSettings({
+      const updated = await trackSave(api.updateAppSettings({
         pattern_recognition: {
           analyze_bonus_content: true,
           show_season_patterns: {
@@ -3909,7 +3962,7 @@ export function LibrariesPage() {
             default_file_patterns: [],
           },
         },
-      });
+      }));
       applyUpdatedAppSettingsState(updated);
       setIgnorePatternsStatus(null);
       setFeatureFlagsStatus(null);
@@ -3919,7 +3972,7 @@ export function LibrariesPage() {
       const reverted = normalizePatternRecognitionInputs(appSettings.pattern_recognition);
       setPatternRecognitionInputs(reverted);
       setDuplicateDurationToleranceInput(String(reverted.duplicate_matching.duration_tolerance_seconds));
-      setPatternRecognitionStatus((reason as Error).message);
+
     } finally {
       setIsSavingPatternRecognition(false);
     }
@@ -4021,7 +4074,7 @@ export function LibrariesPage() {
     setUserIgnorePatternInputs([]);
     setDefaultIgnorePatternInputs(defaultPatterns);
     setIgnorePatternDraft("");
-    await flushIgnorePatternsSave([], defaultPatterns);
+    await flushIgnorePatternsSave([], defaultPatterns, true);
   }
 
   async function updateShowSeasonRecognitionMode(mode: "folder_depth" | "regex") {
@@ -4088,7 +4141,10 @@ export function LibrariesPage() {
       return;
     }
 
-    await navigator.clipboard.writeText(buildScanFailureDiagnostic(job, section, entry));
+    try {
+      await navigator.clipboard.writeText(buildScanFailureDiagnostic(job, section, entry));
+      actionNotice("success", "copied", "Copied to the clipboard.");
+    } catch { actionNotice("error", "copyFailed", "Could not copy to the clipboard."); return; }
     const diagnosticKey = `${job.id}:${section}:${entry.path}`;
     setCopiedScanDiagnosticKey(diagnosticKey);
     if (copiedScanDiagnosticResetTimer.current !== null) {

@@ -16,14 +16,17 @@ import { useTranslation } from "react-i18next";
 import i18n, { LANGUAGE_STORAGE_KEY } from "../i18n";
 import {
   accessRequest,
+  identityGeneration,
   clearIdentityRequests,
   setCsrf,
   setExpectedIdentity,
 } from "./access-session";
 import {
   preferenceStorage,
+  announcePreferenceSave,
   preferenceSnapshot,
   selectPreferenceIdentity,
+  restorePreferenceState,
 } from "./preference-storage";
 
 export type AccessPolicy = {
@@ -69,6 +72,7 @@ type AuthValue = {
   status: AuthStatus | null;
   refresh: () => Promise<void>;
   logout: () => Promise<void>;
+  refreshAfterCredentialChange?: () => Promise<void>;
   has: (right: string, libraryId?: number) => boolean;
 };
 const AuthContext = createContext<AuthValue>({
@@ -76,6 +80,7 @@ const AuthContext = createContext<AuthValue>({
   status: null,
   refresh: async () => {},
   logout: async () => {},
+  refreshAfterCredentialChange: async () => {},
   has: () => false,
 });
 export const useAuth = () => useContext(AuthContext);
@@ -108,6 +113,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [password, setPassword] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const refreshing = useRef<Promise<void> | null>(null);
+  const credentialChangePending = useRef(false);
+  const awaitingCredentialSignIn = useRef(false);
+  const [credentialNotice, setCredentialNotice] = useState<"saved" | "refreshFailed" | null>(null);
+  async function refreshAfterCredentialChange() {
+    credentialChangePending.current = true;
+    setReady(false);
+    const work = refreshSession();
+    const ticket = epoch.current;
+    try { await work; }
+    catch {
+      if (mounted.current && ticket === epoch.current) {
+        // The mutation revoked this session even if status could not be reloaded.
+        identityRef.current = null;
+        setExpectedIdentity("");
+        selectPreferenceIdentity(null);
+        awaitingCredentialSignIn.current = true;
+        setCredentialNotice("refreshFailed");
+        setStatus((previous) => previous ? { ...previous, identity: null, setup_required: false } : previous);
+        setError("");
+        setUsername("");
+        setPassword("");
+        setCurrentPassword("");
+        setReady(true);
+      }
+    }
+    finally { credentialChangePending.current = false; }
+  }
   async function refresh() {
     if (refreshing.current) return refreshing.current;
     const work = loadStatus();
@@ -134,6 +166,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Explicit sign-in stays open; ordinary visits enter only the server-enabled Guest profile.
       if (
         !result.identity &&
+        !credentialChangePending.current &&
+        !awaitingCredentialSignIn.current &&
         result.guest_enabled &&
         !result.setup_required &&
         !loginPageRef.current
@@ -146,6 +180,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       const previous = identityRef.current;
       const next = result.identity;
+      if (credentialChangePending.current && previous?.kind === "account" && !next) {
+        awaitingCredentialSignIn.current = true;
+        setCredentialNotice("saved");
+      } else if (next) {
+        awaitingCredentialSignIn.current = false;
+        setCredentialNotice(null);
+      }
       setExpectedIdentity(next ? `${next.kind}:${next.id}:${next.revision}` : "");
       if (
         previous?.id !== next?.id ||
@@ -165,19 +206,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             ...((prefs.storage ?? {}) as Record<string, string>),
             ...(ui?.color_theme ? { "medialyze-theme": ui.color_theme } : {}),
           });
-          await i18n.changeLanguage(
+          await restorePreferenceState(() => i18n.changeLanguage(
             ui?.interface_language ??
               (prefs.storage as Record<string, string> | undefined)?.[
                 "medialyze-language"
               ] ??
               "en",
-          );
+          ));
         } else {
           selectPreferenceIdentity(next?.kind === "guest" ? "guest" : null);
           if (next?.kind === "guest") {
-            await i18n.changeLanguage(
+            await restorePreferenceState(() => i18n.changeLanguage(
               preferenceStorage.getItem(LANGUAGE_STORAGE_KEY) ?? "en",
-            );
+            ));
           }
         }
       }
@@ -194,7 +235,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
   async function logout() {
-    await accessRequest("/auth/logout", { method: "POST" });
+    const generation = identityGeneration();
+    try {
+      await accessRequest("/auth/logout", { method: "POST" });
+    } catch (error) {
+      if (generation === identityGeneration()) window.dispatchEvent(new Event("medialyze-logout-failed"));
+      throw error;
+    }
     await refreshSession();
   }
   useEffect(() => {
@@ -229,35 +276,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
-    const save = () => {
+    let pending: Array<{ resolve: () => void; reject: (error: unknown) => void }> = [];
+    let writes: Promise<void> = Promise.resolve();
+    const save = (event: Event) => {
       clearTimeout(timeout);
       const id = identityRef.current?.id;
-      const ticket = epoch.current;
+      const generation = identityGeneration();
+      if (!identityRef.current || identityRef.current.kind === "guest") return;
+      const promise = new Promise<void>((resolve, reject) => pending.push({ resolve, reject }));
+      announcePreferenceSave((event as CustomEvent<{ key: string }>).detail?.key ?? "", promise);
       timeout = setTimeout(() => {
-        if (
-          !identityRef.current || identityRef.current.kind === "guest" ||
-          identityRef.current.id !== id || ticket !== epoch.current
-        )
-          return;
+        const batch = pending; pending = [];
         const storage = preferenceSnapshot();
-        const prefs = {
-          storage,
-          ui_preferences: {
+        const valid = () => identityRef.current?.kind !== "guest" && identityRef.current?.id === id && identityGeneration() === generation && mounted.current;
+        const work = writes.then(async () => {
+          if (!valid()) throw new DOMException("Identity changed", "AbortError");
+          const prefs = { storage, ui_preferences: {
             interface_language: storage["medialyze-language"] ?? "en",
             color_theme: storage["medialyze-theme"] ?? "system",
-          },
-        };
-        void accessRequest("/me/preferences", {
-          method: "PATCH",
-          body: JSON.stringify(prefs),
-        }).catch(() => {
-          if (ticket === epoch.current) setError(t("access.preferencesError"));
+          } };
+          await accessRequest<Record<string, unknown>>("/me/preferences", { method: "PATCH", body: JSON.stringify(prefs) });
         });
+        writes = work.catch(() => {});
+        void work.then(() => batch.forEach(({ resolve }) => resolve()), (error: unknown) => batch.forEach(({ reject }) => reject(error)));
       }, 500);
     };
     window.addEventListener("medialyze-preferences-changed", save);
     return () => {
       clearTimeout(timeout);
+      pending.forEach(({ reject }) => reject(new DOMException("Identity changed", "AbortError")));
       window.removeEventListener("medialyze-preferences-changed", save);
     };
   }, []);
@@ -278,7 +325,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               : (identity.policy.libraries[String(libraryId)] ?? [])
             ).includes(right))),
     );
-  const value = { identity, status, refresh, logout, has };
+  const value = { identity, status, refresh, logout, refreshAfterCredentialChange, has };
   if (!ready)
     return (
       <div className="empty-state" aria-busy={!error}>
@@ -303,6 +350,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       <AuthContext.Provider value={value}>
         <ThemeProvider>
           <AccessScreen mode={change ? "password" : setup ? "setup" : "login"}>
+            {credentialNotice && !identity && <div role="status" className={credentialNotice === "refreshFailed" ? "notice warning" : "alert success"}>
+              {credentialNotice === "refreshFailed"
+                ? t("notifications.actions.accounts.signInAgainRefreshFailed", { defaultValue: "Change saved, but the session could not be refreshed. Please sign in again." })
+                : t("notifications.actions.accounts.signInAgain", { defaultValue: "Change saved – please sign in again." })}
+              <button type="button" className="secondary" onClick={() => setCredentialNotice(null)}>{t("notifications.actions.accounts.dismiss", { defaultValue: "Dismiss" })}</button>
+            </div>}
             <form
               className="form-grid"
               onSubmit={(event) => {
@@ -329,10 +382,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     body: JSON.stringify(payload),
                   }))
                   .then(async () => {
+                    awaitingCredentialSignIn.current = false;
                     setPassword("");
                     setCurrentPassword("");
-                    await refreshSession();
-                    if (isLoginPage) navigate(returnTo, { replace: true });
+                    if (change) {
+                      try { await refreshAfterCredentialChange(); }
+                      catch { setError(t("notifications.actions.accounts.refreshFailed", { defaultValue: "Changes were saved, but the account could not be refreshed." })); }
+                    } else {
+                      await refreshSession();
+                    }
+                    if (isLoginPage && !change) navigate(returnTo, { replace: true });
                   })
                   .catch(() => setError(t("access.loginError")))
                   .finally(() => setPending(false));
@@ -395,7 +454,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                       setPending(true); setError("");
                       void refreshSession()
                         .then(authenticatePasskey)
-                        .then(async () => { await refreshSession(); if (isLoginPage) navigate(returnTo, { replace: true }); })
+                        .then(async () => { awaitingCredentialSignIn.current = false; await refreshSession(); if (isLoginPage) navigate(returnTo, { replace: true }); })
                         .catch((reason) => { if (!passkeyCanceled(reason)) setError(t("passkeys.loginError")); })
                         .finally(() => setPending(false));
                     }}>
@@ -410,6 +469,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     onClick={() => {
                       setPending(true);
                       setError("");
+                      awaitingCredentialSignIn.current = false;
                       const enter = identity?.kind === "guest"
                         ? Promise.resolve()
                         : refreshSession()
@@ -428,7 +488,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   <button
                     type="button"
                     className="secondary"
-                    onClick={() => void logout()}
+                    onClick={() => { void logout().catch(() => setError(t("notifications.actions.accounts.logoutFailed", { defaultValue: "Could not sign out." }))); }}
                   >
                     {t("access.logout")}
                   </button>

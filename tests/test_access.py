@@ -36,6 +36,43 @@ def test_access_environment_names(monkeypatch):
     assert (current.owner_username, current.owner_password.get_secret_value(), current.guest_enabled, current.no_users) == ("current", NEW_SECRET, False, False)
 
 
+def test_notification_actions_history_is_personal_idempotent_and_permission_scoped(env):
+    from uuid import uuid4
+    app, factory, _ = env
+    owner = setup(app)
+    visible = library(factory, "visible-notifications")
+    hidden = library(factory, "hidden-notifications")
+    client, account = user(owner, app, {
+        "global": ["settings.presets.view"], "mode": "per_library", "create": False,
+        "shared": [], "libraries": {str(visible): ["library.read"]},
+    })
+    payload = {
+        "event_id": str(uuid4()), "type": "success", "message": "Preset saved.",
+        "source": {"area": "transcoding", "href": "/settings?section=transcoding-presets", "label": "Presets"},
+    }
+    saved = post(client, "/api/notification-history", payload)
+    assert saved.status_code == 200, saved.text
+    retry = post(client, "/api/notification-history", payload)
+    assert retry.status_code == 200 and retry.json()["id"] == saved.json()["id"]
+    page = client.get("/api/notification-history").json()
+    assert page["total"] == 1 and page["items"][0]["message"] == "Preset saved."
+    assert owner.get("/api/notification-history").json()["total"] == 0
+    for area, href in (("settings", "/settings?section=accounts&account=me"), ("library", f"/libraries/{visible}")):
+        response = post(client, "/api/notification-history", {**payload, "event_id": str(uuid4()), "source": {"area": area, "href": href, "label": "Open"}})
+        assert response.status_code == 200, response.text
+    denied = post(client, "/api/notification-history", {**payload, "event_id": str(uuid4()), "source": {"area": "library", "href": f"/libraries/{hidden}", "label": "Hidden"}})
+    assert denied.status_code == 204
+    assert client.get("/api/notification-history").json()["total"] == 3
+    changed = post(owner, f"/api/users/{account['id']}", {"policy": EMPTY_POLICY}, method="patch")
+    assert changed.status_code == 200, changed.text
+    # Revocation prunes scoped library and preset targets, retaining the personal target.
+    from backend.app.models.entities import NotificationHistoryEntry
+    with factory() as db:
+        entries = list(db.scalars(select(NotificationHistoryEntry).where(NotificationHistoryEntry.owner_key == f"account:{account['id']}")))
+        assert len(entries) == 1
+        assert entries[0].source["href"] == "/settings?section=accounts&account=me"
+
+
 @pytest.fixture
 def env(tmp_path):
     config = tmp_path / "config"

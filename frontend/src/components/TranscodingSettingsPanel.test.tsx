@@ -1,4 +1,6 @@
+vi.mock("../lib/notifications", () => ({ useNotifications: () => ({ notify: vi.fn() }), useOptionalNotifications: () => ({ notify: vi.fn() }) }));
 import i18n from "../i18n";
+import { clearIdentityRequests } from "../lib/access-session";
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -337,6 +339,24 @@ describe("TranscodingSettingsPanel", () => {
     expect(screen.queryByRole("heading", { name: "Automation Rules" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Test network" })).not.toBeInTheDocument();
     expect(api.transcodeFederation).not.toHaveBeenCalled();
+  });
+
+  it("flushes a pending output setting when leaving before debounce", async () => {
+    const update = vi.spyOn(api, "updateAppSettings").mockResolvedValue(appSettings);
+    const view = render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
+    fireEvent.change(screen.getByRole("spinbutton", { name: "CPU budget (%)" }), { target: { value: "80" } });
+    expect(update).not.toHaveBeenCalled();
+    view.unmount();
+    await waitFor(() => expect(update).toHaveBeenCalledWith({ transcoding: expect.objectContaining({ cpu_budget_percent: 80 }) }));
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not flush an output draft after identity teardown", async () => {
+    const update = vi.spyOn(api, "updateAppSettings").mockResolvedValue(appSettings);
+    const view = render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
+    fireEvent.change(screen.getByRole("spinbutton", { name: "CPU budget (%)" }), { target: { value: "80" } });
+    clearIdentityRequests(); view.unmount();
+    expect(update).not.toHaveBeenCalled();
   });
 
   it("does not expose a global hardware-device selector", async () => {

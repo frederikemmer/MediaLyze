@@ -1,5 +1,7 @@
+import { identityGeneration } from "../lib/access-session";
 import { AudioLines, Captions, Check, ChevronDown, ChevronRight, CircleAlert, Copy, ExternalLink, Film, LoaderCircle, Play, Plus, RefreshCw, Save, Search, Square, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useNotifications } from "../lib/notifications";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { createPortal } from "react-dom";
@@ -1375,6 +1377,12 @@ export function TranscodingPanel({
   resolutionCategories?: ResolutionCategory[];
 }) {
   const { t, i18n } = useTranslation();
+  const notifications = useNotifications();
+  const notificationIdentity = identityGeneration();
+  const feedback = useCallback((type: "success" | "info" | "error", key: string, fallback: string) => {
+    if (notificationIdentity !== identityGeneration()) return;
+    notifications.notify({ type, message: t(`notifications.actions.${["validationPassed", "validationFailed", "validationRequestFailed"].includes(key) ? "integration" : "transcoding"}.${key}`, { defaultValue: fallback }), topicKey: `transcode:file:${file.id}`, source: { area: "transcoding", href: `/files/${file.id}`, label: t("notifications.actions.transcoding.openFile", { defaultValue: "Open file" }) } });
+  }, [file.id, notifications, t, notificationIdentity]);
   const federationAutoAppliedRef = useRef(false);
   const formattingSectionsInitializedRef = useRef(false);
   const initialPlanLoadedRef = useRef(false);
@@ -1596,8 +1604,9 @@ export function TranscodingPanel({
       setSelectedFormattingIds((current) => ({ ...current, [saved.kind]: saved.id }));
       setSaveFormattingKind(null);
       setFormattingName("");
-    } catch (reason) {
-      setFormattingError((reason as Error).message);
+      feedback("success", "formatSaved", "Formatting preset saved.");
+    } catch {
+      feedback("error", "formatSaveFailed", "Could not save the formatting preset.");
     } finally {
       setFormattingBusy(false);
     }
@@ -1745,22 +1754,24 @@ export function TranscodingPanel({
     }, 0);
   }, [updateFolderTemplate]);
 
-  const validate = useCallback(async (): Promise<TranscodeValidation | null> => {
+  const validate = useCallback(async (explicit = false): Promise<TranscodeValidation | null> => {
     if (!plan) return null;
     setValidating(true);
     setError(null);
     try {
       const result = await api.validateFileTranscode(file.id, releasePlan(automaticEncoderPlan(plan)));
       setValidation(result);
+      if (explicit) feedback(result.valid ? "success" : "error", result.valid ? "validationPassed" : "validationFailed", result.valid ? "Transcode plan validated." : "Transcode plan validation failed. See the validation details.");
       setPlan(releasePlan(result.normalized_plan));
       return result;
     } catch (reason) {
       setError((reason as Error).message);
+      feedback("error", "validationRequestFailed", "Could not validate the transcode plan.");
       return null;
     } finally {
       setValidating(false);
     }
-  }, [file.id, plan]);
+  }, [file.id, plan, feedback]);
 
   const start = useCallback(async () => {
     const result = await validate();
@@ -1770,15 +1781,16 @@ export function TranscodingPanel({
       const nextJob = await api.startFileTranscode(file.id, releasePlan(result.normalized_plan));
       trackExplicitJobStart({ kind: "transcode", job: nextJob });
       setJob(nextJob);
+      feedback("info", "startAccepted", "The transcode was accepted.");
       window.dispatchEvent(new Event("medialyze:transcode-started"));
       setValidation(result);
       setError(null);
-    } catch (reason) {
-      setError((reason as Error).message);
+    } catch {
+      feedback("error", "startFailed", "Could not start the transcode.");
     } finally {
       setStarting(false);
     }
-  }, [file.id, plan, validate]);
+  }, [file.id, plan, validate, feedback]);
 
   const displayedFilenameTemplate = plan
     ? visibleFilenameTemplate(plan.filename_template_override === false
@@ -2798,7 +2810,7 @@ export function TranscodingPanel({
       </section>
 
       <div className="transcode-actions">
-        <button type="button" className="secondary transcode-action-button" onClick={() => void validate()} disabled={validating || Boolean(activeJob)}>
+        <button type="button" className="secondary transcode-action-button" onClick={() => void validate(true)} disabled={validating || Boolean(activeJob)}>
           {validating ? <LoaderCircle className="spin" aria-hidden="true" /> : <Check aria-hidden="true" />}{t("transcoding.validate")}
         </button>
         <button type="button" className="transcode-action-button transcode-start-button" onClick={() => void start()} disabled={starting || Boolean(activeJob) || !capabilities.ffmpeg_available || (plan.output_mode === "replace_original" && !plan.replacement_confirmed)}>
@@ -2834,7 +2846,7 @@ export function TranscodingPanel({
             </Link>
           </div>
           <div className="transcode-progress-actions">
-            <button type="button" className="secondary danger" onClick={() => void api.cancelTranscodeJob(activeJob.id).then(setJob)}><Square aria-hidden="true" />{t("common.cancel")}</button>
+            <button type="button" className="secondary danger" onClick={() => void api.cancelTranscodeJob(activeJob.id).then((updated) => { setJob(updated); feedback("info", "cancelRequested", "Cancellation was requested."); }).catch(() => feedback("error", "actionFailed", "The transcoding action failed."))}><Square aria-hidden="true" />{t("common.cancel")}</button>
           </div>
         </section>
       ) : null}

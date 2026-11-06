@@ -168,7 +168,7 @@ describe("JellyfinSettingsPanel", () => {
     fireEvent.change(interval, { target: { value: "0" } });
 
     await waitFor(() => expect(updateConnection).toHaveBeenCalledWith(expect.objectContaining({ sync_interval_minutes: 0 })), { timeout: 2000 });
-    expect(await screen.findByText("Saved automatically")).toBeInTheDocument();
+    expect(screen.queryByText("Saved automatically")).not.toBeInTheDocument();
   });
 
   it("keeps connection and user settings visible when a connection action fails", async () => {

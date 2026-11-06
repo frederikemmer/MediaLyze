@@ -1,7 +1,10 @@
-import { Check, LoaderCircle, Save, Trash2 } from "lucide-react";
+import { LoaderCircle, Save, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { identityGeneration } from "../lib/access-session";
+import { useOptionalNotifications } from "../lib/notifications";
+import { useAutosaveNotifications } from "../lib/notification-actions";
 import { api, type JellyfinLibrary, type JellyfinPathMapping } from "../lib/api";
 import { TooltipTrigger } from "./TooltipTrigger";
 
@@ -25,23 +28,21 @@ function JellyfinLibraryPathMappingRow({
   onChanged: (mapping: JellyfinPathMapping | null, removedId?: number) => void;
 }) {
   const { t } = useTranslation();
+  const notifications = useOptionalNotifications();
+  const generation = identityGeneration();
+  const source = { area: "connectors" as const, href: "/settings?section=jellyfin", label: t("connectors.title") };
+  const emit = (type: "success" | "error", key: string, fallback: string) => generation === identityGeneration() && notifications?.notify({ type, message: t(`notifications.actions.connectors.${key}`, { defaultValue: fallback }), topicKey: `jellyfin-mapping:${jellyfinLibrary.id}`, source });
   const [target, setTarget] = useState(mapping?.medialyze_path_prefix ?? suggestedTarget);
   const [pendingAction, setPendingAction] = useState<"save" | "delete" | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     setTarget(mapping?.medialyze_path_prefix ?? suggestedTarget);
-    setError(null);
-    setSaved(false);
   }, [mapping?.enabled, mapping?.id, mapping?.medialyze_path_prefix, suggestedTarget]);
 
   async function saveMapping() {
     const nextTarget = target.trim();
     if (!nextTarget) return;
     setPendingAction("save");
-    setError(null);
-    setSaved(false);
     try {
       const savedMapping = mapping
         ? await api.updateJellyfinPathMapping(mapping.id, {
@@ -54,10 +55,10 @@ function JellyfinLibraryPathMappingRow({
             medialyze_path_prefix: nextTarget,
             enabled: true,
           });
-      onChanged(savedMapping);
-      setSaved(true);
-    } catch (reason) {
-      setError((reason as Error).message);
+      emit("success", "pathSaved", "Path mapping saved.");
+      try { onChanged(savedMapping); } catch { if (generation === identityGeneration()) notifications?.notify({ type: "warning", message: t("notifications.actions.connectors.refreshFailed", { defaultValue: "The change was saved, but the view could not be refreshed." }), topicKey: `jellyfin-mapping:${jellyfinLibrary.id}`, source }); }
+    } catch {
+      emit("error", "pathFailed", "Could not save the path mapping.");
     } finally {
       setPendingAction(null);
     }
@@ -66,14 +67,12 @@ function JellyfinLibraryPathMappingRow({
   async function deleteMapping() {
     if (!mapping) return;
     setPendingAction("delete");
-    setError(null);
-    setSaved(false);
     try {
       await api.deleteJellyfinPathMapping(mapping.id);
-      onChanged(null, mapping.id);
-      setTarget("");
-    } catch (reason) {
-      setError((reason as Error).message);
+      emit("success", "pathDeleted", "Path mapping removed.");
+      try { onChanged(null, mapping.id); setTarget(""); } catch { if (generation === identityGeneration()) notifications?.notify({ type: "warning", message: t("notifications.actions.connectors.refreshFailed", { defaultValue: "The change was saved, but the view could not be refreshed." }), topicKey: `jellyfin-mapping:${jellyfinLibrary.id}`, source }); }
+    } catch {
+      emit("error", "pathDeleteFailed", "Could not remove the path mapping.");
     } finally {
       setPendingAction(null);
     }
@@ -109,9 +108,7 @@ function JellyfinLibraryPathMappingRow({
           disabled={disabled || pendingAction !== null}
           onChange={(event) => {
             setTarget(event.target.value);
-            setSaved(false);
-            setError(null);
-          }}
+                          }}
         />
       </div>
       <div className="library-jellyfin-path-mapping-actions">
@@ -137,18 +134,7 @@ function JellyfinLibraryPathMappingRow({
             {pendingAction === "delete" ? <LoaderCircle className="is-spinning" aria-hidden="true" /> : <Trash2 aria-hidden="true" />}
           </button>
         ) : null}
-        {saved ? (
-          <span
-            className="library-jellyfin-path-mapping-status"
-            role="status"
-            aria-label={t("jellyfin.autoSave.saved")}
-            title={t("jellyfin.autoSave.saved")}
-          >
-            <Check aria-hidden="true" />
-          </span>
-        ) : null}
       </div>
-      {error ? <div className="alert jellyfin-inline-error" role="alert">{error}</div> : null}
     </div>
   );
 }
@@ -175,6 +161,10 @@ export function JellyfinLibraryPathMappings({
   focused?: boolean;
 }) {
   const { t } = useTranslation();
+  const notifications = useOptionalNotifications();
+  const generation = identityGeneration();
+  const source = { area: "connectors" as const, href: "/settings?section=jellyfin", label: t("connectors.title") };
+  const autosave = useAutosaveNotifications({ scopeKey: `jellyfin-mapping:${jellyfinLibrary.id}`, topicKey: `jellyfin-mapping:${jellyfinLibrary.id}`, source, successMessage: t("notifications.actions.connectors.pathSaved", { defaultValue: "Path mapping saved." }), errorMessage: t("notifications.actions.connectors.pathFailed", { defaultValue: "Could not save the path mapping." }), partialMessage: t("notifications.actions.connectors.partial", { defaultValue: "Some changes were saved; others failed." }) });
   const [togglePending, setTogglePending] = useState(false);
   const [toggleError, setToggleError] = useState<string | null>(null);
   const switchRef = useRef<HTMLInputElement | null>(null);
@@ -217,11 +207,11 @@ export function JellyfinLibraryPathMappings({
         }];
       });
       if (batch.length) {
-        const updated = await api.updateJellyfinPathMappingsBatch(batch);
-        await onBatchChanged(updated);
+        const updated = await autosave.trackSave(api.updateJellyfinPathMappingsBatch(batch));
+        try { await onBatchChanged(updated); } catch { if (generation === identityGeneration()) notifications?.notify({ type: "warning", message: t("notifications.actions.connectors.refreshFailed", { defaultValue: "The change was saved, but the view could not be refreshed." }), topicKey: `jellyfin-mapping:${jellyfinLibrary.id}`, source }); }
       }
     } catch (reason) {
-      setToggleError((reason as Error).message);
+      if ((reason as Error).message === t("libraries.sections.jellyfin.pathMappingTargetRequired")) setToggleError(t("libraries.sections.jellyfin.pathMappingTargetRequired"));
     } finally {
       setTogglePending(false);
     }

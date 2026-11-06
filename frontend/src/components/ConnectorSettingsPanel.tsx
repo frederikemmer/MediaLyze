@@ -1,6 +1,8 @@
 import { useLocation } from "react-router";
-import { useNotifications, type NotificationType } from "../lib/notifications";
+import { useNotifications, useOptionalNotifications, type NotificationType } from "../lib/notifications";
 import { useAuth, type Identity } from "../lib/auth";
+import { identityGeneration } from "../lib/access-session";
+import { useAutosaveNotifications } from "../lib/notification-actions";
 import { trackExplicitJobStart } from "../lib/notification-job-tracking";
 import {
   Check,
@@ -81,9 +83,21 @@ function providerLabel(provider: string) {
   return provider ? `${provider[0].toUpperCase()}${provider.slice(1)}` : provider;
 }
 
+function useConnectorFeedback(connection?: ConnectorConnection) {
+  const { t } = useTranslation();
+  const notifications = useOptionalNotifications();
+  const generation = identityGeneration();
+  const source = { area: "connectors" as const, href: connection ? `/settings?section=jellyfin#connector-${connection.id}` : "/settings?section=jellyfin", label: connection ? t("notifications.connector.open", { name: connection.name }) : t("connectors.title") };
+  const message = (key: string, fallback: string) => t(`notifications.actions.connectors.${key}`, { defaultValue: fallback });
+  const emit = (type: NotificationType, key: string, fallback: string) => generation === identityGeneration() && notifications?.notify({ type, message: message(key, fallback), topicKey: connection ? `connector:${connection.id}` : "connectors", source });
+  return { source, message, emit };
+}
+
 function ConnectionUsers({ connection }: { connection: ConnectorConnection }) {
   const { t } = useTranslation();
+  const feedback = useConnectorFeedback(connection);
   const [expanded, setExpanded] = useState(false);
+  const autosave = useAutosaveNotifications({ scopeKey: `connector-users:${connection.id}:${expanded}`, topicKey: `connector:${connection.id}`, source: feedback.source, successMessage: feedback.message("usersSaved", "Analyzed users saved."), errorMessage: feedback.message("usersFailed", "Could not save analyzed users."), partialMessage: feedback.message("partial", "Some changes were saved; others failed.") });
   const [users, setUsers] = useState<ConnectorUser[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
@@ -112,9 +126,9 @@ function ConnectionUsers({ connection }: { connection: ConnectorConnection }) {
     setPending(true);
     setError(null);
     try {
-      setUsers(await api.updateConnectorUsers(connection.id, enabledIds));
-    } catch (reason) {
-      setError((reason as Error).message);
+      setUsers(await autosave.trackSave(api.updateConnectorUsers(connection.id, enabledIds)));
+    } catch {
+      // The autosave helper reports a safe error.
     } finally {
       setPending(false);
     }
@@ -232,6 +246,8 @@ function ConnectionMappings({
   onChanged: () => Promise<void>;
 }) {
   const { t } = useTranslation();
+  const feedback = useConnectorFeedback(connection);
+  const autosave = useAutosaveNotifications({ scopeKey: `connector-modes:${connection.id}`, topicKey: `connector:${connection.id}`, source: feedback.source, successMessage: feedback.message("modesSaved", "Mapping modes saved."), errorMessage: feedback.message("modesFailed", "Could not save the mapping mode."), partialMessage: feedback.message("partial", "Some changes were saved; others failed.") });
   const [expanded, setExpanded] = useState<Record<MappingSection, boolean>>({ libraries: false, paths: false });
   const [overview, setOverview] = useState<ConnectorMappingOverview | null>(null);
   const [libraries, setLibraries] = useState<LibrarySummary[]>([]);
@@ -242,7 +258,7 @@ function ConnectionMappings({
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (refresh = false) => {
     setLoading(true);
     setError(null);
     try {
@@ -269,6 +285,7 @@ function ConnectionMappings({
         path: library.recommendation!.accessible_paths[0] ?? "",
       }])));
     } catch (reason) {
+      if (refresh) throw reason;
       setError((reason as Error).message);
     } finally {
       setLoading(false);
@@ -279,69 +296,47 @@ function ConnectionMappings({
     if ((expanded.libraries || expanded.paths) && !overview && !loading) void load();
   }, [expanded, load, loading, overview]);
 
-  async function changeMode(kind: MappingSection, mode: "automatic" | "manual") {
-    setPending(`mode-${kind}`);
-    setError(null);
+  async function refreshAfterMutation(includeConnection = false) {
     try {
-      await api.updateConnector(connection.id, kind === "paths" ? { path_mapping_mode: mode } : { library_mapping_mode: mode });
-      await onChanged();
-      await load();
-    } catch (reason) {
-      setError((reason as Error).message);
-    } finally {
-      setPending(null);
+      if (includeConnection) await onChanged();
+      await load(true);
+    } catch {
+      feedback.emit("warning", "refreshFailed", "The change was saved, but the view could not be refreshed.");
     }
   }
 
-  async function saveBindings() {
-    setPending("bindings");
-    setError(null);
+  async function changeMode(kind: MappingSection, mode: "automatic" | "manual") {
+    setPending(`mode-${kind}`);
     try {
-      await api.updateConnectorBindings(connection.id, bindingDraft);
-      await load();
-    } catch (reason) {
-      setError((reason as Error).message);
-    } finally {
-      setPending(null);
-    }
+      await autosave.trackSave(api.updateConnector(connection.id, kind === "paths" ? { path_mapping_mode: mode } : { library_mapping_mode: mode }));
+      await refreshAfterMutation(true);
+    } catch { /* Autosave reports the failure. */ }
+    finally { setPending(null); }
+  }
+
+  async function performMapping(action: string, mutation: () => Promise<unknown>) {
+    setPending(action);
+    try {
+      try { await mutation(); }
+      catch { feedback.emit("error", `${action}Failed`, action === "library" ? "Could not create the library." : action === "links" ? "Could not save library assignments." : "Could not save path mappings."); return; }
+      feedback.emit("success", `${action}Saved`, action === "library" ? "Library created." : action === "links" ? "Library assignments saved." : "Path mappings saved.");
+      await refreshAfterMutation();
+    } finally { setPending(null); }
+  }
+
+  async function saveBindings() {
+    await performMapping("bindings", () => api.updateConnectorBindings(connection.id, bindingDraft));
   }
 
   async function saveLinks() {
     if (!overview) return;
-    setPending("links");
-    setError(null);
-    try {
-      await api.updateConnectorLibraryLinks(connection.id, overview.libraries.map((library) => ({
-        connector_library_id: library.id,
-        library_ids: linkDraft[library.id] ?? [],
-      })));
-      await load();
-    } catch (reason) {
-      setError((reason as Error).message);
-    } finally {
-      setPending(null);
-    }
+    await performMapping("links", () => api.updateConnectorLibraryLinks(connection.id, overview.libraries.map((library) => ({ connector_library_id: library.id, library_ids: linkDraft[library.id] ?? [] }))));
   }
 
   async function createLibrary(connectorLibraryId: number) {
     const draft = createDraft[connectorLibraryId];
     if (!draft?.name.trim() || !draft.path.trim()) return;
-    setPending(`create-${connectorLibraryId}`);
-    setError(null);
-    try {
-      await api.createLibraryForConnector(connection.id, connectorLibraryId, {
-        name: draft.name.trim(),
-        path: draft.path.trim(),
-        paths: [draft.path.trim()],
-        type: draft.type as LibrarySummary["type"],
-        scan_mode: "manual",
-      });
-      await load();
-    } catch (reason) {
-      setError((reason as Error).message);
-    } finally {
-      setPending(null);
-    }
+    await performMapping("library", () => api.createLibraryForConnector(connection.id, connectorLibraryId, { name: draft.name.trim(), path: draft.path.trim(), paths: [draft.path.trim()], type: draft.type as LibrarySummary["type"], scan_mode: "manual" }));
   }
 
   const allLocations = overview?.libraries.flatMap((library) => library.locations.map((location) => ({ ...location, libraryName: library.name }))) ?? [];
@@ -680,22 +675,21 @@ function SetConnectorSecretDialog({
   onSaved: () => Promise<void>;
 }) {
   const { t } = useTranslation();
+  const feedback = useConnectorFeedback(connection);
   const [secret, setSecret] = useState("");
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const titleId = `connector-${connection.id}-secret-dialog-title`;
 
   async function saveSecret() {
     const normalizedSecret = secret.trim();
     if (!normalizedSecret) return;
     setPending(true);
-    setError(null);
     try {
-      await api.updateConnector(connection.id, { secret: normalizedSecret });
-      await onSaved();
+      try { await api.updateConnector(connection.id, { secret: normalizedSecret }); }
+      catch { feedback.emit("error", "secretFailed", "Could not save the connector secret."); return; }
+      feedback.emit("success", "secretSaved", "Connector secret saved.");
+      try { await onSaved(); } catch { feedback.emit("warning", "refreshFailed", "The change was saved, but the view could not be refreshed."); }
       onClose();
-    } catch (reason) {
-      setError((reason as Error).message);
     } finally {
       setPending(false);
     }
@@ -722,7 +716,6 @@ function SetConnectorSecretDialog({
           <span>{t("connectors.secret")}</span>
           <input className="settings-choice-input" type="password" autoComplete="new-password" autoFocus value={secret} onChange={(event) => setSecret(event.target.value)} />
         </label>
-        {error ? <div className="alert" role="alert">{error}</div> : null}
         <div className="jellyfin-actions">
           <button type="button" disabled={!secret.trim() || pending} onClick={() => void saveSecret()}>{pending ? <RefreshCw className="is-spinning" aria-hidden="true" /> : <KeyRound aria-hidden="true" />}{t("connectors.secretDialog.save")}</button>
           <button type="button" className="secondary" disabled={pending} onClick={onClose}>{t("common.cancel")}</button>
@@ -737,30 +730,31 @@ function AddConnectorDialog({
   onCreated,
 }: {
   onClose: () => void;
-  onCreated: (connection: ConnectorConnection) => void;
+  onCreated: (connection: ConnectorConnection) => Promise<void>;
 }) {
   const { t } = useTranslation();
+  const feedback = useConnectorFeedback();
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [secret, setSecret] = useState("");
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const valid = Boolean(name.trim() && baseUrl.trim() && secret.trim());
 
   async function create() {
     setPending(true);
-    setError(null);
     try {
-      onCreated(await api.createConnector({
+      const created = await api.createConnector({
         provider: "jellyfin",
         name: name.trim(),
         base_url: baseUrl.trim(),
         secret: secret.trim(),
         sync_interval_minutes: 60,
         enabled: false,
-      }));
-    } catch (reason) {
-      setError((reason as Error).message);
+      });
+      feedback.emit("success", "connectionCreated", "Connector created.");
+      try { await onCreated(created); } catch { feedback.emit("warning", "refreshFailed", "The change was saved, but the view could not be refreshed."); }
+    } catch {
+      feedback.emit("error", "connectionFailed", "Could not create the connector.");
       setPending(false);
     }
   }
@@ -784,7 +778,6 @@ function AddConnectorDialog({
           <label><span>{t("connectors.serverUrl")}</span><input className="settings-choice-input" type="url" placeholder="http://jellyfin:8096" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} /></label>
           <label><span>{t("connectors.secret")}</span><input className="settings-choice-input" type="password" autoComplete="new-password" value={secret} onChange={(event) => setSecret(event.target.value)} /></label>
         </div>
-        {error ? <div className="alert" role="alert">{error}</div> : null}
         <div className="jellyfin-actions"><button type="button" disabled={!valid || pending} onClick={() => void create()}>{pending ? <RefreshCw className="is-spinning" aria-hidden="true" /> : <Plus aria-hidden="true" />}{t("connectors.create")}</button><button type="button" className="secondary" disabled={pending} onClick={onClose}>{t("common.cancel")}</button></div>
       </section>
     </div>
@@ -873,7 +866,7 @@ export function ConnectorSettingsPanel({ onCatalogChanged }: { onCatalogChanged?
           ))}
         </div>
       </AsyncPanel>
-      {addOpen ? <AddConnectorDialog onClose={() => setAddOpen(false)} onCreated={(connection) => { setAddOpen(false); setExpanded((current) => ({ ...current, [connection.id]: true })); void load(); }} /> : null}
+      {addOpen ? <AddConnectorDialog onClose={() => setAddOpen(false)} onCreated={async (connection) => { setAddOpen(false); setExpanded((current) => ({ ...current, [connection.id]: true })); await load(); }} /> : null}
     </>
   );
 }

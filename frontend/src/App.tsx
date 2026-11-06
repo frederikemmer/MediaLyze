@@ -2,6 +2,7 @@ import { AuthProvider, useAuth, hasLibraryPermission } from "./lib/auth";
 import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router";
 
+import { PreferenceAutosaveFeedback } from "./components/PreferenceAutosaveFeedback";
 import { AppShell } from "./components/AppShell";
 import { AppDataProvider } from "./lib/app-data";
 import { APP_VERSION } from "./lib/app-version";
@@ -42,6 +43,7 @@ export function App() {
       <ScanJobsProvider>
         <AppDataProvider>
           <NotificationProvider>
+            <PreferenceAutosaveFeedback />
           <Suspense fallback={<div className="empty-state" aria-busy="true" />}>
             <Routes>
               <Route element={<AppShell />}>

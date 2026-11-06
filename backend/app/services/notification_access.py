@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from backend.app.models.entities import (
     ConnectorConnection,
     Library,
+    MediaFile,
     NotificationHistoryEntry,
     TranscodeJob,
 )
@@ -29,6 +30,8 @@ def notification_source_allowed(db: Session, principal: Principal, source: dict)
     if not isinstance(href, str):
         return False
     target = urlsplit(href)
+    if target.scheme or target.netloc or not href.startswith("/") or href.startswith("//"):
+        return False
     query = parse_qs(target.query)
 
     if area == "connectors":
@@ -40,15 +43,45 @@ def notification_source_allowed(db: Session, principal: Principal, source: dict)
         return True
 
     if area == "settings":
-        personal_notification_settings = (
-            target.path == "/settings"
-            and query.get("section") == ["application"]
-            and target.fragment == "notification-settings"
-        )
-        return personal_notification_settings or principal.has("settings.app.view")
+        if target.path != "/settings":
+            return False
+        section = (query.get("section") or ["libraries"])[0]
+        if section in {"application", "logs"}:
+            # Both pages contain personal settings/history available without global rights.
+            return True
+        if section == "accounts":
+            return (
+                query.get("account") == ["me"]
+                or principal.has("access.users")
+                or principal.has("access.guest")
+            )
+        rights = {
+            "quality-profiles": "settings.quality.view",
+            "compatibility-profiles": "settings.hardware.view",
+            "transcoding-presets": "settings.presets.view",
+            "transcoding": "settings.app.view",
+            "pattern-recognition": "settings.app.view",
+            "history-retention": "settings.app.view",
+            "telemetry": "settings.app.view",
+            "jellyfin": "connector.view",
+        }
+        if section in rights:
+            return principal.has(rights[section])
+        if section == "libraries":
+            return principal.owner or principal.can_create() or any(
+                principal.has("library.read", library_id)
+                for library_id in db.scalars(select(Library.id))
+            )
+        return False
 
     if area == "library":
+        overview = {"/": "overview.dashboard", "/storage-map": "overview.storage", "/files/compare": "overview.compare"}
+        if target.path in overview:
+            return principal.has(overview[target.path])
         parts = target.path.strip("/").split("/")
+        if len(parts) >= 2 and parts[0] == "files":
+            file = db.get(MediaFile, _positive_int(parts[1])) if _positive_int(parts[1]) else None
+            return bool(file and principal.has("library.read", file.library_id))
         library_id = _positive_int(parts[1] if len(parts) > 1 and parts[0] == "libraries" else None)
         library_id = library_id or _positive_int((query.get("library_id") or [None])[0])
         if library_id is None:
@@ -59,9 +92,22 @@ def notification_source_allowed(db: Session, principal: Principal, source: dict)
         )
 
     if area == "transcoding":
+        if target.path == "/settings":
+            return notification_source_allowed(db, principal, {**source, "area": "settings"})
+        parts = target.path.strip("/").split("/")
+        if len(parts) >= 2 and parts[0] == "files":
+            file = db.get(MediaFile, _positive_int(parts[1])) if _positive_int(parts[1]) else None
+            return bool(file and principal.has("library.read", file.library_id)
+                        and principal.has("transcode.view", file.library_id))
+        if target.path != "/transcoding":
+            return False
         job_id = _positive_int((query.get("job") or query.get("job_id") or [None])[0])
         if job_id is None:
-            return principal.owner
+            return principal.owner or any(
+                principal.has("library.read", library_id)
+                and principal.has("transcode.view", library_id)
+                for library_id in db.scalars(select(Library.id))
+            )
         job = db.get(TranscodeJob, job_id)
         return bool(
             job

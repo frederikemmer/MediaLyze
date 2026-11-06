@@ -1,3 +1,5 @@
+const notificationSpy = vi.hoisted(() => vi.fn());
+vi.mock("../lib/notifications", () => ({ useNotifications: () => ({ notify: notificationSpy }), useOptionalNotifications: () => ({ notify: notificationSpy }) }));
 import "../i18n";
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -242,6 +244,16 @@ const savedPreset: TranscodePresetPlan = {
 };
 
 describe("TranscodingPanel", () => {
+  it("reports explicit validation request failures without exposing technical errors", async () => {
+    notificationSpy.mockClear();
+    vi.mocked(api.validateFileTranscode).mockRejectedValue(new Error("private ffmpeg detail"));
+    renderTranscodingPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "Validate plan" }));
+    await waitFor(() => expect(notificationSpy).toHaveBeenCalledWith(expect.objectContaining({ type: "error", message: "Could not validate the transcode plan." })));
+    expect(JSON.stringify(notificationSpy.mock.calls)).not.toContain("private ffmpeg detail");
+    expect(screen.getByText("private ffmpeg detail")).toBeInTheDocument();
+  });
+
   it("sets one metadata language format for all stream types and resets it for an incompatible container", async () => {
     vi.mocked(api.validateFileTranscode).mockImplementation(async (_id, plan) => ({ ...validation, normalized_plan: plan }));
     renderTranscodingPanel();

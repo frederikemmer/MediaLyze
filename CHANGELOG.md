@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+- Extend safe notifications across account, library, connector, profile, transcoding, export and clipboard actions; report autosave errors immediately and confirm persisted changes once on departure, including account/Desktop preference updates. Hide Quick scan without the required library rights.
+
 - Keep history reconstruction in Logs settings and remove its duplicate control and status timestamp from library details.
 
 ## v0.20.0

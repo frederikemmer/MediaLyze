@@ -1,9 +1,11 @@
+import { useAutosaveNotifications } from "../lib/notification-actions";
 import { validNewPassword } from "../lib/password-policy";
 import { Fragment, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronRight, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { accessRequest } from "../lib/access-session";
+import { accessRequest, identityGeneration } from "../lib/access-session";
+import { useNotifications, type NotificationType } from "../lib/notifications";
 import {
   emptyPolicy,
   useAuth,
@@ -593,8 +595,16 @@ export function RightsTree({
 }
 
 export function PersonalAccountPanel({ onProfileSaved }: { onProfileSaved?: (username: string) => void } = {}) {
-  const { identity, refresh } = useAuth();
+  const { identity, refresh, refreshAfterCredentialChange } = useAuth();
+  const { notify } = useNotifications();
   const { t } = useTranslation();
+  const { trackSave } = useAutosaveNotifications({
+    scopeKey: "settings:accounts", topicKey: "accounts:personal",
+    source: { area: "settings", href: "/settings?section=accounts&account=me", label: t("access.myAccount") },
+    successMessage: t("notifications.actions.common.saved"),
+    errorMessage: t("notifications.actions.accounts.personalFailed"),
+    partialMessage: t("notifications.actions.common.partial"),
+  });
   const [username, setUsername] = useState(identity?.username ?? "");
   const [email, setEmail] = useState(identity?.email ?? "");
   const [saved, setSaved] = useState({ username: identity?.username ?? "", email: identity?.email ?? "" });
@@ -620,14 +630,19 @@ export function PersonalAccountPanel({ onProfileSaved }: { onProfileSaved?: (use
     if (email !== saved.email) changes.email = email;
     if (!Object.keys(changes).length) return;
     setProfileSaving(true);
-    void accessRequest<{ username: string; email: string | null }>("/me/account", {
+    const generation = identityGeneration();
+    void trackSave(accessRequest<{ username: string; email: string | null }>("/me/account", {
       method: "PATCH", body: JSON.stringify(changes),
-    }).then(async (result) => {
+    })).then(async (result) => {
+      if (generation !== identityGeneration()) return;
       setSaved({ username: result.username, email: result.email ?? "" });
       onProfileSaved?.(result.username);
       setProfileError("");
-      await refresh();
-    }).catch(() => setProfileError(t("access.saveError")))
+      try { await refresh(); }
+      catch {
+        if (generation === identityGeneration()) notify({ type: "warning", message: t("notifications.actions.accounts.refreshFailed"), topicKey: "accounts:personal", source: { area: "settings", href: "/settings?section=accounts&account=me", label: t("access.myAccount") } });
+      }
+    }).catch(() => { if (generation === identityGeneration()) setProfileError(t("access.saveError")); })
       .finally(() => setProfileSaving(false));
   };
   useEffect(() => {
@@ -665,9 +680,18 @@ export function PersonalAccountPanel({ onProfileSaved }: { onProfileSaved?: (use
             e.preventDefault();
             if (!validNewPassword(next)) { setMessage(t("access.passwordRequirements")); return; }
             setPending(true); setMessage("");
+            const generation = identityGeneration();
             void accessRequest("/auth/password", { method: "POST", body: JSON.stringify({ current_password: current, password: next }) })
-              .then(async () => { setCurrent(""); setNext(""); setDialogOpen(false); await refresh(); })
-              .catch(() => setMessage(t("access.passwordChangeError"))).finally(() => setPending(false));
+              .then(async () => {
+                setCurrent(""); setNext(""); setDialogOpen(false);
+                try { await (refreshAfterCredentialChange ?? refresh)(); }
+                catch {
+                  if (generation === identityGeneration()) notify({ type: "warning", message: t("notifications.actions.accounts.refreshFailed"), topicKey: "accounts:personal", source: { area: "settings", href: "/settings?section=accounts&account=me", label: t("access.myAccount") } });
+                }
+              })
+              .catch(() => {
+                if (generation === identityGeneration()) notify({ type: "error", message: t("notifications.actions.accounts.personalFailed"), topicKey: "accounts:personal", source: { area: "settings", href: "/settings?section=accounts&account=me", label: t("access.myAccount") } });
+              }).finally(() => setPending(false));
           }}>
             {passwordEnvConfigured && <p className="field-hint">{t("access.ownerPasswordEnvironmentWarning")}</p>}
             <label>{t("access.currentPassword")}<PasswordField autoFocus autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required /></label>
@@ -711,6 +735,14 @@ export function AccountsPanel({
 }) {
   const auth = useAuth();
   const { t } = useTranslation();
+  const { notify } = useNotifications();
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  function feedback(type: NotificationType, key: string, fallback: string, generation: number) {
+    if (!alive.current || identityGeneration() !== generation) return;
+    notify({ type, preview: Boolean(fixture), message: t(`notifications.actions.accounts.${key}`, { defaultValue: fallback }),
+      topicKey: `accounts:${selected ?? "overview"}`, source: { area: "settings", href: "/settings?section=accounts", label: t("access.title") } });
+  }
   const actor = fixture?.actor ?? auth.identity;
   const [accounts, setAccounts] = useState<ManagedAccount[]>(
     fixture?.accounts ?? [],
@@ -864,6 +896,8 @@ export function AccountsPanel({
       setPasswordValidationAttempt((attempt) => attempt + 1);
       return;
     }
+    const generation = identityGeneration();
+    const action = selected === "new" ? "created" : selected === "guest" ? "guestSaved" : "saved";
     setPending(true);
     setError(null);
     try {
@@ -898,8 +932,9 @@ export function AccountsPanel({
         setSelected(saved.id);
       }
       setSecret("");
+      feedback("success", action, action === "created" ? "Account created." : action === "guestSaved" ? "Guest access saved." : "Account changes saved.", generation);
     } catch {
-      setError(t("access.saveError"));
+      feedback("error", "saveFailed", "Could not save account changes.", generation);
     } finally {
       setPending(false);
     }
@@ -907,14 +942,16 @@ export function AccountsPanel({
   async function removeAccount() {
     if (!target || target.owner || locked || pending) return;
     if (!fixture && !window.confirm(t("access.confirmDelete", { name }))) return;
+    const generation = identityGeneration();
     setPending(true);
     setError(null);
     try {
       if (!fixture) await accessRequest(`/users/${target.id}`, { method: "DELETE" });
       setAccounts((current) => current.filter((account) => account.id !== target.id));
       setSelected(null);
+      feedback("success", "deleted", "Account deleted.", generation);
     } catch {
-      setError(t("access.saveError"));
+      feedback("error", "deleteFailed", "Could not delete the account.", generation);
     } finally {
       setPending(false);
     }

@@ -1,4 +1,5 @@
 import i18n from "../i18n";
+import { clearIdentityRequests } from "../lib/access-session";
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -490,7 +491,7 @@ function renderPage({
     }
   }
   return render(
-    <MemoryRouter initialEntries={[initialEntry]}>
+    <MemoryRouter initialEntries={[initialEntry === "/settings" && activePanel === "historyRetention" ? "/settings?section=history-retention" : initialEntry]}>
       <AppDataProvider>
         <NotificationProvider>
           <ScanJobsProvider>
@@ -2229,6 +2230,30 @@ describe("LibrariesPage desktop mode", () => {
     );
   });
 
+  it("flushes a debounced library setting when leaving the page", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
+    const updateSpy = vi.spyOn(api, "updateLibrarySettings").mockResolvedValue(createLibrarySummary({ duplicate_detection_mode: "both" }));
+    const view = renderPage({ activePanel: "configuredLibraries" });
+    await screen.findByRole("link", { name: "Movies" });
+    await expandLibrarySettings();
+    fireEvent.change(screen.getByLabelText("Duplicate detection"), { target: { value: "both" } });
+    expect(updateSpy).not.toHaveBeenCalled();
+    view.unmount();
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledWith(1, expect.objectContaining({ duplicate_detection_mode: "both" })));
+  });
+
+  it("discards an old identity's debounced library draft on teardown", async () => {
+    vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
+    const update = vi.spyOn(api, "updateLibrarySettings").mockResolvedValue(createLibrarySummary());
+    const view = renderPage({ activePanel: "configuredLibraries" });
+    await screen.findByRole("link", { name: "Movies" });
+    await expandLibrarySettings();
+    fireEvent.change(screen.getByLabelText("Duplicate detection"), { target: { value: "both" } });
+    clearIdentityRequests(); view.unmount();
+    await act(async () => {});
+    expect(update).not.toHaveBeenCalled();
+  });
+
   it("shows the duplicate detection hint in a tooltip instead of inline text", async () => {
     vi.spyOn(api, "libraries").mockResolvedValue([createLibrarySummary()]);
 
@@ -2919,8 +2944,9 @@ describe("LibrariesPage settings panels", () => {
     fireEvent.change(screen.getByLabelText("Type Movies to confirm."), { target: { value: "Movies" } });
     fireEvent.click(screen.getByRole("button", { name: "Delete library" }));
 
-    expect(await screen.findByText("Database is busy")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Movies" })).toBeInTheDocument();
+    expect(await screen.findByText("Could not delete the library.")).toBeInTheDocument();
+    expect(screen.queryByText("Database is busy")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Movies" }).some((link) => link.classList.contains("file-link"))).toBe(true);
     expect(screen.queryByText("Deleting library…")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete library Movies" })).toBeEnabled();
   });

@@ -1,4 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { useAutosaveNotifications } from "../lib/notification-actions";
+import { useNotifications } from "../lib/notifications";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, Plus, Save, Search, SquarePen, Star, Trash2 } from "lucide-react";
 
@@ -114,6 +116,16 @@ function visibleTemplate(preset: TranscodeFormattingPreset): string {
 
 export function TranscodeFormattingPresetsPanel({ kind, tabs }: { kind: FormattingKind; tabs: ReactNode }) {
   const { t } = useTranslation();
+  const notifications = useNotifications();
+  const { trackSave } = useAutosaveNotifications({
+    scopeKey: "settings:transcoding-presets", topicKey: "transcode:formatting", source: { area: "transcoding", href: "/settings?section=transcoding-presets", label: t("notifications.actions.transcoding.openPresets", { defaultValue: "Open formatting presets" }) },
+    successMessage: t("notifications.actions.transcoding.presetsAutosaved", { defaultValue: "Transcoding preset settings saved." }),
+    errorMessage: t("notifications.actions.transcoding.presetsAutosaveFailed", { defaultValue: "Could not save transcoding preset settings." }),
+    partialMessage: t("notifications.actions.transcoding.presetsPartiallySaved", { defaultValue: "Some transcoding preset settings could not be saved." }),
+  });
+  function feedback(type: "success" | "error", key: string, fallback: string) {
+    notifications.notify({ type, message: t(`notifications.actions.transcoding.${key}`, { defaultValue: fallback }), topicKey: `transcode:formatting:${kind}`, source: { area: "transcoding", href: `/settings?section=transcoding-presets&settingsFocus=transcoding-presets-tab-${kind}`, label: t("notifications.actions.transcoding.openFormatting", { defaultValue: "Open formatting presets" }) } });
+  }
   const metadataMenuId = `formatting-metadata-${useId()}`;
   const templateInputId = `formatting-template-${kind}-${useId()}`;
   const templateInputRef = useRef<HTMLDivElement>(null);
@@ -232,8 +244,9 @@ export function TranscodeFormattingPresetsPanel({ kind, tabs }: { kind: Formatti
       setDraftId(undefined);
       setError(null);
       setMetadataMenuOpen(false);
-    } catch (reason) {
-      setError((reason as Error).message);
+      feedback("success", "formatSaved", "Formatting preset saved.");
+    } catch {
+      feedback("error", "formatSaveFailed", "Could not save the formatting preset.");
     } finally {
       setBusy(false);
     }
@@ -242,11 +255,11 @@ export function TranscodeFormattingPresetsPanel({ kind, tabs }: { kind: Formatti
   async function setDefault(preset: TranscodeFormattingPreset) {
     setBusy(true);
     try {
-      const saved = await api.updateTranscodeFormattingPreset(preset.id, { is_default: !preset.is_default });
+      const saved = await trackSave(api.updateTranscodeFormattingPreset(preset.id, { is_default: !preset.is_default }));
       setPresets((current) => current.map((item) => ({ ...item, is_default: item.id === saved.id ? saved.is_default : saved.is_default ? false : item.is_default })));
       setError(null);
-    } catch (reason) {
-      setError((reason as Error).message);
+    } catch {
+      // trackSave reports the failed autosave.
     } finally {
       setBusy(false);
     }
@@ -261,8 +274,9 @@ export function TranscodeFormattingPresetsPanel({ kind, tabs }: { kind: Formatti
       if (draftId === preset.id) setDraftId(undefined);
       setMetadataMenuOpen(false);
       setError(null);
-    } catch (reason) {
-      setError((reason as Error).message);
+      feedback("success", "formatDeleted", "Formatting preset deleted.");
+    } catch {
+      feedback("error", "formatDeleteFailed", "Could not delete the formatting preset.");
     } finally {
       setBusy(false);
     }

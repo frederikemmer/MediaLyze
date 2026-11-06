@@ -1,5 +1,8 @@
+import { identityGeneration } from "../lib/access-session";
 import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Ban, Clock3, Copy, Gauge, ArrowDown, ArrowUp, ChevronDown, ChevronRight, Plus, Power, RefreshCw, Save, Search, ShieldCheck, Star, Trash2, Unplug, X } from "lucide-react";
+import { useAutosaveNotifications } from "../lib/notification-actions";
+import { useNotifications } from "../lib/notifications";
 import { useTranslation } from "react-i18next";
 import { releaseVisibility } from "../lib/release-visibility";
 import { formatLanguageName, languageOptions, normalizeLanguageTag, sharedStreamLanguageCodeFormat, streamLanguageCodeFormats } from "../lib/language";
@@ -751,6 +754,18 @@ export function TranscodePresetsRulesPanel({
   searchFocus = null,
 }: TranscodePresetsRulesPanelProps) {
   const { t } = useTranslation();
+  const notifications = useNotifications();
+  const notificationIdentity = identityGeneration();
+  const { trackSave } = useAutosaveNotifications({
+    scopeKey: "settings:transcoding", topicKey: "transcode:rules", source: { area: "transcoding", href: "/settings?section=transcoding", label: t("notifications.actions.transcoding.openPresets", { defaultValue: "Open transcoding presets" }) },
+    successMessage: t("notifications.actions.transcoding.presetsAutosaved", { defaultValue: "Transcoding preset settings saved." }),
+    errorMessage: t("notifications.actions.transcoding.presetsAutosaveFailed", { defaultValue: "Could not save transcoding preset settings." }),
+    partialMessage: t("notifications.actions.transcoding.presetsPartiallySaved", { defaultValue: "Some transcoding preset settings could not be saved." }),
+  });
+  function feedback(type: "success" | "error", key: string, fallback: string, area: "presets" | "rules") {
+    if (notificationIdentity !== identityGeneration()) return;
+    notifications.notify({ type, message: t(`notifications.actions.${["replacementApproved"].includes(key) ? "integration" : "transcoding"}.${key}`, { defaultValue: fallback }), topicKey: `transcode:${area}`, source: { area: "transcoding", href: area === "rules" ? "/settings?section=transcoding" : "/settings?section=transcoding-presets&settingsFocus=transcoding-presets-tab-presets", label: t("notifications.actions.transcoding.openPresets", { defaultValue: "Open transcoding presets" }) } });
+  }
   const standaloneBodyId = useId();
   const standalonePanelTitleId = useId();
   const [presets, setPresets] = useState<TranscodePreset[]>([]);
@@ -846,8 +861,9 @@ export function TranscodePresetsRulesPanel({
       setTab("presets");
       setExpandedPresetId(saved.id);
       setError(null);
-    } catch (reason) {
-      setError((reason as Error).message);
+      feedback("success", "savePresetSuccess", "Preset saved.", "presets");
+    } catch {
+      feedback("error", "savePresetFailed", "Could not save the preset.", "presets");
     } finally {
       setBusy(false);
     }
@@ -862,8 +878,9 @@ export function TranscodePresetsRulesPanel({
       setPresetEditorOpen(true);
       setTab("presets");
       setExpandedPresetId(copy.id);
-    } catch (reason) {
-      setError((reason as Error).message);
+      feedback("success", "duplicatePresetSuccess", "Preset duplicated.", "presets");
+    } catch {
+      feedback("error", "duplicatePresetFailed", "Could not duplicate the preset.", "presets");
     } finally {
       setBusy(false);
     }
@@ -880,8 +897,9 @@ export function TranscodePresetsRulesPanel({
         setPresetEditorOpen(false);
       }
       if (expandedPresetId === preset.id) setExpandedPresetId(null);
-    } catch (reason) {
-      setError((reason as Error).message);
+      feedback("success", "removePresetSuccess", "Preset deleted.", "presets");
+    } catch {
+      feedback("error", "removePresetFailed", "Could not delete the preset.", "presets");
     } finally {
       setBusy(false);
     }
@@ -908,8 +926,9 @@ export function TranscodePresetsRulesPanel({
       setRules((current) => ruleDraft.id ? current.map((rule) => rule.id === saved.id ? saved : rule) : [...current, saved].sort((a, b) => a.priority - b.priority || a.id - b.id));
       setRuleDraft(ruleDraftFrom(saved));
       setError(null);
-    } catch (reason) {
-      setError((reason as Error).message);
+      feedback("success", "saveRuleSuccess", "Rule saved.", "rules");
+    } catch {
+      feedback("error", "saveRuleFailed", "Could not save the rule.", "rules");
     } finally {
       setBusy(false);
     }
@@ -917,11 +936,11 @@ export function TranscodePresetsRulesPanel({
 
   const toggleRule = async (rule: TranscodeRule) => {
     try {
-      const saved = await api.updateTranscodeRule(rule.id, { enabled: !rule.enabled });
+      const saved = await trackSave(api.updateTranscodeRule(rule.id, { enabled: !rule.enabled }));
       setRules((current) => current.map((entry) => entry.id === saved.id ? saved : entry));
       if (ruleDraft?.id === saved.id) setRuleDraft(ruleDraftFrom(saved));
-    } catch (reason) {
-      setError((reason as Error).message);
+    } catch {
+      // trackSave reports the failed autosave.
     }
   };
 
@@ -944,8 +963,9 @@ export function TranscodePresetsRulesPanel({
         setRuleEditorOpen(false);
       }
       if (expandedRuleId === rule.id) setExpandedRuleId(null);
-    } catch (reason) {
-      setError((reason as Error).message);
+      feedback("success", "deleteRuleSuccess", "Rule deleted.", "rules");
+    } catch {
+      feedback("error", "deleteRuleFailed", "Could not delete the rule.", "rules");
     } finally {
       setBusy(false);
     }
@@ -959,10 +979,10 @@ export function TranscodePresetsRulesPanel({
     const reordered = [...rules];
     [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
     try {
-      const saved = await api.reorderTranscodeRules(reordered.map((rule) => rule.id));
+      const saved = await trackSave(api.reorderTranscodeRules(reordered.map((rule) => rule.id)));
       setRules(saved);
-    } catch (reason) {
-      setError((reason as Error).message);
+    } catch {
+      // trackSave reports the failed autosave.
     }
   };
 
@@ -971,8 +991,9 @@ export function TranscodePresetsRulesPanel({
       const saved = await api.approveTranscodeRuleReplacement(rule.id, true);
       setRules((current) => current.map((entry) => entry.id === saved.id ? saved : entry));
       if (ruleDraft?.id === saved.id) setRuleDraft(ruleDraftFrom(saved));
-    } catch (reason) {
-      setError((reason as Error).message);
+      feedback("success", "replacementApproved", "Replacement approved.", "rules");
+    } catch {
+      feedback("error", "approveReplacementFailed", "Could not approve replacement.", "rules");
     }
   };
 

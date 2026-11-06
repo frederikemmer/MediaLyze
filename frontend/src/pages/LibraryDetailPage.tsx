@@ -1,3 +1,5 @@
+import { identityGeneration } from "../lib/access-session";
+import { useOptionalNotifications } from "../lib/notifications";
 import { preferenceStorage } from "../lib/preference-storage";
 import { useAuth } from "../lib/auth";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -1567,8 +1569,13 @@ function buildDuplicateGroupKey(mode: string, signature: string): string {
 
 export function LibraryDetailPage() {
   const { t } = useTranslation();
+  const notifications = useOptionalNotifications();
+  const notificationIdentity = identityGeneration();
   const { libraryId = "" } = useParams();
   const auth = useAuth();
+  const authRef = useRef(auth);
+  authRef.current = auth;
+  const canQuickScan = !auth.identity || auth.identity.owner || (auth.has("library.read", Number(libraryId)) && auth.has("library.scan", Number(libraryId)));
   const canEditDuplicates = !auth.identity || auth.has("library.edit", Number(libraryId));
   const navigate = useNavigate();
   const { appSettings, libraries } = useAppData();
@@ -1666,7 +1673,6 @@ export function LibraryDetailPage() {
   const [appliedSearchFilters, setAppliedSearchFilters] = useState<LibraryFileSearchFilters>(
     () => initialTableStateRef.current!.appliedSearchFilters,
   );
-  const [exportError, setExportError] = useState<string | null>(null);
   const [isDuplicatesPanelCollapsed, setIsDuplicatesPanelCollapsed] = useState(() =>
     readDuplicatePanelCollapsedPreference(libraryId),
   );
@@ -1685,7 +1691,6 @@ export function LibraryDetailPage() {
   const activeJob = activeJobs.find((job) => String(job.library_id) === libraryId) ?? null;
   const quickScanIconRef = useRef<AnimatedSearchIconHandle>(null);
   const [isQuickScanStarting, setIsQuickScanStarting] = useState(false);
-  const [quickScanError, setQuickScanError] = useState<string | null>(null);
   const hadActiveJobRef = useRef(Boolean(activeJob));
   const fallbackSummary = findLibrarySummary(libraries, libraryId);
   const displayLibrary = librarySummary ?? fallbackSummary;
@@ -1745,33 +1750,35 @@ export function LibraryDetailPage() {
   });
 
   async function startQuickScan() {
-    if (!displayLibrary || activeJob || isQuickScanStarting) {
+    const currentAuth = authRef.current;
+    if (!displayLibrary || activeJob || isQuickScanStarting || (currentAuth.identity && !currentAuth.identity.owner && !(currentAuth.has("library.read", displayLibrary.id) && currentAuth.has("library.scan", displayLibrary.id)))) {
       return;
     }
 
     setIsQuickScanStarting(true);
-    setQuickScanError(null);
+    const attemptSync = Boolean(linkedJellyfinLibrary) && (!currentAuth.identity || currentAuth.identity.owner || (currentAuth.has("connector.view") && currentAuth.has("connector.manage")));
+    const generation = identityGeneration();
+    const source = { area: "library" as const, href: `/libraries/${displayLibrary.id}`, label: displayLibrary.name };
     try {
-      const [scanResult, jellyfinResult] = await Promise.allSettled([
+      const [scanResult, syncResult] = await Promise.allSettled([
         api.scanLibrary(displayLibrary.id, "incremental"),
-        linkedJellyfinLibrary ? api.syncJellyfin() : Promise.resolve(null),
+        attemptSync ? api.syncJellyfin() : Promise.resolve(null),
       ] as const);
+      if (generation !== identityGeneration()) return;
       if (scanResult.status === "fulfilled") {
         trackJob(scanResult.value);
         trackExplicitJobStart({ kind: "scan", job: scanResult.value });
       }
-      const failures = [scanResult, jellyfinResult]
-        .filter((result): result is PromiseRejectedResult => result.status === "rejected")
-        .map((result) => result.reason instanceof Error ? result.reason.message : String(result.reason));
-      if (failures.length > 0) {
-        throw new Error(failures.join(" · "));
-      }
-    } catch (reason) {
-      setQuickScanError((reason as Error).message);
+      const scanFailed = scanResult.status === "rejected";
+      const syncFailed = syncResult.status === "rejected";
+      const key = scanFailed ? (syncFailed ? "quickScanBothFailed" : attemptSync ? "quickScanFailedSyncAccepted" : "quickScanFailed") : syncFailed ? "quickScanSyncFailed" : "quickScanAccepted";
+      const fallback = scanFailed ? (syncFailed ? "Could not request the scan or synchronization." : attemptSync ? "Synchronization requested, but the scan could not be requested." : "Could not request the scan.") : syncFailed ? "Scan requested, but synchronization could not be requested." : "Scan requested.";
+      notifications?.notify({ type: scanFailed ? "error" : syncFailed ? "warning" : "success", message: t(`notifications.actions.integration.${key}`, { defaultValue: fallback }), topicKey: `library:${displayLibrary.id}:quick-scan`, source });
     } finally {
       setIsQuickScanStarting(false);
     }
   }
+
   const tooltipEnabledColumns = useMemo(
     () =>
       new Set<FileColumnKey>(
@@ -2395,11 +2402,13 @@ export function LibraryDetailPage() {
       libraryDuplicateGroupsCache.set(buildDuplicateGroupsCacheKey(libraryId, includeSuppressedDuplicateGroups), payload);
       setDuplicateGroups(payload);
       setDuplicateGroupsError(null);
+      return true;
     } catch (reason) {
       if ((reason as Error).name === "AbortError") {
         return;
       }
       setDuplicateGroupsError((reason as Error).message);
+      return false;
     } finally {
       if (duplicateGroupsAbortRef.current === controller) {
         duplicateGroupsAbortRef.current = null;
@@ -2418,6 +2427,11 @@ export function LibraryDetailPage() {
     if (!canEditDuplicates) return;
     const pendingKey = buildDuplicateGroupKey(mode, signature);
     setDuplicateSuppressionPendingKey(pendingKey);
+    const generation = identityGeneration();
+    const notice = (type: "success" | "error" | "warning", key: string, fallback: string) => {
+      if (generation !== identityGeneration()) return;
+      notifications?.notify({ type, message: t(`notifications.actions.integration.${key}`, { defaultValue: fallback }), topicKey: `library:${libraryId}:duplicates`, source: { area: "library", href: `/libraries/${libraryId}`, label: displayLibrary?.name ?? t("settings.title", { defaultValue: "Library" }) } });
+    };
     try {
       if (suppressed) {
         await api.unsuppressDuplicateGroup(libraryId, { mode, signature });
@@ -2426,14 +2440,11 @@ export function LibraryDetailPage() {
       }
       libraryDuplicateGroupsCache.delete(buildDuplicateGroupsCacheKey(libraryId, false));
       libraryDuplicateGroupsCache.delete(buildDuplicateGroupsCacheKey(libraryId, true));
-      await loadDuplicateGroups(false);
-      setDuplicateGroupsError(null);
+      notice("success", suppressed ? "duplicateRestored" : "duplicateHidden", suppressed ? "Duplicate group restored." : "Duplicate group hidden.");
+      const refreshed = await loadDuplicateGroups(false);
+      if (refreshed === false) notice("warning", "duplicateRefreshFailed", "The group was updated, but the list could not be refreshed.");
     } catch {
-      setDuplicateGroupsError(
-        suppressed
-          ? t("libraryDetail.duplicates.restoreFailed")
-          : t("libraryDetail.duplicates.suppressFailed"),
-      );
+      notice("error", "duplicateUpdateFailed", "Could not update the duplicate group.");
     } finally {
       setDuplicateSuppressionPendingKey(null);
     }
@@ -2703,7 +2714,6 @@ export function LibraryDetailPage() {
     const controller = new AbortController();
     exportAbortRef.current = controller;
     setIsExporting(true);
-    setExportError(null);
 
     try {
       const payload = await api.downloadLibraryFilesCsv(libraryId, {
@@ -2720,11 +2730,12 @@ export function LibraryDetailPage() {
       anchor.click();
       anchor.remove();
       window.URL.revokeObjectURL(objectUrl);
+      if (notificationIdentity === identityGeneration()) notifications?.notify({ type: "info", message: t("notifications.actions.libraries.exportStarted", { defaultValue: "CSV download started." }), topicKey: `libraries:export:${libraryId}`, source: { area: "library", href: `/libraries/${libraryId}`, label: displayLibrary.name } });
     } catch (reason) {
       if ((reason as Error).name === "AbortError") {
         return;
       }
-      setExportError((reason as Error).message);
+      if (notificationIdentity === identityGeneration()) notifications?.notify({ type: "error", message: t("notifications.actions.libraries.exportFailed", { defaultValue: "Could not export the file list." }), topicKey: `libraries:export:${libraryId}`, source: { area: "library", href: `/libraries/${libraryId}`, label: displayLibrary.name } });
     } finally {
       if (exportAbortRef.current === controller) {
         exportAbortRef.current = null;
@@ -3600,7 +3611,7 @@ export function LibraryDetailPage() {
                 )
               }
             />
-            <button
+            {canQuickScan ? <button
               type="button"
               className="icon-button icon-button-borderless icon-button-animated statistic-layout-action-button library-quickscan-button"
               aria-label={activeJob ? t("libraryDetail.scanInProgress") : t("libraryDetail.quickScan")}
@@ -3618,10 +3629,9 @@ export function LibraryDetailPage() {
                 size={18}
                 aria-hidden="true"
               />
-            </button>
+            </button> : null}
           </div>
         </div>
-        {quickScanError ? <div className="alert">{t("libraryDetail.quickScanError", { message: quickScanError })}</div> : null}
         {summaryError && !displayLibrary ? <div className="notice">{summaryError}</div> : null}
         <StatisticPanelLayoutMigrationNotice scope="library" issues={statisticLayoutMigrationIssues} />
         {isSummaryLoading && !displayLibrary ? (
@@ -4278,7 +4288,6 @@ export function LibraryDetailPage() {
                     ) : (
                       <>
                         <div className="data-table-tools data-table-tools-search">
-                          {exportError ? <div className="notice">{t("libraryDetail.export.error", { message: exportError })}</div> : null}
                           {isExporting ? <div className="media-meta">{t("libraryDetail.export.exporting")}</div> : null}
                           {orderedSelectedMetadataFields.length > 0 ? (
                             <div
