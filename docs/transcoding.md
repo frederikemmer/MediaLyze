@@ -6,7 +6,7 @@ MediaLyze can create a new video variant with FFmpeg from the `Transcoding` pane
 
 ## Transcoding plans
 
-The file-detail panel starts with a copy plan that preserves the source streams and container where compatible. Users can edit the plan directly, select one of their saved presets, or choose `Custom`. MediaLyze no longer supplies bundled transcoding presets.
+The file-detail panel starts with a copy plan that preserves the source streams and container where compatible. Users can edit the plan directly, select one of their saved presets, or choose `Custom`.
 
 The normalized versioned plan stores the container; `copy`, `drop`, or `encode` for every stream (the legacy `keep` value remains accepted for old plans); target codec and quality fields; the resolved worker-specific encoder; resolution, frame rate, pixel format, profile, level, preset and GOP controls; dynamic-range handling; chapter, metadata, cover, and attachment behavior; selected sidecar subtitles; the filename template; and the effective execution/output policy. The file-detail UI asks only for the target codec. The selected worker resolves a compatible encoder and device at validation/queue time. Existing explicit encoder fields remain accepted for backwards-compatible API and saved-plan payloads. The API accepts no raw command or arbitrary FFmpeg argument field.
 
@@ -26,7 +26,7 @@ Video encode controls use constant-quality ranges and optional speed presets whi
 
 The Transcoding settings page stores reusable, versioned preset definitions in SQLite. A preset is an ordered set of stream rules for video, audio, internal subtitles, and optional external subtitle sidecars. Each rule can match codec, language, and default-track state and can copy, convert, or remove the matching stream. Internal streams that do not match a rule are copied; external sidecars are not embedded unless an external-subtitle rule explicitly selects them. Saved presets contain abstract stream criteria rather than file-specific stream indexes, subtitle IDs, or raw FFmpeg arguments. A saved preset is materialized against the current file into the same concrete `TranscodePlan` used by the file-detail workflow.
 
-The preset catalog starts empty on new installations. Users can create, edit, duplicate, and delete their own presets. Preset versions and the selected preset version are recorded on every queued job. Jobs retain a complete preset snapshot, so later edits do not change the provenance of an existing run.
+MediaLyze supplies an editable **X to HEVC** preset in the catalog. It converts video to HEVC in MKV at the original resolution and frame rate, copies existing HEVC and video from detected Dolby Vision sources, and keeps audio, internal subtitles, chapters, and metadata. External subtitles remain separate. The formatting preset catalogs include filename and folder examples including a season folder template. Formatting presets can be duplicated and can be selected as the default for their kind. Users can create, edit, duplicate, and delete their own presets. Preset versions and the selected preset version are recorded on every queued job. Jobs retain a complete preset snapshot, so later edits do not change the provenance of an existing run.
 
 The canonical management endpoint is `/api/transcoding/presets`. The former `/api/transcoding/profiles` paths and profile-named storage/plan fields remain compatibility aliases for existing clients and data.
 

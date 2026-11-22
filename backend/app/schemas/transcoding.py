@@ -234,6 +234,7 @@ class TranscodePresetDefinition(BaseModel):
     subtitle_rules: list[TranscodePresetStreamRule] = Field(default_factory=list, max_length=128)
     external_subtitle_rules: list[TranscodePresetStreamRule] = Field(default_factory=list, max_length=128)
     default_video_action: Literal["copy", "convert", "remove"] = "copy"
+    copy_dolby_vision_video: bool = False
     default_audio_action: Literal["copy", "convert", "remove"] = "copy"
     default_subtitle_action: Literal["copy", "convert", "remove"] = "copy"
     default_external_subtitle_action: Literal["copy", "convert", "remove"] = "remove"

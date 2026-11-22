@@ -11,6 +11,7 @@ from backend.app.services.transcode_formatting_presets import (
     create_formatting_preset,
     delete_formatting_preset,
     list_formatting_presets,
+    seed_standard_formatting_presets,
     update_formatting_preset,
 )
 
@@ -44,3 +45,26 @@ def test_formatting_presets_persist_per_kind_and_keep_one_default_each() -> None
             assert rows[first.id].definition.template == "[{resolution}]"
             delete_formatting_preset(reopened, second.id)
             assert second.id not in {row.id for row in list_formatting_presets(reopened)}
+
+def test_seed_standard_formatting_presets_preserves_user_choices() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        custom = create_formatting_preset(db, TranscodeFormattingPresetCreate(
+            kind="folder", name="medialyze standard", definition={"template": "[{folderName}]"},
+        ))
+        update_formatting_preset(db, custom.id, TranscodeFormattingPresetUpdate(is_default=True))
+
+        seed_standard_formatting_presets(db)
+        db.commit()
+        rows = list_formatting_presets(db)
+        assert len(rows) == 3
+        assert [row.id for row in rows if row.is_default] == [custom.id]
+        assert next(row for row in rows if row.id == custom.id).definition.template == "[{folderName}]"
+        series = next(row for row in rows if row.name.endswith("Serien"))
+        assert series.definition.template.startswith("Season {seasonNumber} ({releaseYear})")
+
+        delete_formatting_preset(db, series.id)
+        seed_standard_formatting_presets(db)
+        db.commit()
+        assert len(list_formatting_presets(db)) == 2

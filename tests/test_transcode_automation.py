@@ -273,6 +273,41 @@ def test_preset_stream_language_formats_fall_back_to_container_default(tmp_path:
         assert profile.definition["video_language_code_format"] == format
 
 
+@pytest.mark.parametrize(("codec", "hdr_type", "expected_action"), [
+    ("h264", "SDR", "encode"),
+    ("hevc", "HDR10", "copy"),
+    ("h265", "SDR", "copy"),
+    ("h264", "Dolby Vision Profile 9", "copy"),
+])
+def test_seeded_hevc_preset_materializes_video_and_preserves_other_streams(
+    tmp_path: Path, codec: str, hdr_type: str, expected_action: str,
+) -> None:
+    settings = _settings(tmp_path)
+    with _session_factory()() as db:
+        media_file = _media_file(db, tmp_path)
+        media_file.video_streams[0].codec = codec
+        media_file.video_streams[0].hdr_type = hdr_type
+        automation.seed_standard_transcode_preset(db)
+        db.commit()
+        automation.seed_standard_transcode_preset(db)
+        db.commit()
+
+        preset, = automation.list_transcode_presets(db)
+        assert preset.name == "X to HEVC"
+        plan = automation.materialize_transcode_preset(
+            db.get(TranscodePreset, preset.id), media_file, _capabilities(), get_app_settings(db, settings),
+        )
+        video, = plan.video_streams
+        assert plan.container == "mkv"
+        assert video.action.value == expected_action
+        assert video.codec == ("hevc" if expected_action == "encode" else None)
+        assert video.width is None and video.height is None and video.frame_rate is None
+        assert [audio.action.value for audio in plan.audio_streams] == ["copy"]
+        assert [subtitle.action.value for subtitle in plan.subtitle_streams] == ["copy"]
+        assert plan.external_subtitles == []
+        assert plan.chapters == plan.metadata == "keep"
+
+
 def test_profile_materialization_copies_unmatched_internal_and_external_is_opt_in(tmp_path: Path) -> None:
     factory = _session_factory()
     settings = _settings(tmp_path)

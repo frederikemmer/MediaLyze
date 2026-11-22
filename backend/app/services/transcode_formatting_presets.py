@@ -1,15 +1,49 @@
 from __future__ import annotations
 
 from sqlalchemy import func, select, update
+from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.app.models.entities import TranscodeFormattingPreset
+from backend.app.models.entities import AppSetting, TranscodeFormattingPreset
 from backend.app.schemas.transcoding import (
+    TranscodeFormattingDefinition,
     TranscodeFormattingPresetCreate,
     TranscodeFormattingPresetRead,
     TranscodeFormattingPresetUpdate,
 )
+
+
+def seed_standard_formatting_presets(db: Session) -> None:
+    existing = db.execute(
+        insert(AppSetting)
+        .values(key="standard_formatting_presets_seeded", value={})
+        .on_conflict_do_nothing(index_elements=[AppSetting.key])
+    )
+    if existing.rowcount == 0:
+        return
+
+    standards = (
+        ("filename", "MediaLyze Standard",
+         "{sourceName} ({releaseYear}) [{resolution}, {dynRange}, {codec}] [{audioLanguages}]"),
+        ("folder", "MediaLyze Standard", "{folderName} ({releaseYear})"),
+        ("folder", "MediaLyze Standard – Serien",
+         "Season {seasonNumber} ({releaseYear}) [{resolution}, {dynRange}, {codec}] [{audioLanguages}]"),
+    )
+    for kind, name, template in standards:
+        existing_name = db.scalar(select(TranscodeFormattingPreset.id).where(
+            TranscodeFormattingPreset.kind == kind,
+            func.lower(TranscodeFormattingPreset.name) == name.lower(),
+        ))
+        if existing_name is None:
+            db.add(TranscodeFormattingPreset(
+                kind=kind,
+                name=name,
+                definition=TranscodeFormattingDefinition(
+                    template=template, source_name_explicit=kind == "filename",
+                ).model_dump(mode="json"),
+                is_default=False,
+            ))
 
 
 class FormattingPresetError(ValueError):

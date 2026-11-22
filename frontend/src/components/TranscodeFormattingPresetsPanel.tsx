@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent
 import { useAutosaveNotifications } from "../lib/notification-actions";
 import { useNotifications } from "../lib/notifications";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Plus, Save, Search, SquarePen, Star, Trash2 } from "lucide-react";
+import { ChevronDown, Copy as CopyIcon, Plus, Save, Search, SquarePen, Star, Trash2 } from "lucide-react";
 
 import { api, type TranscodeFormattingDefinition, type TranscodeFormattingPreset } from "../lib/api";
 import type { FormattingKind } from "../lib/transcode-formatting-presets";
@@ -252,6 +252,32 @@ export function TranscodeFormattingPresetsPanel({ kind, tabs }: { kind: Formatti
     }
   }
 
+  async function duplicate(preset: TranscodeFormattingPreset) {
+    const existingNames = new Set(presets.map((item) => item.name.toLowerCase()));
+    const copyName = (number: number) => {
+      const suffix = number === 1 ? " copy" : ` copy ${number}`;
+      return `${preset.name.slice(0, 255 - suffix.length)}${suffix}`;
+    };
+    let number = 1;
+    while (existingNames.has(copyName(number).toLowerCase())) number++;
+    setBusy(true);
+    try {
+      const copy = await api.createTranscodeFormattingPreset({
+        kind: preset.kind,
+        name: copyName(number),
+        definition: preset.definition,
+      });
+      setPresets((current) => [...current, copy].sort((a, b) => a.name.localeCompare(b.name)));
+      setSearch("");
+      startEdit(copy);
+      feedback("success", "duplicatePresetSuccess", "Preset duplicated.");
+    } catch {
+      feedback("error", "duplicatePresetFailed", "Could not duplicate the preset.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function setDefault(preset: TranscodeFormattingPreset) {
     setBusy(true);
     try {
@@ -392,6 +418,11 @@ export function TranscodeFormattingPresetsPanel({ kind, tabs }: { kind: Formatti
         <div className="compatibility-profile-quick-actions transcode-automation-quick-actions">
           <button type="button" className={`secondary icon-only-button compatibility-profile-quick-action${preset.is_default ? " is-favorite" : ""}`} aria-label={t(preset.is_default ? "transcoding.formattingPresets.removeDefault" : "transcoding.formattingPresets.makeDefault", { name: preset.name })} aria-pressed={preset.is_default} title={t(preset.is_default ? "transcoding.formattingPresets.removeDefault" : "transcoding.formattingPresets.makeDefault", { name: preset.name })} disabled={busy} onClick={() => void setDefault(preset)}><Star size={18} fill={preset.is_default ? "currentColor" : "none"} aria-hidden="true" /></button>
           <button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label={`${t("transcoding.automation.edit")} ${preset.name}`} disabled={busy} onClick={() => startEdit(preset)}><SquarePen size={18} aria-hidden="true" /></button>
+          <button type="button" className="secondary icon-only-button compatibility-profile-quick-action"
+            aria-label={`${t("transcoding.automation.duplicate")} ${preset.name}`}
+            title={t("transcoding.automation.duplicate")} disabled={busy} onClick={() => void duplicate(preset)}>
+            <CopyIcon className="nav-icon" size={18} aria-hidden="true" />
+          </button>
           <button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label={`${t("transcoding.automation.delete")} ${preset.name}`} disabled={busy} onClick={() => void remove(preset)}><Trash2 size={18} aria-hidden="true" /></button>
         </div>
       </div>

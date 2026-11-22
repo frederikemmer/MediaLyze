@@ -8388,7 +8388,8 @@ select.settings-choice-input[multiple] {
   border-top: 1px solid rgba(31, 28, 22, 0.08);
 }
 
-.compatibility-profile-form-grid {
+.compatibility-profile-form-grid,
+.transcode-rule-output-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
@@ -18279,6 +18280,11 @@ html[data-theme="dark"] .notification-card[data-palette="contrast"][data-type="e
 .transcode-rule-test-success { color: #2f6f28; }
 html[data-theme="dark"] .transcode-rule-test-success { color: #9fd18f; }
 
+.transcode-rule-output-options {
+  align-items: center;
+}
+
 @media (max-width: 480px) {
-  .transcode-rule-editor .compatibility-profile-form-grid { grid-template-columns: 1fr; }
+  .transcode-rule-editor .compatibility-profile-form-grid,
+  .transcode-rule-output-options { grid-template-columns: 1fr; }
 }

@@ -5,11 +5,13 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from sqlalchemy import case, func, or_, select
+from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.core.config import Settings
 from backend.app.models.entities import (
+    AppSetting,
     ConnectorItem,
     ConnectorMediaMatch,
     JobStatus,
@@ -169,6 +171,37 @@ def ensure_builtin_transcode_presets(db: Session) -> None:
         dirty = True
     if dirty:
         db.flush()
+
+
+def seed_standard_transcode_preset(db: Session) -> None:
+    marker = db.execute(
+        insert(AppSetting)
+        .values(key="standard_hevc_preset_seeded", value={})
+        .on_conflict_do_nothing(index_elements=[AppSetting.key])
+    )
+    if marker.rowcount == 0:
+        return
+
+    name = "X to HEVC"
+    if db.scalar(select(TranscodePreset.id).where(func.lower(TranscodePreset.name) == name.lower())) is not None:
+        return
+
+    definition = TranscodePresetDefinition(
+        container="mkv",
+        video_rules=[
+            TranscodePresetStreamRule(match_codecs=["hevc", "h265"], action="copy"),
+            TranscodePresetStreamRule(action="convert", codec="hevc", crf=22),
+        ],
+        default_video_action="convert",
+        copy_dolby_vision_video=True,
+    )
+    db.add(TranscodePreset(
+        name=name,
+        description="Convert video to HEVC in MKV. Copy existing HEVC, Dolby Vision, audio and subtitles.",
+        version=1,
+        is_builtin=False,
+        definition=definition.model_dump(mode="json"),
+    ))
 
 
 def remove_unreferenced_builtin_transcode_presets(db: Session) -> None:
@@ -754,6 +787,10 @@ def materialize_transcode_preset(
         if definition.execution_mode == "inherit"
         else definition.execution_mode
     )
+    copy_source_video = definition.copy_dolby_vision_video and (
+        "dolby" in (media_file.primary_video_hdr_type or "").lower()
+        or any("dolby" in (stream.hdr_type or "").lower() for stream in media_file.video_streams)
+    )
     video_plans = []
     audio_plans = []
     subtitle_plans = []
@@ -766,7 +803,7 @@ def materialize_transcode_preset(
         kind = "video" if target is video_plans else "audio" if target is audio_plans else "subtitle"
         for stream in sorted(source, key=lambda item: item.stream_index):
             rule = _first_matching_stream_rule(rules, stream)
-            if rule is None:
+            if rule is None or (kind == "video" and copy_source_video and rule.action == "convert"):
                 rule = TranscodePresetStreamRule(action="copy")
             target.append(_materialize_stream(stream, rule, kind, container, capabilities, execution_mode))
     from backend.app.schemas.transcoding import ExternalSubtitlePlan, TranscodePlan

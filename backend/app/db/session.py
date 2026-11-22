@@ -1659,7 +1659,11 @@ def init_db(engine: Engine | None = None) -> None:
     from backend.app.services.duplicates import backfill_filename_pattern_signatures
     from backend.app.services.app_settings import get_app_settings
     from backend.app.services.quality_profiles import migrate_legacy_library_quality_profiles
-    from backend.app.services.transcode_automation import remove_unreferenced_builtin_transcode_presets
+    from backend.app.services.transcode_automation import (
+        remove_unreferenced_builtin_transcode_presets,
+        seed_standard_transcode_preset,
+    )
+    from backend.app.services.transcode_formatting_presets import seed_standard_formatting_presets
 
     active_engine = engine or ENGINE
     started = perf_counter()
@@ -1676,6 +1680,8 @@ def init_db(engine: Engine | None = None) -> None:
         logger.info("Database startup: %s filename signatures updated; checking profiles", updated)
         migrate_legacy_library_quality_profiles(db, app_settings.resolution_categories)
         remove_unreferenced_builtin_transcode_presets(db)
+        seed_standard_transcode_preset(db)
+        seed_standard_formatting_presets(db)
         db.commit()
     with active_engine.begin() as connection:
         connection.execute(text("PRAGMA optimize;"))

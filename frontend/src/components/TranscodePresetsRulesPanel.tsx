@@ -432,6 +432,9 @@ function PresetDefinitionEditor({
         <div className={"transcode-stream-list-row" + (languageSpecific ? " has-language-controls" : "")}>
           {languageSpecific ? (
             <div className="transcode-preset-language-controls">
+              {rule.match_codecs.length ? <span className="transcode-field-label">{[
+                ...new Set(rule.match_codecs.map((codec) => presetCodecLabels[codec === "h265" ? "hevc" : codec] ?? codec)),
+              ].join(", ")}</span> : null}
               <label className="transcode-control-field"><span className="transcode-field-label">{t("transcoding.presetLanguageRules.languages")}</span>
                 <select className="settings-choice-input transcode-control" value="" aria-label={t("transcoding.presetLanguageRules.addLanguage")} onChange={(event) => patchRule({ match_languages: [...rule.match_languages, event.target.value] })}>
                   <option value="" disabled>{t("transcoding.presetLanguageRules.addLanguage")}</option>
@@ -574,6 +577,11 @@ function PresetDefinitionEditor({
             <div className="transcode-stream-list transcode-preset-stream-list">
               {renderRuleGroup(sections.find((section) => section.key === activeStreamTab)!)}
               {activeStreamTab === "subtitle_rules" ? renderRuleGroup(sections[3]) : null}
+              {activeStreamTab === "video_rules" ? <label className="transcode-filename-option">
+                <input type="checkbox" checked={definition.copy_dolby_vision_video ?? false}
+                  onChange={(event) => onChange({ ...definition, copy_dolby_vision_video: event.target.checked })} />
+                {t("transcoding.automation.copyDolbyVisionVideo")}
+              </label> : null}
             </div>
           </div>
         </div>
@@ -1179,15 +1187,16 @@ export function TranscodePresetsRulesPanel({
               <option value="same_directory">{t("transcoding.sameDirectory")}</option>
               <option value="replace_original" disabled={Boolean(identity) && !ruleDraft.library_ids.every(id => has("transcode.replace", id))}>{t("transcoding.replaceOriginal")}</option>
             </SettingsInlineLabelSelect>
+          </div>
+          <div className="transcode-rule-output-options">
             {ruleDraft.output_mode === "transcode_output" && <RuleInput label={t("transcoding.automation.outputSubfolder")}
               value={ruleDraft.output_subfolder} maxLength={512} onChange={event => setRuleDraft({ ...ruleDraft, output_subfolder: event.target.value })} />}
+            <label className="transcode-filename-option">
+              <input type="checkbox" checked={ruleDraft.prevent_output_growth}
+                onChange={event => setRuleDraft({ ...ruleDraft, prevent_output_growth: event.target.checked })} />
+              {t("transcoding.automation.preventOutputGrowth")}
+            </label>
           </div>
-          <label className="transcode-filename-option">
-            <input type="checkbox" checked={ruleDraft.prevent_output_growth}
-              onChange={event => setRuleDraft({ ...ruleDraft, prevent_output_growth: event.target.checked })} />
-            {t("transcoding.automation.preventOutputGrowth")}
-          </label>
-          {ruleDraft.prevent_output_growth && <p className="field-hint">{t("transcoding.automation.preventOutputGrowthHint")}</p>}
           {!ruleDraft.profile_id && <p className="field-hint">{t(canReadPresets ? "transcoding.automation.ruleNeedsPreset" : "transcoding.automation.ruleNeedsPresetAccess")}</p>}
           {ruleDraft.output_mode === "replace_original" && <p className="field-hint">{t("transcoding.replacementWarning")}</p>}
         </section>

@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 
 ## vUnreleased
+
+- Ship the X to HEVC transcoding preset and standard filename, folder, and series season folder presets. Allow formatting presets to be duplicated.
+
+- Place the output size limit beside the output subfolder in transcoding rules and remove its inline hint.
 - Discard larger transcoded outputs before publishing by default for new automation rules, with an option to allow them.
 
 - Open the automation rule editor from a collapsed panel and explain missing presets or libraries before saving.

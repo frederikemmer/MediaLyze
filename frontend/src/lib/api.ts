@@ -1457,6 +1457,7 @@ export type TranscodePresetDefinition = {
   subtitle_rules: TranscodePresetStreamRule[];
   external_subtitle_rules: TranscodePresetStreamRule[];
   default_video_action: "copy" | "convert" | "remove";
+  copy_dolby_vision_video?: boolean;
   default_audio_action: "copy" | "convert" | "remove";
   default_subtitle_action: "copy" | "convert" | "remove";
   default_external_subtitle_action: "copy" | "convert" | "remove";
