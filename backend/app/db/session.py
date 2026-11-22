@@ -349,6 +349,9 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "trigger_details": "ALTER TABLE scan_jobs ADD COLUMN trigger_details JSON NOT NULL DEFAULT '{}'",
         "scan_summary": "ALTER TABLE scan_jobs ADD COLUMN scan_summary JSON NOT NULL DEFAULT '{}'",
     },
+    "transcode_rules": {
+        "prevent_output_growth": "ALTER TABLE transcode_rules ADD COLUMN prevent_output_growth BOOLEAN NOT NULL DEFAULT 0",
+    },
     "transcode_jobs": {
         "profile_id": "ALTER TABLE transcode_jobs ADD COLUMN profile_id INTEGER REFERENCES transcode_profiles(id) ON DELETE SET NULL",
         "profile_version": "ALTER TABLE transcode_jobs ADD COLUMN profile_version INTEGER",

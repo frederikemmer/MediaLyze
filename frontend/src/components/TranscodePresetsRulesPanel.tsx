@@ -47,6 +47,7 @@ type RuleDraft = {
   profile_id: number;
   output_mode: TranscodeRule["output_mode"];
   output_subfolder: string;
+  prevent_output_growth: boolean;
 };
 
 type AutomationTab = "presets" | "rules" | "accelerators" | "members";
@@ -255,6 +256,7 @@ function ruleDraftFrom(rule: TranscodeRule): RuleDraft {
     profile_id: rule.profile_id,
     output_mode: rule.output_mode,
     output_subfolder: rule.output_subfolder,
+    prevent_output_growth: rule.prevent_output_growth ?? false,
   };
 }
 
@@ -776,7 +778,7 @@ export function TranscodePresetsRulesPanel({
     setPresetEditorOpen(false);
     const defaultPreset = presets[0];
     const defaultLibrary = editableLibraries[0];
-    setRuleDraft({ id: null, name: "", priority: (rules.at(-1)?.priority ?? -1) + 1, library_ids: defaultLibrary ? [defaultLibrary.id] : [], conditions: null, profile_id: defaultPreset?.id ?? 0, output_mode: "transcode_output", output_subfolder: "" });
+    setRuleDraft({ id: null, name: "", priority: (rules.at(-1)?.priority ?? -1) + 1, library_ids: defaultLibrary ? [defaultLibrary.id] : [], conditions: null, profile_id: defaultPreset?.id ?? 0, output_mode: "transcode_output", output_subfolder: "", prevent_output_growth: true });
     setRuleEditorOpen(true);
   };
 
@@ -788,6 +790,7 @@ export function TranscodePresetsRulesPanel({
         name: ruleDraft.name.trim(), priority: ruleDraft.priority, library_ids: ruleDraft.library_ids,
         conditions: ruleDraft.conditions, profile_id: ruleDraft.profile_id, output_mode: ruleDraft.output_mode,
         output_subfolder: ruleDraft.output_subfolder,
+        prevent_output_growth: ruleDraft.prevent_output_growth,
       };
       const existing = rules.find(rule => rule.id === ruleDraft.id);
       const changed = Object.fromEntries(
@@ -1179,12 +1182,19 @@ export function TranscodePresetsRulesPanel({
             {ruleDraft.output_mode === "transcode_output" && <RuleInput label={t("transcoding.automation.outputSubfolder")}
               value={ruleDraft.output_subfolder} maxLength={512} onChange={event => setRuleDraft({ ...ruleDraft, output_subfolder: event.target.value })} />}
           </div>
+          <label className="transcode-filename-option">
+            <input type="checkbox" checked={ruleDraft.prevent_output_growth}
+              onChange={event => setRuleDraft({ ...ruleDraft, prevent_output_growth: event.target.checked })} />
+            {t("transcoding.automation.preventOutputGrowth")}
+          </label>
+          {ruleDraft.prevent_output_growth && <p className="field-hint">{t("transcoding.automation.preventOutputGrowthHint")}</p>}
           {!ruleDraft.profile_id && <p className="field-hint">{t(canReadPresets ? "transcoding.automation.ruleNeedsPreset" : "transcoding.automation.ruleNeedsPresetAccess")}</p>}
           {ruleDraft.output_mode === "replace_original" && <p className="field-hint">{t("transcoding.replacementWarning")}</p>}
         </section>
         {identity?.owner && <TranscodeRuleTest draft={{
           rule_id: ruleDraft.id ?? undefined, library_ids: ruleDraft.library_ids, conditions: ruleDraft.conditions,
           profile_id: ruleDraft.profile_id, output_mode: ruleDraft.output_mode, output_subfolder: ruleDraft.output_subfolder,
+          prevent_output_growth: ruleDraft.prevent_output_growth,
         }} presetName={activeRulePreset?.name} />}
         <div className="transcode-actions">
           <button type="button" className="transcode-action-button" onClick={() => void saveRule()}

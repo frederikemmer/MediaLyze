@@ -37,6 +37,7 @@ Open **Settings → Transcoding → Automation Rules** to select libraries, cond
 The Owner can use **Test rule** to search the catalog by title or filename and evaluate the current draft on one file. The result shows which conditions matched and, when the plan validates, the proposed output path. The test simulates this rule in isolation, including when it is disabled. It never queues a job or saves the draft.
 
 New rules are saved inactive. Turn on the switch beside the rule name to apply the rule to new or changed primary videos after successful scans. To replace originals, approve that specific rule version before activating it. See [Execution safety](#execution-safety) for the effects of replacing an original.
+**Output must not exceed source size** is enabled by default for new rules. MediaLyze discards a larger result before publishing or replacing the original. Equal-sized results are accepted. The draft test cannot predict the encoded file size.
 
 ## CPU- and APU-integrated media engines
 

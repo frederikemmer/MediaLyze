@@ -393,6 +393,7 @@ class TranscodeRuleCreate(BaseModel):
     profile_id: int = Field(ge=1)
     output_mode: Literal["transcode_output", "same_directory", "replace_original"] = "transcode_output"
     output_subfolder: str = Field(default="", max_length=512)
+    prevent_output_growth: bool = True
 
     @model_validator(mode="before")
     @classmethod
@@ -416,6 +417,7 @@ class TranscodeRuleUpdate(BaseModel):
     profile_id: int | None = Field(default=None, ge=1)
     output_mode: Literal["transcode_output", "same_directory", "replace_original"] | None = None
     output_subfolder: str | None = Field(default=None, max_length=512)
+    prevent_output_growth: bool = False
 
     @model_validator(mode="before")
     @classmethod
@@ -443,6 +445,7 @@ class TranscodeRuleRead(BaseModel):
     profile_version: int
     output_mode: str
     output_subfolder: str
+    prevent_output_growth: bool = False
     replacement_approved: bool = False
     created_at: datetime
     updated_at: datetime
@@ -473,6 +476,7 @@ class TranscodeRuleTestRequest(BaseModel):
     profile_id: int = Field(ge=1)
     output_mode: Literal["transcode_output", "same_directory", "replace_original"]
     output_subfolder: str = Field(default="", max_length=512)
+    prevent_output_growth: bool = False
 
 
 class TranscodeRuleTestTrace(BaseModel):

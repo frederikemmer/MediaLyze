@@ -3063,7 +3063,7 @@ def execute_remote_transcode_job(
     """Origin-side orchestration with resumable upload/download chunks."""
 
     from backend.app.models.entities import MediaFile, TranscodeVariant
-    from backend.app.services.transcoding import _publish_without_overwrite
+    from backend.app.services.transcoding import _publish_without_overwrite, enforce_automation_output_size
 
     db = SessionLocal()
     try:
@@ -3266,6 +3266,7 @@ def execute_remote_transcode_job(
             return _mark_remote_job_failed(db, job, "The source file changed while the remote job was running")
         output_path = Path(job.output_path_snapshot)
         job.processing_phase = "validating_result"
+        enforce_automation_output_size(job, Path(result_transfer.local_path))
         job.phase_detail = "Validating the complete result checksum and source snapshot"
         db.commit()
         if job.output_mode == "replace_original":

@@ -3,6 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## vUnreleased
+- Discard larger transcoded outputs before publishing by default for new automation rules, with an option to allow them.
 
 - Open the automation rule editor from a collapsed panel and explain missing presets or libraries before saving.
 

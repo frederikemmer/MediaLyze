@@ -186,8 +186,9 @@ describe("TranscodePresetsRulesPanel", () => {
     const [ , nestedLogic ] = screen.getAllByRole("combobox", { name: "Logic" });
     fireEvent.change(nestedLogic, { target: { value: "xor" } });
     fireEvent.change(screen.getByRole("combobox", { name: "Condition value" }), { target: { value: "hevc" } });
+    expect(screen.getByRole("checkbox", { name: "Output must not exceed source size" })).toBeChecked();
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ conditions: saved.conditions })));
+    await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ conditions: saved.conditions, prevent_output_growth: true })));
     const toggle = await screen.findByRole("switch", { name: "Enable " + saved.name });
     expect(toggle).not.toBeChecked();
     expect(toggle.parentElement?.querySelector(".toggle-switch-thumb")).toBeInTheDocument();

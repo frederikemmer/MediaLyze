@@ -1728,7 +1728,10 @@ def test_progress_without_time_or_frame_rate_remains_unknown() -> None:
     assert job.eta_seconds is None
 
 
-def test_successful_execution_publishes_variant_without_touching_source(monkeypatch, tmp_path) -> None:
+@pytest.mark.parametrize("prevent_growth", [False, True])
+def test_successful_execution_publishes_variant_without_touching_source(monkeypatch, tmp_path, prevent_growth) -> None:
+    import backend.app.models.access  # Register the job authority table for isolated test runs.
+
     factory = _session_factory()
     monkeypatch.setattr(transcoding, "SessionLocal", factory)
     monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: _capabilities())
@@ -1780,7 +1783,10 @@ def test_successful_execution_publishes_variant_without_touching_source(monkeypa
         source_before = source_path.read_bytes()
         plan = _compatibility_plan()
         plan.video_streams[0].frame_rate = 12
-        job, _validation = transcoding.queue_transcode_job(db, _settings(tmp_path), media_file, plan)
+        job, _validation = transcoding.queue_transcode_job(
+            db, _settings(tmp_path), media_file, plan,
+            rule_snapshot={"rule": {"prevent_output_growth": True}} if prevent_growth else None,
+        )
         job_id = job.id
         output_path = Path(job.output_path_snapshot)
 
@@ -1790,6 +1796,14 @@ def test_successful_execution_publishes_variant_without_touching_source(monkeypa
         completed = db.get(TranscodeJob, job_id)
         variant = db.scalar(select(TranscodeVariant).where(TranscodeVariant.job_id == job_id))
         assert completed is not None
+        if prevent_growth:
+            assert completed.status == JobStatus.failed
+            assert "exceeded the source size" in completed.error
+            assert variant is None
+            assert not output_path.exists()
+            assert not Path(completed.temporary_path).exists()
+            assert source_path.read_bytes() == source_before
+            return
         assert completed.status == JobStatus.completed
         assert completed.progress_percent == 100
         assert variant is not None

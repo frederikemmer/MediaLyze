@@ -375,6 +375,7 @@ def _rule_payload(db: Session, rule: TranscodeRule) -> TranscodeRuleRead:
         profile_version=profile.version,
         output_mode=rule.output_mode,
         output_subfolder=rule.output_subfolder or "",
+        prevent_output_growth=rule.prevent_output_growth,
         replacement_approved=rule.replacement_approved_version == rule.version,
         created_at=rule.created_at,
         updated_at=rule.updated_at,
@@ -451,6 +452,7 @@ def create_transcode_rule(db: Session, payload: TranscodeRuleCreate) -> Transcod
         profile_id=profile.id,
         output_mode=payload.output_mode,
         output_subfolder=output_subfolder,
+        prevent_output_growth=payload.prevent_output_growth,
         replacement_approved_version=None,
     )
     db.add(rule)
@@ -473,7 +475,7 @@ def update_transcode_rule(
     if not changes:
         return _rule_payload(db, rule)
     relevant_change = any(
-        key in changes for key in {"conditions", "library_ids", "profile_id", "output_mode", "output_subfolder"}
+        key in changes for key in {"conditions", "library_ids", "profile_id", "output_mode", "output_subfolder", "prevent_output_growth"}
     )
     disable_requested = changes.get("enabled") is False
     if "name" in changes:
@@ -505,6 +507,8 @@ def update_transcode_rule(
         rule.output_mode = next_output_mode
     if "output_subfolder" in changes:
         rule.output_subfolder = next_output_subfolder
+    if "prevent_output_growth" in changes:
+        rule.prevent_output_growth = payload.prevent_output_growth
     if "priority" in changes:
         rule.priority = int(payload.priority or 0)
     if "enabled" in changes:
@@ -1147,12 +1151,13 @@ def test_transcode_rule_draft(db: Session, settings: Settings, payload: Transcod
     unchanged = saved is not None and (
         saved.profile_id == payload.profile_id and saved.output_mode == payload.output_mode
         and (saved.output_subfolder or "") == subfolder and saved.conditions == conditions
+        and saved.prevent_output_growth == payload.prevent_output_growth
         and set(saved.library_ids) == set(payload.library_ids)
     )
     draft = saved if unchanged else TranscodeRule(
         id=0, name="", version=1, enabled=True, priority=0,
         library_ids=payload.library_ids, conditions=conditions, profile_id=preset.id,
-        output_mode=payload.output_mode, output_subfolder=subfolder,
+        output_mode=payload.output_mode, output_subfolder=subfolder, prevent_output_growth=payload.prevent_output_growth,
     )
     decision = _decision_for_file(
         db, settings, media_file, [draft], app_settings, get_transcode_capabilities(settings),
@@ -1688,6 +1693,7 @@ def _rule_snapshot(rule: TranscodeRule, profile: TranscodePreset) -> dict[str, A
             "conditions": rule.conditions,
             "output_mode": rule.output_mode,
             "output_subfolder": rule.output_subfolder,
+            "prevent_output_growth": rule.prevent_output_growth,
             "replacement_approved_version": rule.replacement_approved_version,
         },
         "profile": {

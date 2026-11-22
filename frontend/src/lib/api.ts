@@ -1528,6 +1528,7 @@ export type TranscodeRule = {
   profile_version: number;
   output_mode: "transcode_output" | "same_directory" | "replace_original";
   output_subfolder: string;
+  prevent_output_growth?: boolean;
   replacement_approved: boolean;
   created_at: string;
   updated_at: string;
@@ -1539,7 +1540,7 @@ export type TranscodeRuleTestTrace = {
   values: Array<string | number | boolean>;
   children: TranscodeRuleTestTrace[];
 };
-export type TranscodeRuleTestRequest = Pick<TranscodeRule, "library_ids" | "conditions" | "profile_id" | "output_mode" | "output_subfolder"> & {
+export type TranscodeRuleTestRequest = Pick<TranscodeRule, "library_ids" | "conditions" | "profile_id" | "output_mode" | "output_subfolder" | "prevent_output_growth"> & {
   file_id: number;
   rule_id?: number;
 };
@@ -2996,6 +2997,7 @@ export const api = {
     profile_id: number;
     output_mode?: TranscodeRule["output_mode"];
     output_subfolder?: string;
+    prevent_output_growth?: boolean;
   }) => request<TranscodeRule>("/transcoding/rules", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -3009,6 +3011,7 @@ export const api = {
     profile_id: number;
     output_mode: TranscodeRule["output_mode"];
     output_subfolder: string;
+    prevent_output_growth?: boolean;
   }>) => request<TranscodeRule>(`/transcoding/rules/${id}`, {
     method: "PATCH",
     body: JSON.stringify(payload),

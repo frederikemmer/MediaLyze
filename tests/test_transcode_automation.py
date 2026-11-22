@@ -550,3 +550,21 @@ def test_draft_rule_preview_uses_execution_logic_without_creating_work(tmp_path,
         assert db.scalars(select(TranscodeRule)).all() == []
         assert db.scalars(select(TranscodeJob)).all() == []
         assert db.scalars(select(TranscodeAutomationRecord)).all() == []
+
+
+@pytest.mark.parametrize(("guard", "size", "discarded"), [
+    (True, 9, False), (True, 10, False), (True, 11, True), (False, 11, False),
+])
+def test_automation_output_size_guard(tmp_path, guard, size, discarded):
+    from backend.app.models.entities import TranscodeJob
+
+    result = tmp_path / "result.mkv"
+    result.write_bytes(b"x" * size)
+    job = TranscodeJob(source_size_snapshot=10, rule_snapshot={"rule": {"prevent_output_growth": guard}})
+    if discarded:
+        with pytest.raises(ValueError, match="11 > 10 bytes"):
+            transcoding.enforce_automation_output_size(job, result)
+        assert not result.exists()
+    else:
+        transcoding.enforce_automation_output_size(job, result)
+        assert result.stat().st_size == size

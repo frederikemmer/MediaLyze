@@ -3336,6 +3336,19 @@ def queue_transcode_job(
     return job, validation
 
 
+def enforce_automation_output_size(job: TranscodeJob, result_path: Path) -> None:
+    rule = (job.rule_snapshot or {}).get("rule") or {}
+    if not rule.get("prevent_output_growth"):
+        return
+    output_bytes = result_path.stat().st_size
+    if output_bytes > job.source_size_snapshot:
+        result_path.unlink()
+        raise ValueError(
+            f"Automation discarded the output because it exceeded the source size "
+            f"({output_bytes} > {job.source_size_snapshot} bytes)"
+        )
+
+
 def _publish_without_overwrite(temporary_path: Path, output_path: Path) -> None:
     if output_path.exists():
         raise FileExistsError("The output file appeared while transcoding and was not overwritten")
@@ -3515,6 +3528,7 @@ def execute_transcode_job(
             raise ValueError("The source file changed while transcoding; the temporary result was discarded")
         if not temporary_path.exists() or temporary_path.stat().st_size <= 0:
             raise RuntimeError("FFmpeg completed without producing a valid output file")
+        enforce_automation_output_size(job, temporary_path)
         job.processing_phase = "validating_result"
         job.phase_detail = "Validating the temporary result"
         db.commit()
