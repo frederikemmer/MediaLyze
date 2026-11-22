@@ -2,37 +2,10 @@
 
 [Documentation home](../README.md)
 
-Status: Transcoding automation is implemented in the backend but its management
-UI is hidden in the shipped frontend by
-`frontend/src/lib/release-visibility.ts` (`automationRules: false`). Hiding the
-UI does not disable the API or scan-triggered automation. Saved presets and
-manual per-file transcoding remain available. New rules are always created
-disabled; any already enabled rule can still be applied by the backend.
-
-To expose automation in a later release, enable the `automationRules` switch,
-promote the relevant behavior into the fixed documentation, and include the
-feature in release validation. The rule, inventory, and run-history APIs are
-already registered; they do not require a separate network listener or
-automation-specific environment variable.
-
-## Release promotion checklist
-
-When automation is approved for a release, carry its supported contract into
-the permanent documentation:
-
-- Add the scan-triggered inventory flow, eligibility rules, persistence, and
-  executor ownership to [Architecture](../architecture.md).
-- Check [Environment](../environment.md) for any configuration variables or
-  listener/port changes introduced before release. The current implementation
-  has no automation-specific variables or listener; document that only if it
-  remains relevant to deployment guidance.
-- Add the released management workflow to [Transcoding](../transcoding.md),
-  including rule and preset management, condition matching, output policies,
-  replacement approval, inventory, history, and cancellation.
-- Update the [documentation home](../README.md) to list the released guide
-  with current user documentation; reclassify or remove this internal note.
-- Verify the release visibility switch, API behavior, scan triggers, and
-  documented safety limits against the implementation shipped in that release.
+Status: The rule editor and the Owner's single-file draft test are exposed on
+`dev`. See [Transcoding](../transcoding.md#automation-rules) for the workflow.
+These implementation notes also cover the existing inventory and run-history APIs,
+which do not yet have a management UI.
 
 ## Rules and presets
 
@@ -51,7 +24,7 @@ tie-breaker. The first enabled rule whose library and conditions match wins.
 With no condition tree, a rule matches every eligible video file in its
 selected libraries.
 
-Condition trees support nested `AND` and `OR` groups. Conditions can inspect
+Condition trees support nested `AND`, `OR`, and exactly-one `XOR` groups. Conditions can inspect
 path, container, size, duration, quality score, video and audio bitrate, audio
 bit depth, channels, sample rate, chapter count and titles, video codec,
 resolution, HDR type, audio codecs, spatial audio profiles and languages,
@@ -114,13 +87,15 @@ queued or running inventory runs are marked canceled instead of resumed.
 
 ## Automation API
 
-The API remains available while the management UI is hidden. With the default
-`API_PREFIX=/api`, the rule endpoints are:
+With the default `API_PREFIX=/api`, the rule endpoints are:
 
 - `GET` / `POST /api/transcoding/rules`
 - `GET` / `PATCH` / `DELETE /api/transcoding/rules/{rule_id}`
 - `POST /api/transcoding/rules/reorder`
 - `POST /api/transcoding/rules/{rule_id}/replacement-approval`
+
+The Owner-only draft test uses `GET /api/transcoding/automation/test-assets?q=…`
+and `POST /api/transcoding/automation/test-rule`.
 
 Inventory and run-history endpoints are:
 

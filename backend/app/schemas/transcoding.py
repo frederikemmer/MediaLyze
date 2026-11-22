@@ -356,7 +356,7 @@ class TranscodeConditionGroup(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     type: Literal["group"] = "group"
-    operator: Literal["and", "or"] = "and"
+    operator: Literal["and", "or", "xor"] = "and"
     children: list[Annotated[Union[TranscodeCondition, "TranscodeConditionGroup"], Field(discriminator="type")]] = Field(
         min_length=1,
         max_length=128,
@@ -454,6 +454,40 @@ class TranscodeRuleReorder(BaseModel):
 
 class TranscodeReplacementApproval(BaseModel):
     confirm: bool = True
+
+
+class TranscodeRuleTestAsset(BaseModel):
+    id: int
+    filename: str
+    title: str | None
+    library_id: int
+
+
+class TranscodeRuleTestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    file_id: int = Field(ge=1)
+    rule_id: int | None = Field(default=None, ge=1)
+    library_ids: list[int] = Field(min_length=1, max_length=256)
+    conditions: TranscodeConditionGroup | None = None
+    profile_id: int = Field(ge=1)
+    output_mode: Literal["transcode_output", "same_directory", "replace_original"]
+    output_subfolder: str = Field(default="", max_length=512)
+
+
+class TranscodeRuleTestTrace(BaseModel):
+    matched: bool
+    values: list[str | int | float | bool] = Field(default_factory=list)
+    children: list["TranscodeRuleTestTrace"] = Field(default_factory=list)
+
+
+class TranscodeRuleTestRead(BaseModel):
+    in_scope: bool
+    trace: TranscodeRuleTestTrace
+    status: Literal["matched", "unmatched", "blocked", "skipped"]
+    reason: str | None = None
+    output_path: str | None = None
+    output_relative_path: str | None = None
 
 
 class TranscodeAutomationScope(BaseModel):

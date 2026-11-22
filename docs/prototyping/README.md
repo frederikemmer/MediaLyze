@@ -3,7 +3,8 @@
 These notes describe retained implementation that is hidden in the shipped frontend. Consult the code and current documentation for active behavior.
 
 - [Transcoding Federation](unreleased-transcoding-federation.md): its backend API also requires persisted opt-in and a process gate.
-- [Transcoding automation](unreleased-transcoding-automation.md): its API and scan-triggered automation remain active independently of frontend visibility.
+- [Transcoding automation internals](unreleased-transcoding-automation.md): architecture and API notes for the rule editor, draft test, and inventory.
+- [Rule editor prototype](transcoding-rule-editor.html): the interactive design used for the integrated editor, with example files.
 
 Historical evidence for implemented features:
 

@@ -30,6 +30,14 @@ The preset catalog starts empty on new installations. Users can create, edit, du
 
 The canonical management endpoint is `/api/transcoding/presets`. The former `/api/transcoding/profiles` paths and profile-named storage/plan fields remain compatibility aliases for existing clients and data.
 
+## Automation rules
+
+Open **Settings → Transcoding → Automation Rules** to select libraries, conditions, a saved preset, and an output destination. Rules run in list order, and the first active matching rule wins. A rule without conditions can match every eligible primary video in its selected libraries. A nested group counts as one result in its parent group. XOR requires exactly one direct condition or subgroup to match.
+
+The Owner can use **Test rule** to search the catalog by title or filename and evaluate the current draft on one file. The result shows which conditions matched and, when the plan validates, the proposed output path. The test simulates this rule in isolation, including when it is disabled. It never queues a job or saves the draft.
+
+New rules are saved inactive. Turn on the switch beside the rule name to apply the rule to new or changed primary videos after successful scans. To replace originals, approve that specific rule version before activating it. See [Execution safety](#execution-safety) for the effects of replacing an original.
+
 ## CPU- and APU-integrated media engines
 
 In this documentation, "CPU hardware acceleration" means the dedicated media

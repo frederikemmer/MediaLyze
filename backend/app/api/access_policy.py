@@ -148,6 +148,8 @@ def authorize(request, db, principal, name, params, body):
         params[key] = resource_id(params[key])
     if principal.owner:
         return
+    if name in {"transcoding_rule_test_assets", "transcoding_rule_test"}:
+        fail(403, "Automation rule tests are available to the Owner only")
     if name in {"notification_history_list", "notification_history_create"}:
         return  # The endpoint derives its owner solely from the authenticated request.
     query = request.query_params

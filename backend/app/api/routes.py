@@ -132,6 +132,9 @@ from backend.app.schemas.transcoding import (
     TranscodeRuleCreate,
     TranscodeRuleRead,
     TranscodeRuleReorder,
+    TranscodeRuleTestAsset,
+    TranscodeRuleTestRead,
+    TranscodeRuleTestRequest,
     TranscodeRuleUpdate,
     TranscodeValidationRead,
 )
@@ -297,6 +300,8 @@ from backend.app.services.transcode_automation import (
     list_transcode_presets,
     list_transcode_rules,
     preview_transcode_automation,
+    search_transcode_rule_assets,
+    test_transcode_rule_draft,
     reorder_transcode_rules,
     serialize_transcode_automation_run,
     serialize_transcode_preset,
@@ -3304,6 +3309,26 @@ def transcoding_rule_delete(
     except TranscodeAutomationError as exc:
         raise _transcode_automation_error(exc) from exc
     return Response(status_code=204)
+
+
+@router.get("/transcoding/automation/test-assets", response_model=list[TranscodeRuleTestAsset])
+def transcoding_rule_test_assets(
+    q: str = Query(min_length=1, max_length=512),
+    db: Session = Depends(get_db_session),
+) -> list[TranscodeRuleTestAsset]:
+    return search_transcode_rule_assets(db, q)
+
+
+@router.post("/transcoding/automation/test-rule", response_model=TranscodeRuleTestRead)
+def transcoding_rule_test(
+    payload: TranscodeRuleTestRequest,
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> TranscodeRuleTestRead:
+    try:
+        return test_transcode_rule_draft(db, settings, payload)
+    except TranscodeAutomationError as exc:
+        raise _transcode_automation_error(exc) from exc
 
 
 @router.post("/transcoding/automation/preview", response_model=TranscodeAutomationPreviewRead)

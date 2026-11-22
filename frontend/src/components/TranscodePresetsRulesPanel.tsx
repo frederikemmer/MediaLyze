@@ -1,6 +1,6 @@
 import { identityGeneration } from "../lib/access-session";
 import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Ban, Clock3, Copy, Gauge, ArrowDown, ArrowUp, ChevronDown, ChevronRight, Plus, Power, RefreshCw, Save, Search, ShieldCheck, Star, Trash2, Unplug, X } from "lucide-react";
+import { Ban, Clock3, Copy, Gauge, ArrowDown, ArrowUp, ChevronDown, ChevronRight, Plus, RefreshCw, Save, Search, ShieldCheck, Star, Trash2, Unplug, X } from "lucide-react";
 import { useAutosaveNotifications } from "../lib/notification-actions";
 import { useNotifications } from "../lib/notifications";
 import { useTranslation } from "react-i18next";
@@ -10,7 +10,6 @@ import { formatLanguageName, languageOptions, normalizeLanguageTag, sharedStream
 import {
   api,
   type LibrarySummary,
-  type TranscodeCondition,
   type TranscodeConditionGroup,
   type TranscodeFederation,
   type TranscodeFederationMember,
@@ -26,6 +25,10 @@ import { CopyIcon } from "./CopyIcon";
 import { PanelEmptyState } from "./PanelEmptyState";
 import { SquarePenIcon } from "./SquarePenIcon";
 import { TooltipTrigger } from "./TooltipTrigger";
+import { useAuth } from "../lib/auth";
+import { ConditionGroupEditor, RuleInput, validRuleConditions } from "./TranscodeRuleConditions";
+import { TranscodeRuleTest } from "./TranscodeRuleTest";
+import { SettingsInlineLabelSelect } from "./SettingsInlineLabelSelect";
 import { LanguageCodeFormatField } from "./LanguageCodeFormatField";
 
 type PresetDraft = {
@@ -38,14 +41,12 @@ type PresetDraft = {
 type RuleDraft = {
   id: number | null;
   name: string;
-  enabled: boolean;
   priority: number;
   library_ids: number[];
   conditions: TranscodeConditionGroup | null;
   profile_id: number;
   output_mode: TranscodeRule["output_mode"];
   output_subfolder: string;
-  replacement_approved: boolean;
 };
 
 type AutomationTab = "presets" | "rules" | "accelerators" | "members";
@@ -83,58 +84,6 @@ type TranscodePresetsRulesPanelProps = {
   onAcceleratorMatrixFocus?: (focus: TranscodingMatrixFocus | null) => void;
   searchFocus?: string | null;
 };
-
-const CONDITION_FIELDS = [
-  "path",
-  "container",
-  "size",
-  "duration",
-  "quality_score",
-  "bitrate",
-  "audio_bitrate",
-  "bit_depth",
-  "audio_channels",
-  "sample_rate",
-  "chapter_count",
-  "video_codec",
-  "resolution",
-  "hdr_type",
-  "audio_codecs",
-  "audio_spatial_profiles",
-  "audio_languages",
-  "audio_title",
-  "audio_artist",
-  "audio_album",
-  "audio_album_artist",
-  "audio_genre",
-  "audio_date",
-  "audio_disc",
-  "audio_composer",
-  "track_number",
-  "bit_rate_mode",
-  "has_embedded_cover",
-  "chapter_titles",
-  "subtitle_languages",
-  "subtitle_codecs",
-  "subtitle_sources",
-];
-
-const CONDITION_OPERATORS = [
-  "equals",
-  "not_equals",
-  "contains",
-  "not_contains",
-  "starts_with",
-  "ends_with",
-  "in",
-  "not_in",
-  ">",
-  ">=",
-  "<",
-  "<=",
-  "exists",
-  "missing",
-];
 
 function emptyPresetDefinition(): TranscodePresetDefinition {
   return {
@@ -300,110 +249,13 @@ function ruleDraftFrom(rule: TranscodeRule): RuleDraft {
   return {
     id: rule.id,
     name: rule.name,
-    enabled: rule.enabled,
     priority: rule.priority,
     library_ids: [...rule.library_ids],
     conditions: clone(rule.conditions),
     profile_id: rule.profile_id,
     output_mode: rule.output_mode,
     output_subfolder: rule.output_subfolder,
-    replacement_approved: rule.replacement_approved,
   };
-}
-
-function blankCondition(): TranscodeCondition {
-  return { type: "condition", field: "video_codec", operator: "equals", value: "" };
-}
-
-function ConditionGroupEditor({
-  group,
-  onChange,
-  onRemove,
-  nested = false,
-}: {
-  group: TranscodeConditionGroup;
-  onChange: (group: TranscodeConditionGroup) => void;
-  onRemove?: () => void;
-  nested?: boolean;
-}) {
-  const { t } = useTranslation();
-  const updateChild = (index: number, child: TranscodeCondition | TranscodeConditionGroup) => {
-    const children = [...group.children];
-    children[index] = child;
-    onChange({ ...group, children });
-  };
-  return (
-    <div className={`transcode-condition-group ${nested ? "is-nested" : ""}`}>
-      <div className="field-label-row">
-        <strong>{nested ? t("transcoding.automation.nestedGroup") : t("transcoding.automation.conditions")}</strong>
-        {onRemove ? (
-          <button type="button" className="secondary icon-only-button" title={t("transcoding.automation.removeConditionGroup")} onClick={onRemove}>
-            <X aria-hidden="true" size={14} />
-          </button>
-        ) : null}
-      </div>
-      <select
-        className="settings-choice-input transcode-control"
-        aria-label={t("transcoding.automation.conditionLogic")}
-        value={group.operator}
-        onChange={(event) => onChange({ ...group, operator: event.target.value as "and" | "or" })}
-      >
-        <option value="and">{t("transcoding.automation.allConditions")}</option>
-        <option value="or">{t("transcoding.automation.anyCondition")}</option>
-      </select>
-      <div className="transcode-condition-list">
-        {group.children.map((child, index) => child.type === "group" ? (
-          <ConditionGroupEditor
-            key={`group-${index}`}
-            group={child}
-            nested
-            onChange={(next) => updateChild(index, next)}
-            onRemove={() => onChange({ ...group, children: group.children.filter((_entry, childIndex) => childIndex !== index) })}
-          />
-        ) : (
-          <div className="transcode-condition-row" key={`condition-${index}`}>
-            <select
-              className="settings-choice-input transcode-control"
-              aria-label={t("transcoding.automation.conditionField")}
-              value={child.field}
-              onChange={(event) => updateChild(index, { ...child, field: event.target.value })}
-            >
-              {CONDITION_FIELDS.map((field) => <option key={field} value={field}>{field}</option>)}
-            </select>
-            <select
-              className="settings-choice-input transcode-control"
-              aria-label={t("transcoding.automation.conditionOperator")}
-              value={child.operator}
-              onChange={(event) => updateChild(index, { ...child, operator: event.target.value })}
-            >
-              {CONDITION_OPERATORS.map((operator) => <option key={operator} value={operator}>{operator}</option>)}
-            </select>
-            {!(["exists", "missing"].includes(child.operator)) ? (
-              <input
-                className="settings-choice-input transcode-control"
-                aria-label={t("transcoding.automation.conditionValue")}
-                value={String(child.value ?? "")}
-                onChange={(event) => updateChild(index, { ...child, value: event.target.value })}
-              />
-            ) : null}
-            <button type="button" className="secondary icon-only-button" title={t("transcoding.automation.removeCondition")} onClick={() => onChange({ ...group, children: group.children.filter((_entry, childIndex) => childIndex !== index) })}>
-              <Trash2 aria-hidden="true" size={14} />
-            </button>
-          </div>
-        ))}
-      </div>
-      <div className="transcode-actions">
-        <button type="button" className="secondary small settings-panel-header-action" onClick={() => onChange({ ...group, children: [...group.children, blankCondition()] })}>
-          <Plus aria-hidden="true" size={14} />{t("transcoding.automation.addCondition")}
-        </button>
-        {!nested ? (
-          <button type="button" className="secondary small settings-panel-header-action" onClick={() => onChange({ ...group, children: [...group.children, { type: "group", operator: "or", children: [blankCondition()] }] })}>
-            <Plus aria-hidden="true" size={14} />{t("transcoding.automation.addNestedGroup")}
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
 }
 
 type PresetRuleListKey = "video_rules" | "audio_rules" | "subtitle_rules" | "external_subtitle_rules";
@@ -754,6 +606,8 @@ export function TranscodePresetsRulesPanel({
   searchFocus = null,
 }: TranscodePresetsRulesPanelProps) {
   const { t } = useTranslation();
+  const { identity, has } = useAuth();
+  const canReadPresets = !identity || has("settings.presets.view");
   const notifications = useNotifications();
   const notificationIdentity = identityGeneration();
   const { trackSave } = useAutosaveNotifications({
@@ -805,7 +659,7 @@ export function TranscodePresetsRulesPanel({
         setLoaded(true);
         return;
       }
-      const nextPresets = await api.transcodePresets();
+      const nextPresets = standaloneTab === "rules" && !canReadPresets ? [] : await api.transcodePresets();
       setPresets(nextPresets);
       if (standaloneTab !== "presets") {
         const [nextRules, nextLibraries] = await Promise.all([
@@ -822,7 +676,7 @@ export function TranscodePresetsRulesPanel({
     } finally {
       setLoading(false);
     }
-  }, [standaloneTab]);
+  }, [standaloneTab, canReadPresets]);
 
   useEffect(() => {
     if (!loaded) void load();
@@ -905,26 +759,44 @@ export function TranscodePresetsRulesPanel({
     }
   };
 
+  const editableLibraries = libraries.filter(library => !identity || (
+    has("settings.app.edit") && has("library.read", library.id) &&
+    has("transcode.view", library.id) && has("transcode.run", library.id)
+  ));
+  const canEditRule = (rule: TranscodeRule) => Boolean(identity?.owner) || rule.library_ids.every(id =>
+    editableLibraries.some(library => library.id === id) &&
+    (!identity || rule.output_mode !== "replace_original" || has("transcode.replace", id))
+  );
   const startNewRule = () => {
+    if (standaloneCollapsed) onStandaloneToggle?.();
     setTab("rules");
     setExpandedPresetId(null);
     setExpandedRuleId(null);
     setPresetDraft(null);
     setPresetEditorOpen(false);
     const defaultPreset = presets[0];
-    const defaultLibrary = libraries[0];
-    setRuleDraft({ id: null, name: "", enabled: false, priority: rules.length, library_ids: defaultLibrary ? [defaultLibrary.id] : [], conditions: null, profile_id: defaultPreset?.id ?? 0, output_mode: "transcode_output", output_subfolder: "", replacement_approved: false });
+    const defaultLibrary = editableLibraries[0];
+    setRuleDraft({ id: null, name: "", priority: (rules.at(-1)?.priority ?? -1) + 1, library_ids: defaultLibrary ? [defaultLibrary.id] : [], conditions: null, profile_id: defaultPreset?.id ?? 0, output_mode: "transcode_output", output_subfolder: "" });
     setRuleEditorOpen(true);
   };
 
   const saveRule = async () => {
-    if (!ruleDraft?.name.trim() || !ruleDraft.profile_id || !ruleDraft.library_ids.length) return;
+    if (!ruleDraft?.name.trim() || !ruleDraft.profile_id || !ruleDraft.library_ids.length || !validRuleConditions(ruleDraft.conditions)) return;
     setBusy(true);
     try {
-      const payload = { name: ruleDraft.name.trim(), enabled: ruleDraft.enabled, priority: ruleDraft.priority, library_ids: ruleDraft.library_ids, conditions: ruleDraft.conditions, profile_id: ruleDraft.profile_id, output_mode: ruleDraft.output_mode, output_subfolder: ruleDraft.output_subfolder };
-      const saved = ruleDraft.id ? await api.updateTranscodeRule(ruleDraft.id, payload) : await api.createTranscodeRule(payload);
+      const payload = {
+        name: ruleDraft.name.trim(), priority: ruleDraft.priority, library_ids: ruleDraft.library_ids,
+        conditions: ruleDraft.conditions, profile_id: ruleDraft.profile_id, output_mode: ruleDraft.output_mode,
+        output_subfolder: ruleDraft.output_subfolder,
+      };
+      const existing = rules.find(rule => rule.id === ruleDraft.id);
+      const changed = Object.fromEntries(
+        Object.entries(payload).filter(([key, value]) => JSON.stringify(existing?.[key as keyof typeof payload]) !== JSON.stringify(value)),
+      );
+      const saved = existing ? await api.updateTranscodeRule(existing.id, changed) : await api.createTranscodeRule(payload);
       setRules((current) => ruleDraft.id ? current.map((rule) => rule.id === saved.id ? saved : rule) : [...current, saved].sort((a, b) => a.priority - b.priority || a.id - b.id));
       setRuleDraft(ruleDraftFrom(saved));
+      setExpandedRuleId(saved.id);
       setError(null);
       feedback("success", "saveRuleSuccess", "Rule saved.", "rules");
     } catch {
@@ -935,12 +807,14 @@ export function TranscodePresetsRulesPanel({
   };
 
   const toggleRule = async (rule: TranscodeRule) => {
+    setBusy(true);
     try {
       const saved = await trackSave(api.updateTranscodeRule(rule.id, { enabled: !rule.enabled }));
       setRules((current) => current.map((entry) => entry.id === saved.id ? saved : entry));
-      if (ruleDraft?.id === saved.id) setRuleDraft(ruleDraftFrom(saved));
     } catch {
       // trackSave reports the failed autosave.
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -990,7 +864,6 @@ export function TranscodePresetsRulesPanel({
     try {
       const saved = await api.approveTranscodeRuleReplacement(rule.id, true);
       setRules((current) => current.map((entry) => entry.id === saved.id ? saved : entry));
-      if (ruleDraft?.id === saved.id) setRuleDraft(ruleDraftFrom(saved));
       feedback("success", "replacementApproved", "Replacement approved.", "rules");
     } catch {
       feedback("error", "approveReplacementFailed", "Could not approve replacement.", "rules");
@@ -1010,12 +883,6 @@ export function TranscodePresetsRulesPanel({
     if (presetDraft?.id === null) setExpandedPresetId(null);
     setPresetDraft(null);
     setPresetEditorOpen(false);
-  };
-
-  const closeRuleEditor = () => {
-    if (ruleDraft?.id === null) setExpandedRuleId(null);
-    setRuleDraft(null);
-    setRuleEditorOpen(false);
   };
 
   const selectTab = (nextTab: AutomationTab, nextMatrixFocus: TranscodingMatrixFocus | null = null) => {
@@ -1274,25 +1141,67 @@ export function TranscodePresetsRulesPanel({
 
   const renderRuleEditor = () => {
     if (!ruleDraft) return null;
+    const savedRule = rules.find(rule => rule.id === ruleDraft.id);
     return (
-      <div className="compatibility-profile-details transcode-automation-details transcode-automation-editor">
-        <div className="field-label-row">
-          <strong>{ruleDraft.id ? t("transcoding.automation.editRule") : t("transcoding.automation.newRule")}</strong>
-          <button type="button" className="secondary icon-only-button" title={t("common.close")} onClick={closeRuleEditor}><X aria-hidden="true" size={14} /></button>
-        </div>
-        <div className="compatibility-profile-form-grid"><label><span>{t("transcoding.automation.ruleName")}</span><input className="settings-choice-input" value={ruleDraft.name} onChange={(event) => setRuleDraft({ ...ruleDraft, name: event.target.value })} /></label><label><span>{t("transcoding.automation.rulePriority")}</span><input className="settings-choice-input" type="number" min={0} value={ruleDraft.priority} onChange={(event) => setRuleDraft({ ...ruleDraft, priority: Math.max(0, Number(event.target.value) || 0) })} /></label><label><span>{t("transcoding.automation.preset")}</span><select className="settings-choice-input" value={ruleDraft.profile_id} onChange={(event) => setRuleDraft({ ...ruleDraft, profile_id: Number(event.target.value) })}>{presets.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · v{profile.version}</option>)}</select></label></div>
-        <label className="compatibility-profile-field-wide"><span>{t("transcoding.automation.libraries")}</span><select className="settings-choice-input" multiple value={ruleDraft.library_ids.map(String)} onChange={(event) => setRuleDraft({ ...ruleDraft, library_ids: [...event.target.selectedOptions].map((option) => Number(option.value)) })}>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>
-        <div className="compatibility-profile-form-grid"><label><span>{t("transcoding.outputMode")}</span><select className="settings-choice-input" value={ruleDraft.output_mode} onChange={(event) => setRuleDraft({ ...ruleDraft, output_mode: event.target.value as RuleDraft["output_mode"], replacement_approved: false })}><option value="transcode_output">{t("transcoding.transcodeOutput")}</option><option value="same_directory">{t("transcoding.sameDirectory")}</option><option value="replace_original">{t("transcoding.replaceOriginal")}</option></select></label><label><span>{t("transcoding.automation.outputSubfolder")}</span><input className="settings-choice-input" value={ruleDraft.output_subfolder} disabled={ruleDraft.output_mode !== "transcode_output"} placeholder="anime/optimized" onChange={(event) => setRuleDraft({ ...ruleDraft, output_subfolder: event.target.value })} /></label></div>
-        {ruleDraft.output_mode === "replace_original" ? <p className="field-hint">{t("transcoding.replacementWarning")}</p> : null}
-        <label className="transcode-filename-option"><input type="checkbox" checked={ruleDraft.enabled} disabled={ruleDraft.output_mode === "replace_original" && !ruleDraft.replacement_approved} onChange={(event) => setRuleDraft({ ...ruleDraft, enabled: event.target.checked })} /><span>{t("transcoding.automation.enabled")}</span></label>
-        {ruleDraft.conditions ? <ConditionGroupEditor group={ruleDraft.conditions} onChange={(conditions) => setRuleDraft({ ...ruleDraft, conditions })} /> : <button type="button" className="secondary small settings-panel-header-action" onClick={() => setRuleDraft({ ...ruleDraft, conditions: { type: "group", operator: "and", children: [blankCondition()] } })}><Plus aria-hidden="true" size={14} />{t("transcoding.automation.addCondition")}</button>}
-        {activeRulePreset ? <p className="field-hint">{t("transcoding.automation.presetVersionHint", { version: activeRulePreset.version })}</p> : null}
-        <div className="compatibility-profile-card-actions transcode-automation-editor-actions">
-          <button type="button" className="transcode-action-button" onClick={() => void saveRule()} disabled={busy || !ruleDraft.name.trim() || !ruleDraft.profile_id || !ruleDraft.library_ids.length}><Save aria-hidden="true" />{t("common.save")}</button>
+      <div className="compatibility-profile-details transcode-automation-details transcode-automation-editor transcode-rule-editor">
+        <RuleInput label={t("transcoding.automation.ruleName")} value={ruleDraft.name} maxLength={255}
+          onChange={event => setRuleDraft({ ...ruleDraft, name: event.target.value })} />
+        <fieldset className="transcode-rule-libraries">
+          <legend>{t("transcoding.automation.libraries")}</legend>
+          <div>{editableLibraries.map(library => <label key={library.id} className="transcode-filename-option">
+            <input type="checkbox" checked={ruleDraft.library_ids.includes(library.id)} onChange={event => setRuleDraft({
+              ...ruleDraft,
+              library_ids: event.target.checked ? [...ruleDraft.library_ids, library.id] : ruleDraft.library_ids.filter(id => id !== library.id),
+            })} />{library.name}
+          </label>)}</div>
+        </fieldset>
+        {!editableLibraries.length && <p className="field-hint">{t("transcoding.automation.ruleNeedsLibrary")}</p>}
+        <section><h4>{t("transcoding.automation.conditions")}</h4>
+          <ConditionGroupEditor group={ruleDraft.conditions} onChange={group => setRuleDraft({ ...ruleDraft, conditions: group.children.length ? group : null })} />
+        </section>
+        <section><h4>{t("transcoding.automation.action")}</h4>
+          <div className="compatibility-profile-form-grid">
+            <SettingsInlineLabelSelect label={t("transcoding.automation.preset")} value={ruleDraft.profile_id}
+              onChange={event => setRuleDraft({ ...ruleDraft, profile_id: Number(event.target.value) })}>
+              {!ruleDraft.profile_id && <option value={0} disabled>{t("transcoding.automation.preset")}</option>}
+              {savedRule && !presets.some(profile => profile.id === savedRule.profile_id) &&
+                <option value={savedRule.profile_id}>{savedRule.profile_name} · v{savedRule.profile_version}</option>}
+              {presets.map(profile => <option key={profile.id} value={profile.id}>{profile.name} · v{profile.version}</option>)}
+            </SettingsInlineLabelSelect>
+            <SettingsInlineLabelSelect label={t("transcoding.outputMode")} value={ruleDraft.output_mode} onChange={event => {
+              const output_mode = event.target.value as RuleDraft["output_mode"];
+              setRuleDraft({ ...ruleDraft, output_mode, output_subfolder: output_mode === "transcode_output" ? ruleDraft.output_subfolder : "" });
+            }}>
+              <option value="transcode_output">{t("transcoding.transcodeOutput")}</option>
+              <option value="same_directory">{t("transcoding.sameDirectory")}</option>
+              <option value="replace_original" disabled={Boolean(identity) && !ruleDraft.library_ids.every(id => has("transcode.replace", id))}>{t("transcoding.replaceOriginal")}</option>
+            </SettingsInlineLabelSelect>
+            {ruleDraft.output_mode === "transcode_output" && <RuleInput label={t("transcoding.automation.outputSubfolder")}
+              value={ruleDraft.output_subfolder} maxLength={512} onChange={event => setRuleDraft({ ...ruleDraft, output_subfolder: event.target.value })} />}
+          </div>
+          {!ruleDraft.profile_id && <p className="field-hint">{t(canReadPresets ? "transcoding.automation.ruleNeedsPreset" : "transcoding.automation.ruleNeedsPresetAccess")}</p>}
+          {ruleDraft.output_mode === "replace_original" && <p className="field-hint">{t("transcoding.replacementWarning")}</p>}
+        </section>
+        {identity?.owner && <TranscodeRuleTest draft={{
+          rule_id: ruleDraft.id ?? undefined, library_ids: ruleDraft.library_ids, conditions: ruleDraft.conditions,
+          profile_id: ruleDraft.profile_id, output_mode: ruleDraft.output_mode, output_subfolder: ruleDraft.output_subfolder,
+        }} presetName={activeRulePreset?.name} />}
+        <div className="transcode-actions">
+          <button type="button" className="transcode-action-button" onClick={() => void saveRule()}
+            disabled={busy || !ruleDraft.name.trim() || !ruleDraft.profile_id || !ruleDraft.library_ids.length || !validRuleConditions(ruleDraft.conditions)}>{t("common.save")}</button>
         </div>
       </div>
     );
   };
+
+  const renderRuleSwitch = (rule: TranscodeRule) => (
+    <label className="toggle-switch transcode-rule-switch">
+      <input type="checkbox" role="switch" aria-label={t("transcoding.automation.ruleActivation", { name: rule.name })}
+        checked={rule.enabled} disabled={busy || !canEditRule(rule) || (rule.output_mode === "replace_original" && !rule.replacement_approved)}
+        onChange={() => void toggleRule(rule)} />
+      <span className="toggle-switch-track" aria-hidden="true"><span className="toggle-switch-thumb" /></span>
+    </label>
+  );
 
   const renderPresetActions = (preset: TranscodePreset) => (
     <div className="compatibility-profile-quick-actions transcode-automation-quick-actions">
@@ -1332,19 +1241,10 @@ export function TranscodePresetsRulesPanel({
   );
 
   const renderRuleActions = (rule: TranscodeRule) => {
+    if (!canEditRule(rule)) return null;
     const ruleIndex = rules.findIndex((entry) => entry.id === rule.id);
     return (
       <div className="compatibility-profile-quick-actions transcode-automation-quick-actions">
-        <button
-          type="button"
-          className="secondary icon-only-button compatibility-profile-quick-action"
-          aria-label={`${rule.enabled ? t("transcoding.automation.disable") : t("transcoding.automation.enable")} ${rule.name}`}
-          title={rule.enabled ? t("transcoding.automation.disable") : t("transcoding.automation.enable")}
-          disabled={busy}
-          onClick={() => void toggleRule(rule)}
-        >
-          <Power aria-hidden="true" className="nav-icon" size={18} />
-        </button>
         <button
           type="button"
           className="secondary icon-only-button compatibility-profile-quick-action"
@@ -1372,7 +1272,7 @@ export function TranscodePresetsRulesPanel({
           className="secondary icon-only-button compatibility-profile-quick-action"
           aria-label={t("transcoding.automation.moveUp")}
           title={t("transcoding.automation.moveUp")}
-          disabled={busy || ruleIndex <= 0}
+          disabled={busy || Boolean(identity && !identity.owner) || ruleIndex <= 0}
           onClick={() => void moveRule(rule, -1)}
         >
           <ArrowUp aria-hidden="true" className="nav-icon" size={18} />
@@ -1382,7 +1282,7 @@ export function TranscodePresetsRulesPanel({
           className="secondary icon-only-button compatibility-profile-quick-action"
           aria-label={t("transcoding.automation.moveDown")}
           title={t("transcoding.automation.moveDown")}
-          disabled={busy || ruleIndex < 0 || ruleIndex >= rules.length - 1}
+          disabled={busy || Boolean(identity && !identity.owner) || ruleIndex < 0 || ruleIndex >= rules.length - 1}
           onClick={() => void moveRule(rule, 1)}
         >
           <ArrowDown aria-hidden="true" className="nav-icon" size={18} />
@@ -1487,7 +1387,7 @@ export function TranscodePresetsRulesPanel({
 
   const renderRuleList = () => (
     <section className="transcode-automation-tab-content">
-      <div className="compatibility-profile-list">
+      <div className="compatibility-profile-list transcode-rule-list">
         {standaloneTab && !hasStandaloneCollapse ? renderStandaloneHeader(panelAction) : !standaloneTab ? renderAutomationToggleRow(panelAction) : null}
         {rules.map((rule) => {
           const expanded = expandedRuleId === rule.id;
@@ -1495,8 +1395,9 @@ export function TranscodePresetsRulesPanel({
           return (
             <article className={`compatibility-profile-list-item${expanded ? " is-expanded" : ""}`} key={rule.id}>
               <div className="compatibility-profile-list-row">
+                {renderRuleSwitch(rule)}
                 <button type="button" className="compatibility-profile-list-trigger" aria-expanded={expanded} onClick={() => toggleRuleRow(rule)}>
-                  <span className="transcode-automation-list-copy"><strong>{rule.priority + 1}. {rule.name}</strong><small><span className={`badge ${rule.enabled ? "transcode-status-completed" : "transcode-status-canceled"}`}>{rule.enabled ? t("transcoding.automation.enabled") : t("transcoding.automation.disabled")}</span> · {rule.profile_name} · v{rule.profile_version}</small></span>
+                  <span className="transcode-automation-list-copy"><strong>{editing ? ruleDraft.name || rule.name : rule.name}</strong></span>
                   <ChevronDown aria-hidden="true" />
                 </button>
                 {renderRuleActions(rule)}
@@ -1508,15 +1409,16 @@ export function TranscodePresetsRulesPanel({
         {ruleDraft?.id === null && ruleEditorOpen ? (
           <article className="compatibility-profile-list-item is-expanded">
             <div className="compatibility-profile-list-row">
-              <div className="compatibility-profile-list-trigger is-static">
-                <span className="transcode-automation-list-copy"><strong>{ruleDraft.name || t("transcoding.automation.newRule")}</strong><small>{t("transcoding.automation.newRule")}</small></span>
+              <button type="button" className="compatibility-profile-list-trigger" aria-expanded="true"
+                onClick={() => { setRuleDraft(null); setRuleEditorOpen(false); }}>
+                <span className="transcode-automation-list-copy"><strong>{ruleDraft.name || t("transcoding.automation.newRule")}</strong></span>
                 <ChevronDown aria-hidden="true" />
-              </div>
+              </button>
             </div>
             {renderRuleEditor()}
           </article>
         ) : null}
-        {!rules.length && !(ruleDraft?.id === null && ruleEditorOpen) ? <p className="compatibility-profile-search-empty">{t("transcoding.automation.searchEmpty")}</p> : null}
+        {!rules.length && !(ruleDraft?.id === null && ruleEditorOpen) ? <p className="compatibility-profile-search-empty">{t("transcoding.automation.noRules")}</p> : null}
       </div>
     </section>
   );
@@ -1772,7 +1674,7 @@ export function TranscodePresetsRulesPanel({
       <Plus aria-hidden="true" size={14} />{t("transcoding.automation.newPreset")}
     </button>
   ) : tab === "rules" ? (
-    <button type="button" className="secondary small settings-panel-header-action" onClick={startNewRule} disabled={busy || !presets.length || !libraries.length}>
+    <button type="button" className="secondary small settings-panel-header-action" onClick={startNewRule} disabled={busy || Boolean(identity && !has("settings.app.edit"))}>
       <Plus aria-hidden="true" size={14} />{t("transcoding.automation.newRule")}
     </button>
   ) : null;

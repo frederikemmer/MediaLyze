@@ -35,7 +35,7 @@ These references describe the current repository implementation on `dev`, entry 
 | [Environment](environment.md) | Runtime variables, Compose interpolation, persistent paths, permissions, and diagnostic overrides. |
 | [Discovery and patterns](patterns.md) | Library roots, type-aware extensions, series/season recognition, duplicates, bonus content, and ignores. |
 | [Supported metadata](supported_metadata.md) | Analysis and UI support, music/audiobooks, quality, tables/charts, scan modes, failure reasons, and resource limits. |
-| [Transcoding](transcoding.md) | Plans/presets, filename and folder formatting, capability probes, output safety, job center, history, and comparison. |
+| [Transcoding](transcoding.md) | Plans and presets, automation rules and draft tests, formatting, capability probes, output safety, job center, history, and comparison. |
 | [Connectors](connectors.md) | Provider-neutral entities, path inference, exact matching, staging, APIs, and provider-development contract. |
 | [Compatibility profiles](compatibility-profiles.md) | Hardware/software/combination documents, schema versions, evaluation precedence, and contribution rules. |
 | [Telemetry](telemetry.md) | Opt-in modes, local API, payload contents/rounding, development flags, and external-service boundaries. |

@@ -1511,7 +1511,7 @@ export type TranscodeCondition = {
 
 export type TranscodeConditionGroup = {
   type: "group";
-  operator: "and" | "or";
+  operator: "and" | "or" | "xor";
   children: Array<TranscodeCondition | TranscodeConditionGroup>;
 };
 
@@ -1531,6 +1531,25 @@ export type TranscodeRule = {
   replacement_approved: boolean;
   created_at: string;
   updated_at: string;
+};
+
+export type TranscodeRuleTestAsset = { id: number; filename: string; title: string | null; library_id: number };
+export type TranscodeRuleTestTrace = {
+  matched: boolean;
+  values: Array<string | number | boolean>;
+  children: TranscodeRuleTestTrace[];
+};
+export type TranscodeRuleTestRequest = Pick<TranscodeRule, "library_ids" | "conditions" | "profile_id" | "output_mode" | "output_subfolder"> & {
+  file_id: number;
+  rule_id?: number;
+};
+export type TranscodeRuleTestResult = {
+  in_scope: boolean;
+  trace: TranscodeRuleTestTrace;
+  status: "matched" | "unmatched" | "blocked" | "skipped";
+  reason: string | null;
+  output_path: string | null;
+  output_relative_path: string | null;
 };
 
 export type TranscodeAutomationScope = {
@@ -3003,6 +3022,10 @@ export const api = {
     method: "POST",
     body: JSON.stringify({ confirm }),
   }),
+  searchTranscodeRuleAssets: (query: string, signal?: AbortSignal) =>
+    request<TranscodeRuleTestAsset[]>(`/transcoding/automation/test-assets?${new URLSearchParams({ q: query })}`, { signal }),
+  testTranscodeRule: (payload: TranscodeRuleTestRequest, signal?: AbortSignal) =>
+    request<TranscodeRuleTestResult>("/transcoding/automation/test-rule", { method: "POST", body: JSON.stringify(payload), signal }),
   previewTranscodeAutomation: (payload: TranscodeAutomationScope = {}) => request<TranscodeAutomationPreview>("/transcoding/automation/preview", {
     method: "POST",
     body: JSON.stringify(payload),

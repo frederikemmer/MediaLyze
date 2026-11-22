@@ -107,6 +107,8 @@ import {
 import { AnimatedConnectIcon } from "../components/AnimatedConnectIcon";
 import { AnimatedSearchIcon } from "../components/AnimatedSearchIcon";
 import { StreamLanguageField } from "../components/TranscodingPanel";
+import { ConditionGroupEditor, RuleConditionTrace } from "../components/TranscodeRuleConditions";
+import type { TranscodeConditionGroup } from "../lib/api";
 import { TranscodeProgressSummary } from "../components/TranscodeProgressSummary";
 import { LibraryHistoryPanel } from "../components/LibraryHistoryPanel";
 import { AsyncPanel } from "../components/AsyncPanel";
@@ -468,6 +470,25 @@ function AnalyzedFilesTable() {
       </div>
     </div>
   );
+}
+
+function TranscodeRuleFixture() {
+  const [group, setGroup] = useState<TranscodeConditionGroup>({
+    type: "group", operator: "and", children: [
+      { type: "condition", field: "size", operator: ">=", value: "10 GB" },
+      { type: "group", operator: "xor", children: [
+        { type: "condition", field: "audio_languages", operator: "contains", value: "de" },
+        { type: "condition", field: "audio_languages", operator: "contains", value: "en" },
+      ] },
+    ],
+  });
+  const example = { type: "condition", field: "size", operator: ">=", value: "10 GB" } as const;
+  return <div className="compatibility-profile-details transcode-rule-editor">
+    <ConditionGroupEditor group={group} onChange={setGroup} />
+    <ul className="transcode-rule-layers transcode-rule-test-result">
+      <RuleConditionTrace node={example} trace={{ matched: true, values: [14 * 1024 ** 3], children: [] }} />
+    </ul>
+  </div>;
 }
 
 function SettingsNavigationFixture({ collapsed = false, noResults = false, desktop = false }: { collapsed?: boolean; noResults?: boolean; desktop?: boolean }) {
@@ -3331,6 +3352,11 @@ export function UiElementsPage() {
                     </button>
                   </section>
                 </div>
+              </VariantCard>
+              <VariantCard title="Transcoding rule conditions" source="Settings → Transcoding → Automation Rules"
+                status="The editor uses nested logic groups and compact comparison symbols. This fixture edits local example data."
+                classes={["transcode-rule-editor", "transcode-rule-layers", "transcode-rule-operator", "transcode-rule-test-result"]} wide>
+                <TranscodeRuleFixture />
               </VariantCard>
               <VariantCard title="Compact transcoding plan" source="TranscodingPanel" status="No bundled transcoding presets; the selector offers saved user presets and Custom. Stream tabs use the fixed 40px Settings row height and container-aware language output formats; active default-stream actions fill the Sparkles symbol; search covers source metadata; audio and subtitle rows lead with language; metadata settings use a tooltip list; an expanded disabled folder formatter remains editable and previews its output" classes={["panel-header", "panel-title-row", "async-panel-header-status", "transcoding-panel", "transcode-preset-header-slot", "transcode-preset-select", "transcode-original-card", "transcode-control", "settings-choice-input", "transcode-progress", "transcode-progress-compact", "transcode-progress-compact-content", "transcode-progress-center-link", "transcode-progress-actions", "transcoding-progress-summary", "transcoding-progress-metrics", "transcoding-progress-metric", "transcoding-progress-chart", "transcoding-progress-meta", "compatibility-profile-list", "transcode-stream-catalog", "transcode-stream-tabs", "transcode-stream-tab", "transcode-stream-tab-count", "transcode-stream-tabpanel", "transcode-stream-list", "transcode-stream-search", "compatibility-profile-search", "compatibility-profile-search-icon", "compatibility-profile-search-clear", "transcode-stream-list-item", "is-dropped", "transcode-stream-list-row", "transcode-stream-row-actions", "transcode-stream-row-trigger", "transcode-stream-row-copy", "transcode-stream-format", "is-language-first", "transcode-stream-default-button", "compatibility-profile-quick-action", "transcode-stream-action-icon", "transcode-action-field", "transcode-action-select", "transcode-stream-details", "transcode-stream-copy-details", "transcode-stream-copy-note", "transcode-stream-encode-fields", "transcode-video-encode-fields", "transcode-control-field", "transcode-field-label", "transcode-dynamic-range-field", "transcode-codec-field", "transcode-preset-field", "transcode-range-row", "transcode-quality-range", "transcode-range-value", "transcode-filename-section", "transcode-folder-section", "transcode-metadata-settings", "transcode-filename-header", "transcode-filename-header-tooltip", "transcode-filename-chevron-toggle", "transcode-filename-toggle", "transcode-filename-chevron", "transcode-formatting-toggle", "transcode-formatting-preset-select", "transcode-filename-body", "transcode-filename-template-input", "transcode-filename-template-editor", "transcode-filename-inline-token", "transcode-filename-inline-text", "transcode-filename-metadata-tools", "transcode-filename-metadata-toggle", "transcode-filename-token-list", "transcode-filename-token-group", "transcode-filename-token-group-items", "transcode-filename-token-pill", "transcode-filename-token-tooltip-portal", "transcode-filename-token-tooltip", "transcode-filename-token-tooltip-heading", "transcode-filename-token-tooltip-example", "transcode-filename-options-row", "transcode-filename-divider-field", "transcode-filename-cleanup", "transcode-filename-cleanup-heading", "transcode-filename-cleanup-control", "transcode-language-code-field", "transcode-filename-field", "transcode-filename-preview", "is-disabled", "transcode-metadata-option-list", "transcode-global-option", "transcode-global-option-label", "toggle-switch", "toggle-switch-track", "toggle-switch-thumb", "transcode-action-button"]} wide>
                 <div className="transcoding-panel">

@@ -9,6 +9,8 @@ import {
   type TranscodeFederation,
   type TranscodePreset,
   type TranscodePresetDefinition,
+  type LibrarySummary,
+  type TranscodeRule,
 } from "../lib/api";
 import { TranscodePresetsRulesPanel } from "./TranscodePresetsRulesPanel";
 import { releaseVisibility } from "../lib/release-visibility";
@@ -145,6 +147,53 @@ describe("TranscodePresetsRulesPanel", () => {
     releaseVisibility.automationRules = false;
     cleanup();
     vi.restoreAllMocks();
+  });
+
+  it("opens a new draft from a collapsed rule panel without a preset or library", async () => {
+    vi.mocked(api.transcodePresets).mockResolvedValue([]);
+    const onToggle = vi.fn();
+    const panel = (collapsed: boolean) => <TranscodePresetsRulesPanel
+      capabilityMatrix={() => null} acceleratorsTooltip={null} standaloneTab="rules"
+      standaloneCollapsed={collapsed} onStandaloneToggle={onToggle}
+    />;
+    const { rerender } = render(panel(true));
+    fireEvent.click(await screen.findByRole("button", { name: "New rule" }));
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    rerender(panel(false));
+    expect(screen.getByRole("textbox", { name: "Rule name" })).toBeVisible();
+    expect(screen.getByText(/Create a transcode preset/)).toBeVisible();
+    expect(screen.getByText(/need a library with permission/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it("saves a nested XOR rule and activates the saved row with the standard switch", async () => {
+    vi.mocked(api.libraries).mockResolvedValue([{ id: 6, name: "Movies" } as LibrarySummary]);
+    const saved: TranscodeRule = {
+      id: 19, name: "Encode selected files", enabled: false, priority: 0, library_ids: [6],
+      conditions: { type: "group", operator: "and", children: [{ type: "group", operator: "xor", children: [
+        { type: "condition", field: "video_codec", operator: "equals", value: "hevc" },
+      ] }] },
+      profile_id: builtin.id, profile_name: builtin.name, profile_version: builtin.version,
+      output_mode: "transcode_output", output_subfolder: "", replacement_approved: false, version: 1,
+      created_at: "", updated_at: "",
+    };
+    const create = vi.spyOn(api, "createTranscodeRule").mockResolvedValue(saved);
+    const update = vi.spyOn(api, "updateTranscodeRule").mockResolvedValue({ ...saved, enabled: true });
+    render(<TranscodePresetsRulesPanel capabilityMatrix={() => null} acceleratorsTooltip={null} standaloneTab="rules" />);
+    fireEvent.click(await screen.findByRole("button", { name: "New rule" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Rule name" }), { target: { value: saved.name } });
+    fireEvent.click(screen.getByRole("button", { name: "Add nested group" }));
+    const [ , nestedLogic ] = screen.getAllByRole("combobox", { name: "Logic" });
+    fireEvent.change(nestedLogic, { target: { value: "xor" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Condition value" }), { target: { value: "hevc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ conditions: saved.conditions })));
+    const toggle = await screen.findByRole("switch", { name: "Enable " + saved.name });
+    expect(toggle).not.toBeChecked();
+    expect(toggle.parentElement?.querySelector(".toggle-switch-thumb")).toBeInTheDocument();
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle).toBeChecked());
+    expect(update).toHaveBeenCalledWith(saved.id, { enabled: true });
   });
 
   it("hides unfinished rule and member tabs in the release view", async () => {

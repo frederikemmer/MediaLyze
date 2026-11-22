@@ -1827,3 +1827,39 @@ def test_reconstruction_checks_only_selected_scan_conflicts_and_hides_other_job_
     assert "allowed" not in response.text and "other" not in response.text
     assert client.get(f"/api/libraries/{b}/history/reconstruct").status_code == 404
     assert len(executor.tasks) == 2
+
+
+def test_rule_file_search_uses_only_titles_and_filenames_and_requires_owner(env):
+    app, factory, _ = env
+    library_id = library(factory, "automation-search")
+    owner = setup(app)
+    with factory() as db:
+        for index in range(7):
+            db.add(MediaFile(
+                library_id=library_id, filename=f"Clip-{index}.mkv",
+                relative_path=f"hidden-directory/Clip-{index}.mkv", extension="mkv",
+                size_bytes=10, mtime=1, episode_title="Find this title" if index == 1 else None,
+            ))
+        db.commit()
+
+    path = "/api/transcoding/automation/test-assets"
+    response = owner.get(path, params={"q": "find this title"})
+    assert response.status_code == 200, response.text
+    assert [(item["filename"], item["title"]) for item in response.json()] == [("Clip-1.mkv", "Find this title")]
+    assert len(owner.get(path, params={"q": "clip"}).json()) == 5
+    assert owner.get(path, params={"q": "hidden-directory"}).json() == []
+    assert owner.get(path, params={"q": "%"}).json() == []
+    payload = {
+        "file_id": response.json()[0]["id"], "library_ids": [library_id],
+        "profile_id": 1, "output_mode": "transcode_output",
+    }
+    preview = post(owner, "/api/transcoding/automation/test-rule", payload)
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["status"] == "blocked"  # The catalog asset has no video stream.
+
+    client, _ = user(owner, app, {
+        **EMPTY_POLICY, "global": ["settings.app.view", "settings.app.edit"],
+        "libraries": {str(library_id): ["library.read", "transcode.view", "transcode.run"]},
+    })
+    assert client.get(path, params={"q": "clip"}).status_code == 403
+    assert post(client, "/api/transcoding/automation/test-rule", payload).status_code == 403

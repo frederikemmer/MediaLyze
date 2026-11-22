@@ -517,3 +517,36 @@ def test_preview_batches_profiles_and_existing_decisions(tmp_path: Path, monkeyp
             sum("FROM transcode_automation_records" in statement for statement in statements)
             == 1
         )
+
+
+def test_draft_rule_preview_uses_execution_logic_without_creating_work(tmp_path, monkeypatch):
+    from backend.app.models.entities import TranscodeJob
+    from backend.app.schemas.transcoding import TranscodeRuleTestRequest
+
+    settings = _settings(tmp_path)
+    monkeypatch.setattr(automation, "get_transcode_capabilities", lambda _: _capabilities())
+    monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda _: _capabilities())
+    with _session_factory()() as db:
+        media = _media_file(db, tmp_path)
+        preset = automation.create_transcode_preset(db, TranscodePresetCreate(name="Draft", definition=_profile_definition()))
+        codec = TranscodeCondition(field="video_codec", operator="equals", value="hevc")
+        size = TranscodeCondition(field="size", operator=">", value=10**20)
+        tree = _condition_group(codec, size, operator="xor")
+        request = TranscodeRuleTestRequest(
+            file_id=media.id, library_ids=[media.library_id], profile_id=preset.id,
+            conditions=tree, output_mode="transcode_output", output_subfolder="preview",
+        )
+        decision = automation.test_transcode_rule_draft(db, settings, request)
+        assert [child.matched for child in decision.trace.children] == [True, False]
+        assert decision.trace.matched == automation.condition_matches(media, tree, get_app_settings(db, settings))
+        assert decision.status == "matched", decision.reason
+        assert "preview/" in decision.output_relative_path
+        conflicting = request.model_copy(update={"conditions": _condition_group(codec, codec, operator="xor")})
+        decision = automation.test_transcode_rule_draft(db, settings, conflicting)
+        assert decision.status == "unmatched"
+        assert [child.matched for child in decision.trace.children] == [True, True]
+        replacing = request.model_copy(update={"output_mode": "replace_original", "output_subfolder": ""})
+        assert automation.test_transcode_rule_draft(db, settings, replacing).status == "blocked"
+        assert db.scalars(select(TranscodeRule)).all() == []
+        assert db.scalars(select(TranscodeJob)).all() == []
+        assert db.scalars(select(TranscodeAutomationRecord)).all() == []

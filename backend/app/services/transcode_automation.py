@@ -4,12 +4,14 @@ import re
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.core.config import Settings
 from backend.app.models.entities import (
+    ConnectorItem,
+    ConnectorMediaMatch,
     JobStatus,
     Library,
     MediaFile,
@@ -36,6 +38,10 @@ from backend.app.schemas.transcoding import (
     TranscodeRuleCreate,
     TranscodeRuleRead,
     TranscodeRuleReorder,
+    TranscodeRuleTestAsset,
+    TranscodeRuleTestRead,
+    TranscodeRuleTestRequest,
+    TranscodeRuleTestTrace,
     TranscodeRuleUpdate,
 )
 from backend.app.services.app_settings import get_app_settings
@@ -903,7 +909,10 @@ def _field_values(media_file: MediaFile, field: str, app_settings) -> tuple[list
         if primary_video is None:
             return [], False
         value = str(primary_video.hdr_type).lower() if primary_video.hdr_type else "sdr"
-        return list(dict.fromkeys((value, value.replace("_", " "), value.replace(" ", "_")))), False
+        values = [value, value.replace("_", " "), value.replace(" ", "_")]
+        if value.startswith("dolby vision "):
+            values.append("dolby vision")
+        return list(dict.fromkeys(values)), False
     if key == "audio_codecs":
         return [str(stream.codec).lower() for stream in media_file.audio_streams if stream.codec], False
     if key == "audio_spatial_profiles":
@@ -983,8 +992,7 @@ def _text_match(values: list[str], operator: str, wanted: list[str]) -> bool:
     return False
 
 
-def _condition_matches(media_file: MediaFile, condition: TranscodeCondition, app_settings) -> bool:
-    values, numeric = _field_values(media_file, condition.field, app_settings)
+def _condition_matches(values: list[Any], numeric: bool, condition: TranscodeCondition) -> bool:
     operator = condition.operator.strip().lower().replace("-", "_").replace(" ", "_")
     if operator in {"exists", "present", "has_value"}:
         return bool(values)
@@ -1045,18 +1053,116 @@ def _condition_matches(media_file: MediaFile, condition: TranscodeCondition, app
     return _text_match([str(value) for value in values], operator, wanted)
 
 
+def _group_matches(operator: str, results: list[bool]) -> bool:
+    if not results:
+        return False
+    if operator == "xor":
+        return sum(results) == 1
+    return all(results) if operator == "and" else any(results)
+
+
 def condition_matches(media_file: MediaFile, conditions: TranscodeConditionGroup | None, app_settings) -> bool:
     if conditions is None:
         return True
-    if not conditions.children:
-        return False
-    results = [
+    return _group_matches(conditions.operator, [
         condition_matches(media_file, child, app_settings)
         if isinstance(child, TranscodeConditionGroup)
-        else _condition_matches(media_file, child, app_settings)
+        else _condition_matches(*_field_values(media_file, child.field, app_settings), child)
         for child in conditions.children
-    ]
-    return all(results) if conditions.operator == "and" else any(results)
+    ])
+
+
+def _condition_trace(media_file: MediaFile, node: TranscodeConditionGroup | TranscodeCondition | None, app_settings) -> TranscodeRuleTestTrace:
+    if node is None:
+        return TranscodeRuleTestTrace(matched=True)
+    if isinstance(node, TranscodeConditionGroup):
+        children = [_condition_trace(media_file, child, app_settings) for child in node.children]
+        return TranscodeRuleTestTrace(matched=_group_matches(node.operator, [child.matched for child in children]), children=children)
+    values, numeric = _field_values(media_file, node.field, app_settings)
+    matched = _condition_matches(values, numeric, node)
+    return TranscodeRuleTestTrace(
+        matched=matched,
+        values=list(dict.fromkeys(value if isinstance(value, (str, int, float, bool)) else str(value) for value in values)),
+    )
+
+
+def search_transcode_rule_assets(db: Session, query: str) -> list[TranscodeRuleTestAsset]:
+    query = query.strip()
+    if not query:
+        return []
+    provider_title = (
+        select(ConnectorItem.title)
+        .join(ConnectorMediaMatch, ConnectorMediaMatch.connector_item_id == ConnectorItem.id)
+        .where(ConnectorMediaMatch.media_file_id == MediaFile.id, ConnectorMediaMatch.status == "matched",
+               ConnectorItem.title.icontains(query, autoescape=True))
+        .order_by(ConnectorItem.id)
+        .limit(1)
+        .correlate(MediaFile)
+        .scalar_subquery()
+    )
+    titles = (
+        provider_title,
+        func.nullif(MediaFile.episode_title, ""),
+        func.nullif(MediaFile.audio_title, ""),
+        func.json_extract(MediaFile.raw_ffprobe_json, "$.format.tags.title"),
+        func.json_extract(MediaFile.raw_ffprobe_json, "$.format.tags.TITLE"),
+    )
+    filename = MediaFile.filename
+    fields = (filename, *titles)
+    contains = [field.icontains(query, autoescape=True) for field in fields]
+    title = func.coalesce(
+        *(case((matched, field)) for matched, field in zip(contains[1:], titles)),
+        *titles,
+    )
+    rank = case(
+        (or_(*(func.lower(field) == query.lower() for field in fields)), 0),
+        (or_(*(field.istartswith(query, autoescape=True) for field in fields)), 1),
+        else_=2,
+    )
+    rows = db.execute(
+        select(MediaFile.id, filename, title.label("title"), MediaFile.library_id)
+        .where(or_(*contains))
+        .order_by(rank, func.lower(filename), MediaFile.id)
+        .limit(5)
+    )
+    return [TranscodeRuleTestAsset.model_validate(row._mapping) for row in rows]
+
+
+def test_transcode_rule_draft(db: Session, settings: Settings, payload: TranscodeRuleTestRequest) -> TranscodeRuleTestRead:
+    media_file = db.get(MediaFile, payload.file_id)
+    if media_file is None:
+        raise TranscodeAutomationError("Media file not found")
+    app_settings = get_app_settings(db, settings)
+    trace = _condition_trace(media_file, payload.conditions, app_settings)
+    in_scope = media_file.library_id in _library_ids_exist(db, payload.library_ids)
+    if not in_scope or not trace.matched:
+        return TranscodeRuleTestRead(in_scope=in_scope, trace=trace, status="unmatched")
+    if media_file.is_transcode_variant or not media_file.video_streams:
+        return TranscodeRuleTestRead(in_scope=True, trace=trace, status="blocked", reason="Only primary video files are eligible for automation.")
+    preset = get_transcode_preset(db, payload.profile_id)
+    subfolder = _normalized_rule_output_subfolder(payload.output_subfolder)
+    _validate_rule_output_layout(payload.output_mode, subfolder)
+    conditions = _conditions_payload(payload.conditions)
+    saved = get_transcode_rule(db, payload.rule_id) if payload.rule_id else None
+    unchanged = saved is not None and (
+        saved.profile_id == payload.profile_id and saved.output_mode == payload.output_mode
+        and (saved.output_subfolder or "") == subfolder and saved.conditions == conditions
+        and set(saved.library_ids) == set(payload.library_ids)
+    )
+    draft = saved if unchanged else TranscodeRule(
+        id=0, name="", version=1, enabled=True, priority=0,
+        library_ids=payload.library_ids, conditions=conditions, profile_id=preset.id,
+        output_mode=payload.output_mode, output_subfolder=subfolder,
+    )
+    decision = _decision_for_file(
+        db, settings, media_file, [draft], app_settings, get_transcode_capabilities(settings),
+        retry_failed=False, profiles_by_id={preset.id: preset},
+        records_by_identity=None if unchanged else {},
+    )
+    return TranscodeRuleTestRead(
+        in_scope=True, trace=trace, status=decision.status, reason=decision.reason,
+        output_path=decision.output_path, output_relative_path=decision.output_relative_path,
+    )
 
 
 def _candidate_options(scope: TranscodeAutomationScope, rules: list[TranscodeRule]):

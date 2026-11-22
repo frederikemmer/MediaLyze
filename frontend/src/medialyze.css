@@ -18189,3 +18189,96 @@ html[data-theme="dark"] .notification-card[data-palette="contrast"][data-type="e
 .passkey-identity small { color: var(--text-muted); font-size: .73rem; }
 .passkey-rename { display: flex; align-items: center; flex: 1; min-width: 0; gap: 4px; }
 .passkey-rename input { min-width: 0; flex: 1; }
+
+/* Transcoding rule editor and read-only file test. */
+.transcode-rule-list.compatibility-profile-list { overflow: visible; }
+.transcode-rule-switch { margin-inline-start: 12px; }
+.transcode-rule-editor section { display: grid; gap: 8px; min-width: 0; }
+.transcode-rule-editor :is(h4, p) { margin: 0; }
+.transcode-rule-libraries { min-width: 0; margin: 0; padding: 0 0 8px; border: 0; }
+.transcode-rule-libraries legend { padding: 0; margin-bottom: 6px; color: var(--muted); font-size: .82rem; font-weight: 700; }
+.transcode-rule-libraries > div { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.transcode-rule-inline-input { position: relative; display: block; min-width: 0; }
+.transcode-rule-inline-input > input.settings-choice-input { padding-inline-end: 6rem; }
+.transcode-rule-editor .settings-inline-label-select > select { text-overflow: ellipsis; }
+.transcode-rule-layers { display: grid; gap: 8px; padding: 0; margin: 0; list-style: none; }
+.transcode-rule-layers .transcode-rule-layers {
+  --rule-indent: clamp(8px, 2vw, 18px);
+  margin-inline-start: 4px;
+  padding-inline-start: var(--rule-indent);
+  border-inline-start: 2px solid var(--border);
+}
+.transcode-rule-branch { position: relative; min-width: 0; }
+.transcode-rule-layers .transcode-rule-layers > .transcode-rule-branch::before {
+  content: "";
+  position: absolute;
+  inset-inline-end: 100%;
+  inset-block-start: 17px;
+  width: var(--rule-indent);
+  border-block-start: 2px solid var(--border);
+}
+.transcode-rule-layer.is-nested { border-style: solid; }
+.transcode-rule-group-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.transcode-rule-group-header > .settings-inline-label-select { width: min(100%, 26rem); }
+.transcode-rule-condition-row > :is(.settings-inline-label-select, .transcode-rule-inline-input) {
+  flex: 1 1 12rem;
+  min-width: min(100%, 12rem);
+}
+.transcode-rule-condition-row > select.transcode-rule-operator {
+  flex: 0 0 3.5rem;
+  min-width: 0;
+  width: 3.5rem;
+  padding-inline: 9px 26px;
+  background-position: right 6px center;
+}
+.transcode-rule-editor button.transcode-rule-remove.secondary.icon-only-button {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  min-height: 38px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+}
+.transcode-rule-editor button.transcode-rule-remove.secondary.icon-only-button:hover {
+  transform: none;
+  background: var(--surface-subtle);
+  color: var(--ink);
+}
+.transcode-rule-test-picker { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px 12px; }
+.transcode-rule-test-picker > h4 { padding-block-start: 8px; }
+.transcode-rule-test-search { position: relative; flex: 1 1 15rem; min-width: 0; }
+.transcode-rule-test-options.compatibility-profile-list {
+  position: absolute;
+  z-index: 5;
+  inset-block-start: 100%;
+  inset-inline: 0;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  background: linear-gradient(var(--panel-strong), var(--panel-strong)), var(--bg);
+  box-shadow: var(--shadow);
+}
+.transcode-rule-test-options .compatibility-profile-list-trigger { width: 100%; padding: 4px 8px; overflow-wrap: anywhere; }
+.transcode-rule-test-options .field-hint { padding: 6px 8px; }
+.transcode-rule-test-result { overflow-wrap: anywhere; }
+.transcode-rule-test-result .transcode-rule-layers { gap: 4px; }
+.transcode-rule-test-result .transcode-rule-branch::before { inset-block-start: 10px; }
+.transcode-rule-test-line { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; padding: 3px 6px; border-radius: 5px; }
+.transcode-rule-test-group { display: grid; gap: 4px; padding: 4px 6px; border-radius: 7px; box-shadow: inset 0 0 0 1px var(--border); }
+.transcode-rule-test-result :is(.is-match, .is-miss) {
+  background: linear-gradient(var(--rule-test-tint), var(--rule-test-tint)), linear-gradient(var(--panel-strong), var(--panel-strong)), var(--bg);
+}
+.transcode-rule-test-result .is-match { --rule-test-tint: rgba(115, 153, 108, .12); }
+.transcode-rule-test-result .is-miss { --rule-test-tint: rgba(207, 83, 69, .11); }
+.transcode-rule-test-result .jellyfin-status-badge { max-width: 100%; }
+.transcode-rule-test-line .is-rule-value { background: color-mix(in srgb, var(--accent-3) 16%, var(--panel)); color: var(--ink); }
+.transcode-rule-test-line small { color: var(--muted); }
+.transcode-rule-test-success { color: #2f6f28; }
+html[data-theme="dark"] .transcode-rule-test-success { color: #9fd18f; }
+
+@media (max-width: 480px) {
+  .transcode-rule-editor .compatibility-profile-form-grid { grid-template-columns: 1fr; }
+}

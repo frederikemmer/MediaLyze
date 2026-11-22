@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+- Open the automation rule editor from a collapsed panel and explain missing presets or libraries before saving.
+
+- Add the Transcoding automation rule editor with nested AND, OR and XOR conditions, activation switches, and an Owner-only dry run that searches existing files by title or filename and shows condition matches and the proposed output.
+
 - Extend safe notifications across account, library, connector, profile, transcoding, export and clipboard actions; report autosave errors immediately and confirm persisted changes once on departure, including account/Desktop preference updates. Hide Quick scan without the required library rights.
 
 - Keep history reconstruction in Logs settings and remove its duplicate control and status timestamp from library details.
