@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+- Place save and cancel icon buttons beside the transcoding rule name.
+
+- Improve transcoding rule and preset summaries, list video copy settings, and highlight the full rule row on hover.
+
 - Ship the X to HEVC transcoding preset and standard filename, folder, and series season folder presets. Allow formatting presets to be duplicated.
 
 - Place the output size limit beside the output subfolder in transcoding rules and remove its inline hint.
