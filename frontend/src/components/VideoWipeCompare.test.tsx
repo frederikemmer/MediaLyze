@@ -18,6 +18,8 @@ describe("VideoWipeCompare", () => {
     const [first, second] = Array.from(container.querySelectorAll("video"));
     expect(first).toHaveAttribute("playsinline");
     expect(second).toHaveAttribute("playsinline");
+    expect(screen.getByRole("combobox", { name: "First audio track" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "Second audio track" })).toBeDisabled();
     Object.defineProperty(first, "duration", { configurable: true, value: 120 });
     Object.defineProperty(second, "duration", { configurable: true, value: 121 });
     fireEvent.loadedMetadata(first);
@@ -67,5 +69,43 @@ describe("VideoWipeCompare", () => {
     );
     fireEvent.error(container.querySelectorAll("video")[1]);
     expect(screen.getByText(/cannot be played by this browser/i)).toBeInTheDocument();
+  });
+
+  it("switches the selected audio track on only the requested side", () => {
+    type TestTrack = { enabled: boolean; label: string; language: string };
+    const trackLists = new WeakMap<HTMLVideoElement, EventTarget & ArrayLike<TestTrack>>();
+    Object.defineProperty(HTMLVideoElement.prototype, "audioTracks", {
+      configurable: true,
+      get(this: HTMLVideoElement) {
+        if (!trackLists.has(this)) {
+          const tracks: ArrayLike<TestTrack> = {
+            0: { enabled: true, label: "English", language: "en" },
+            1: { enabled: false, label: "German", language: "de" },
+            length: 2,
+          };
+          trackLists.set(this, Object.assign(new EventTarget(), tracks));
+        }
+        return trackLists.get(this);
+      },
+    });
+    try {
+      const { container, unmount } = render(
+        <VideoWipeCompare
+          first={{ src: "/api/files/1/media", label: "Original" }}
+          second={{ src: "/api/files/2/media", label: "Variant" }}
+        />,
+      );
+      const firstSelect = screen.getByRole("combobox", { name: "First audio track" });
+      const secondSelect = screen.getByRole("combobox", { name: "Second audio track" });
+      fireEvent.change(firstSelect, { target: { value: "1" } });
+      expect(firstSelect).toHaveValue("1");
+      expect(secondSelect).toHaveValue("0");
+      const [first, second] = container.querySelectorAll("video");
+      expect(Array.from(trackLists.get(first)!, (track) => track.enabled)).toEqual([false, true]);
+      expect(Array.from(trackLists.get(second)!, (track) => track.enabled)).toEqual([true, false]);
+      unmount();
+    } finally {
+      Reflect.deleteProperty(HTMLVideoElement.prototype, "audioTracks");
+    }
   });
 });

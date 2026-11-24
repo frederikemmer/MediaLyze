@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   api,
+  type AppSettings,
+  type TranscodeAutomationRun,
   type TranscodeFederation,
   type TranscodePreset,
   type TranscodePresetDefinition,
@@ -13,6 +15,7 @@ import {
   type TranscodeRule,
 } from "../lib/api";
 import { TranscodePresetsRulesPanel } from "./TranscodePresetsRulesPanel";
+import * as auth from "../lib/auth";
 import { releaseVisibility } from "../lib/release-visibility";
 
 const definition: TranscodePresetDefinition = {
@@ -149,6 +152,49 @@ describe("TranscodePresetsRulesPanel", () => {
     vi.restoreAllMocks();
   });
 
+  it("sets an interval, previews all active rules, and starts jobs only after confirmation", async () => {
+    vi.spyOn(auth, "useAuth").mockReturnValue({
+      identity: { owner: true } as ReturnType<typeof auth.useAuth>["identity"],
+      has: () => true, status: null, refresh: async () => {}, logout: async () => {},
+    });
+    vi.mocked(api.transcodeRules).mockResolvedValue([{
+      id: 19, name: "Encode selected files", enabled: true, priority: 0, library_ids: [6],
+      conditions: null, profile_id: builtin.id, profile_name: builtin.name, profile_version: builtin.version,
+      output_mode: "transcode_output", output_subfolder: "", replacement_approved: false, version: 1,
+      created_at: "", updated_at: "",
+    }]);
+    const save = vi.spyOn(api, "updateAppSettings").mockResolvedValue({} as AppSettings);
+    vi.spyOn(api, "transcodeAutomationStatus").mockResolvedValue(null);
+    const preview = vi.spyOn(api, "previewTranscodeAutomation").mockResolvedValue({
+      generated_at: "", total_files: 3, matched: 2, queued: 0, blocked: 0, skipped: 0, unmatched: 1, items: [],
+    });
+    const start = vi.spyOn(api, "startTranscodeAutomation").mockResolvedValue({
+      id: 1, status: "completed", queued: 2, completed: 0, failed: 0, skipped: 0, blocked: 0,
+    } as TranscodeAutomationRun);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    render(<TranscodePresetsRulesPanel capabilityMatrix={() => null} acceleratorsTooltip={null}
+      standaloneTab="rules" onAutomationSettingsUpdated={vi.fn()} />);
+
+    fireEvent.change(await screen.findByRole("combobox", { name: "Trigger" }), { target: { value: "interval" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Interval (minutes)" }), { target: { value: "15" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith({
+      transcoding: { automation_trigger: "interval", automation_interval_minutes: 15 },
+    }));
+    const dryRun = screen.getByRole("button", { name: "Dry Run" });
+    await waitFor(() => expect(dryRun).toBeEnabled());
+    fireEvent.click(dryRun);
+    expect(await screen.findByText(/3 candidate files/)).toBeInTheDocument();
+    expect(preview).toHaveBeenCalledWith({ preview_all: true, limit: 100 });
+    expect(start).not.toHaveBeenCalled();
+    const startAll = screen.getByRole("button", { name: "Start All" });
+    fireEvent.click(startAll);
+    expect(start).not.toHaveBeenCalled();
+    fireEvent.click(startAll);
+    await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
+    expect(confirm).toHaveBeenCalledTimes(2);
+  });
+
   it("shows saved rules while editor options are still loading", async () => {
     let resolveLibraries!: (libraries: LibrarySummary[]) => void;
     vi.mocked(api.libraries).mockReturnValue(new Promise(resolve => { resolveLibraries = resolve; }));
@@ -169,7 +215,7 @@ describe("TranscodePresetsRulesPanel", () => {
     await waitFor(() => expect(newRule).toBeEnabled());
   });
 
-  it("opens a new draft from a collapsed rule panel without a preset or library", async () => {
+  it("places New rule inside the panel and opens a draft without a preset or library", async () => {
     vi.mocked(api.transcodePresets).mockResolvedValue([]);
     const onToggle = vi.fn();
     const panel = (collapsed: boolean) => <TranscodePresetsRulesPanel
@@ -177,11 +223,12 @@ describe("TranscodePresetsRulesPanel", () => {
       standaloneCollapsed={collapsed} onStandaloneToggle={onToggle}
     />;
     const { rerender } = render(panel(true));
+    await screen.findByRole("button", { name: /Expand Automation Rules/i });
+    expect(screen.queryByRole("button", { name: "New rule" })).not.toBeInTheDocument();
+    rerender(panel(false));
     const newRule = await screen.findByRole("button", { name: "New rule" });
     await waitFor(() => expect(newRule).toBeEnabled());
     fireEvent.click(newRule);
-    expect(onToggle).toHaveBeenCalledTimes(1);
-    rerender(panel(false));
     expect(screen.getByRole("textbox", { name: "Rule name" })).toBeVisible();
     expect(screen.getByText(/Create a transcode preset/)).toBeVisible();
     expect(screen.getByText(/need a library with permission/)).toBeVisible();
@@ -214,7 +261,13 @@ describe("TranscodePresetsRulesPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add nested group" }));
     const [ , nestedLogic ] = screen.getAllByRole("combobox", { name: "Logic" });
     fireEvent.change(nestedLogic, { target: { value: "xor" } });
-    fireEvent.change(screen.getByRole("combobox", { name: "Condition field" }), { target: { value: "resolution" } });
+    const conditionField = screen.getByRole("combobox", { name: "Condition field" });
+    fireEvent.change(conditionField, { target: { value: "path" } });
+    fireEvent.mouseEnter(conditionField);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Archiv/Dokus/");
+    expect(fireEvent.keyDown(conditionField, { key: " " })).toBe(true);
+    fireEvent.mouseLeave(conditionField);
+    fireEvent.change(conditionField, { target: { value: "resolution" } });
     const resolution = screen.getByRole("combobox", { name: "Condition value" });
     expect(within(resolution).getByRole("option", { name: "Archive HD" })).toHaveValue("archive_hd");
     fireEvent.change(resolution, { target: { value: "archive_hd" } });

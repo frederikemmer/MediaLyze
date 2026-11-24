@@ -2759,7 +2759,7 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="Transcoding job center" source="TranscodingPage" status="Modular ECharts core renders the shared SVG speed chart with registered tooltips; small muted metrics overlay the 30px graph; phase text interrupts the thin 6px bar with a centered white backdrop; compact actions include terminal run deletion and a borderless filter reset; column headers use half the previous height" classes={["transcoding-center-panel", "transcoding-center-heading", "transcoding-center-tabs", "library-history-range-toggle", "library-history-range-pill", "library-history-range-button", "transcoding-center-tab-count", "transcoding-reset-button", "icon-button", "icon-button-borderless", "icon-button-static", "transcoding-job-table", "column-sort", "sort-indicator", "transcoding-progress-summary", "transcoding-progress-metrics", "transcoding-progress-metric", "transcoding-progress-chart", "transcoding-progress-meta", "transcoding-progress-static", "column-resize-handle", "transcoding-job-row", "transcoding-job-action", "transcoding-job-detail-row", "transcoding-job-detail-grid", "transcoding-job-detail-time", "transcoding-job-detail-list", "transcoding-job-transform-list", "transcoding-job-command", "transcoding-detail-links", "transcoding-hardware-load", "transcoding-hardware-load-trigger", "transcoding-hardware-load-slots", "transcoding-hardware-load-slot", "settings-choice-input"]} wide>
+              <VariantCard title="Transcoding job center" source="TranscodingPage" status="Search and filters use inset labels. Modular ECharts core renders the shared SVG speed chart with registered tooltips; small muted metrics overlay the 30px graph; phase text interrupts the thin 6px bar with a centered white backdrop; compact actions include terminal run deletion and a borderless filter reset; column headers use half the previous height" classes={["transcoding-center-panel", "transcoding-center-heading", "transcoding-center-tabs", "library-history-range-toggle", "library-history-range-pill", "library-history-range-button", "transcoding-center-tab-count", "transcoding-reset-button", "icon-button", "icon-button-borderless", "icon-button-static", "transcoding-job-table", "column-sort", "sort-indicator", "transcoding-progress-summary", "transcoding-progress-metrics", "transcoding-progress-metric", "transcoding-progress-chart", "transcoding-progress-meta", "transcoding-progress-static", "column-resize-handle", "transcoding-job-row", "transcoding-job-action", "transcoding-job-detail-row", "transcoding-job-detail-grid", "transcoding-job-detail-time", "transcoding-job-detail-list", "transcoding-job-transform-list", "transcoding-job-command", "transcoding-detail-links", "transcoding-hardware-load", "transcoding-hardware-load-trigger", "transcoding-hardware-load-slots", "transcoding-hardware-load-slot", "settings-choice-input"]} wide>
                 <div className="transcoding-center-panel">
                   <div className="transcoding-center-header">
                     <div className="transcoding-center-heading">
@@ -2780,9 +2780,13 @@ export function UiElementsPage() {
                     </div>
                   </div>
                   <div className="transcoding-center-toolbar">
-                    <label className="transcoding-search-field"><Search aria-hidden="true" /><input type="search" placeholder="Search files…" /></label>
-                    <label className="transcoding-filter-field"><span>Status</span><select className="settings-choice-input" defaultValue="all"><option value="all">All statuses</option></select></label>
-                    <label className="transcoding-filter-field"><span>Hardware</span><select className="settings-choice-input" defaultValue="all"><option value="all">All hardware</option></select></label>
+                    <div className="transcoding-search-field">
+                      <Search aria-hidden="true" />
+                      <SettingsInlineLabelInput type="search" label="Search files" />
+                    </div>
+                    <SettingsInlineLabelSelect label="Status" defaultValue="all"><option value="all">All</option></SettingsInlineLabelSelect>
+                    <SettingsInlineLabelSelect label="Target" defaultValue="all"><option value="all">All</option></SettingsInlineLabelSelect>
+                    <SettingsInlineLabelSelect label="Hardware" defaultValue="all"><option value="all">All</option></SettingsInlineLabelSelect>
                     <TooltipTrigger ariaLabel="Reset filters" content="Reset filters" className="icon-button icon-button-borderless icon-button-static transcoding-reset-button" pinOnClick={false}><History aria-hidden="true" className="nav-icon" size={16} /></TooltipTrigger>
                   </div>
                   <div className="transcoding-table-scroll">
@@ -3233,6 +3237,19 @@ export function UiElementsPage() {
                     <div className="page-heading-row">
                       <GitCompare aria-hidden="true" className="page-heading-icon" />
                       <h2>Compare files</h2>
+                    <div className="distribution-chart-mode-toggle duplicate-panel-view-toggle file-compare-display-toggle" role="group" aria-label="Select compare display">
+                      <SlidingTogglePill activeKey="all" className="nav-active-pill distribution-chart-mode-pill" />
+                      <button type="button" data-toggle-key="all" className="distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button active" aria-label="Show all categories, metadata, and metrics" title="Show all categories, metadata, and metrics">
+                        <span className="distribution-chart-mode-button-content">
+                          <Layers aria-hidden="true" className="distribution-chart-mode-icon" />
+                        </span>
+                      </button>
+                      <button type="button" data-toggle-key="differences" className="distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button" aria-label="Show differences only" title="Show differences only">
+                        <span className="distribution-chart-mode-button-content">
+                          <Diff aria-hidden="true" className="distribution-chart-mode-icon" />
+                        </span>
+                      </button>
+                    </div>
                     </div>
                     <div className="file-compare-title-actions">
                       <div className="search-filter-picker file-compare-column-count-picker">
@@ -3249,21 +3266,6 @@ export function UiElementsPage() {
                     </div>
                   </div>
                   <div className="file-compare-toolbar file-compare-toolbar-3-columns has-file-labels">
-                    <div className="file-compare-toolbar-controls">
-                      <div className="distribution-chart-mode-toggle duplicate-panel-view-toggle file-compare-display-toggle" role="group" aria-label="Select compare display">
-                        <SlidingTogglePill activeKey="all" className="nav-active-pill distribution-chart-mode-pill" />
-                        <button type="button" data-toggle-key="all" className="distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button active" aria-label="Show all categories, metadata, and metrics" title="Show all categories, metadata, and metrics">
-                          <span className="distribution-chart-mode-button-content">
-                            <Layers aria-hidden="true" className="distribution-chart-mode-icon" />
-                          </span>
-                        </button>
-                        <button type="button" data-toggle-key="differences" className="distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button" aria-label="Show differences only" title="Show differences only">
-                          <span className="distribution-chart-mode-button-content">
-                            <Diff aria-hidden="true" className="distribution-chart-mode-icon" />
-                          </span>
-                        </button>
-                      </div>
-                    </div>
                     <div className="file-compare-search-card">
                       <div className="file-compare-search-label">
                         <strong title="Movies / Sci-Fi/Arrival.2016.UHD.mkv">Arrival.2016.UHD.mkv</strong>
@@ -3282,14 +3284,6 @@ export function UiElementsPage() {
                         </button>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      className="file-compare-swap-button"
-                      aria-label="Swap compared files"
-                      title="Swap compared files"
-                    >
-                      <ChevronsRightLeftIcon size={22} aria-hidden="true" />
-                    </button>
                     <div className="file-compare-search-card">
                       <div className="file-compare-search-label">
                         <strong title="Movies / Sci-Fi/Arrival.2016.Remux.mkv">Arrival.2016.Remux.mkv</strong>

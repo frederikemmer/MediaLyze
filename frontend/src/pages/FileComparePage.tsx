@@ -1040,6 +1040,33 @@ export function FileComparePage() {
           <div className="page-heading-row">
             <GitCompare aria-hidden="true" className="page-heading-icon" />
             <h2>{t("fileCompare.title")}</h2>
+            <div
+              className="distribution-chart-mode-toggle duplicate-panel-view-toggle file-compare-display-toggle"
+              role="group"
+              aria-label={t("fileCompare.displayMode.label")}
+            >
+              <SlidingTogglePill
+                activeKey={displayMode}
+                className="nav-active-pill distribution-chart-mode-pill"
+              />
+              {displayModeOptions.map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  data-toggle-key={key}
+                  className={`distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button${
+                    displayMode === key ? " active" : ""
+                  }`}
+                  aria-label={label}
+                  title={label}
+                  onClick={() => setDisplayMode(key)}
+                >
+                  <span className="distribution-chart-mode-button-content">
+                    <Icon aria-hidden="true" className="distribution-chart-mode-icon" />
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
           <div className="file-compare-title-actions">
             <ColumnCountPicker value={columnCount} onChange={(count) => {
@@ -1055,35 +1082,6 @@ export function FileComparePage() {
               hasFileLabels ? " has-file-labels" : ""
             }`}
           >
-            <div className="file-compare-toolbar-controls">
-              <div
-                className="distribution-chart-mode-toggle duplicate-panel-view-toggle file-compare-display-toggle"
-                role="group"
-                aria-label={t("fileCompare.displayMode.label")}
-              >
-                <SlidingTogglePill
-                  activeKey={displayMode}
-                  className="nav-active-pill distribution-chart-mode-pill"
-                />
-                {displayModeOptions.map(({ key, label, icon: Icon }) => (
-                  <button
-                    key={key}
-                    type="button"
-                    data-toggle-key={key}
-                    className={`distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button${
-                      displayMode === key ? " active" : ""
-                    }`}
-                    aria-label={label}
-                    title={label}
-                    onClick={() => setDisplayMode(key)}
-                  >
-                    <span className="distribution-chart-mode-button-content">
-                      <Icon aria-hidden="true" className="distribution-chart-mode-icon" />
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
             {visibleSlots.map((slot, index) => (
               <Fragment key={slot.key}>
                 {columnCount === 2 && index === 1 ? (
@@ -1136,9 +1134,9 @@ export function FileComparePage() {
               visibleSections.length > 0 ? (
                 <div className="file-compare-sections">
                   {selectedVisibleFiles.length === 2 && selectedVisibleFiles.every((entry) => entry.detail?.video_streams.length) ? (
-                    <section className="panel file-compare-section file-compare-wipe-section">
-                      <h3>{t("transcoding.wipeComparison")}</h3>
+                    <section className="panel file-compare-section file-compare-wipe-section" aria-label={t("transcoding.wipeComparison")}>
                       <VideoWipeCompare
+                        key={selectedVisibleFiles.map(({ detail }) => detail!.id).join(":")}
                         first={{
                           src: api.fileMediaUrl(selectedVisibleFiles[0].detail!.id),
                           label: selectedVisibleFiles[0].detail!.filename,

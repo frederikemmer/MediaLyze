@@ -332,6 +332,7 @@ export function TooltipTrigger({
     .join(" ");
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (as === "span" && event.target !== event.currentTarget) return;
     if (as === "span" && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
       handleClick(event as unknown as Parameters<MouseEventHandler<HTMLElement>>[0]);

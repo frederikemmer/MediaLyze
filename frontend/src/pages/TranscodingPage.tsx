@@ -1,3 +1,5 @@
+import { SettingsInlineLabelInput } from "../components/SettingsInlineLabelInput";
+import { SettingsInlineLabelSelect } from "../components/SettingsInlineLabelSelect";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
   Activity,
@@ -985,15 +987,29 @@ export function TranscodingPage() {
         </header>
 
         <div className="transcoding-center-toolbar">
-          <label className="transcoding-search-field">
-            <span className="sr-only">{t("transcoding.center.searchFiles")}</span>
+          <div className={`transcoding-search-field${search ? " has-clear" : ""}`}>
             <Search aria-hidden="true" />
-            <input type="search" value={search} placeholder={t("transcoding.center.searchPlaceholder")} onChange={(event) => setSearch(event.target.value)} />
+            <SettingsInlineLabelInput
+              type="search"
+              label={t("transcoding.center.searchFiles")}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
             {search ? <button type="button" className="transcoding-search-clear" aria-label={t("transcoding.center.clearSearch")} onClick={() => setSearch("")}><X aria-hidden="true" /></button> : null}
-          </label>
-          <label className="transcoding-filter-field"><span>{t("transcoding.center.statusFilter")}</span><select className="settings-choice-input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}><option value="all">{t("common.all")}</option>{(["running", "queued", "completed", "failed", "canceled"] as JobStatus[]).map((status) => <option key={status} value={status}>{statusLabel(status, t)}</option>)}</select></label>
-          <label className="transcoding-filter-field"><span>{t("transcoding.center.targetFilter")}</span><select className="settings-choice-input" value={targetFilter} onChange={(event) => setTargetFilter(event.target.value as TargetFilter)}><option value="all">{t("common.all")}</option>{PRESET_KEYS.map((profile) => <option key={profile} value={profile}>{t(`transcoding.presets.${profile}`)}</option>)}</select></label>
-          <label className="transcoding-filter-field"><span>{t("transcoding.center.hardwareFilter")}</span><select className="settings-choice-input" value={hardwareFilter} onChange={(event) => setHardwareFilter(event.target.value as HardwareFilter)}><option value="all">{t("common.all")}</option><option value="hardware">{t("transcoding.hardware")}</option><option value="cpu">{t("transcoding.cpu")}</option></select></label>
+          </div>
+          <SettingsInlineLabelSelect label={t("transcoding.center.statusFilter")} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
+            <option value="all">{t("common.all")}</option>
+            {(["running", "queued", "completed", "failed", "canceled"] as JobStatus[]).map((status) => <option key={status} value={status}>{statusLabel(status, t)}</option>)}
+          </SettingsInlineLabelSelect>
+          <SettingsInlineLabelSelect label={t("transcoding.center.targetFilter")} value={targetFilter} onChange={(event) => setTargetFilter(event.target.value as TargetFilter)}>
+            <option value="all">{t("common.all")}</option>
+            {PRESET_KEYS.map((profile) => <option key={profile} value={profile}>{t(`transcoding.presets.${profile}`)}</option>)}
+          </SettingsInlineLabelSelect>
+          <SettingsInlineLabelSelect label={t("transcoding.center.hardwareFilter")} value={hardwareFilter} onChange={(event) => setHardwareFilter(event.target.value as HardwareFilter)}>
+            <option value="all">{t("common.all")}</option>
+            <option value="hardware">{t("transcoding.hardware")}</option>
+            <option value="cpu">{t("transcoding.cpu")}</option>
+          </SettingsInlineLabelSelect>
           <TooltipTrigger
             ariaLabel={t("transcoding.center.resetFilters")}
             content={t("transcoding.center.resetFilters")}

@@ -1221,7 +1221,7 @@ def _load_candidates(
     scope: TranscodeAutomationScope,
     rules: list[TranscodeRule],
     *,
-    offset: int = 0,
+    after_id: int = 0,
     limit: int = AUTOMATION_PAGE_SIZE,
 ) -> list[MediaFile]:
     return db.scalars(
@@ -1235,9 +1235,8 @@ def _load_candidates(
             selectinload(MediaFile.subtitle_streams),
             selectinload(MediaFile.external_subtitles),
         )
-        .where(*_candidate_options(scope, rules))
+        .where(*_candidate_options(scope, rules), MediaFile.id > after_id)
         .order_by(MediaFile.id.asc())
-        .offset(offset)
         .limit(limit)
     ).all()
 
@@ -1481,34 +1480,42 @@ def preview_transcode_automation(
     rules = _scope_rules(db, scope)
     capabilities = get_transcode_capabilities(settings)
     total = _candidate_count(db, scope, rules)
-    limit = min(scope.limit, 100000)
     items: list[TranscodeAutomationDecisionRead] = []
-    candidates = _load_candidates(db, scope, rules, limit=limit)
+    other_items: list[TranscodeAutomationDecisionRead] = []
     profiles_by_id = _preview_profiles(db, rules)
-    for start in range(0, len(candidates), AUTOMATION_PREVIEW_QUERY_BATCH_SIZE):
-        candidate_batch = candidates[start : start + AUTOMATION_PREVIEW_QUERY_BATCH_SIZE]
+    counts = dict.fromkeys(("matched", "queued", "blocked", "skipped", "unmatched"), 0)
+    after_id = 0
+    remaining = total if scope.preview_all else min(scope.limit, total)
+    while remaining:
+        candidate_batch = _load_candidates(
+            db, scope, rules, after_id=after_id, limit=min(remaining, AUTOMATION_PREVIEW_QUERY_BATCH_SIZE)
+        )
+        if not candidate_batch:
+            break
         records_by_identity = _preview_existing_records(db, candidate_batch)
         for media_file in candidate_batch:
-            items.append(
-                _decision_for_file(
-                    db,
-                    settings,
-                    media_file,
-                    rules,
-                    app_settings,
-                    capabilities,
-                    retry_failed=scope.retry_failed,
-                    profiles_by_id=profiles_by_id,
-                    records_by_identity=records_by_identity,
-                )
+            decision = _decision_for_file(
+                db,
+                settings,
+                media_file,
+                rules,
+                app_settings,
+                capabilities,
+                retry_failed=scope.retry_failed,
+                profiles_by_id=profiles_by_id,
+                records_by_identity=records_by_identity,
             )
-    counts = {key: 0 for key in ("matched", "queued", "blocked", "skipped", "unmatched")}
-    for item in items:
-        counts[item.status] = counts.get(item.status, 0) + 1
+            counts[decision.status] += 1
+            if not scope.preview_all or (decision.status == "matched" and len(items) < scope.limit):
+                items.append(decision)
+            elif decision.status in {"blocked", "skipped"} and len(other_items) < scope.limit:
+                other_items.append(decision)
+        remaining -= len(candidate_batch)
+        after_id = candidate_batch[-1].id
     return TranscodeAutomationPreviewRead(
         generated_at=utc_now(),
         total_files=total,
-        items=items,
+        items=items + other_items[:max(0, scope.limit - len(items))],
         **counts,
     )
 
@@ -1859,7 +1866,8 @@ def process_transcode_automation_run(
         capabilities = get_transcode_capabilities(settings)
         run.files_total = _candidate_count(db, scope, rules)
         db.commit()
-        offset = 0
+        after_id = 0
+        processed = 0
         page = 0
         while True:
             db.refresh(run)
@@ -1878,7 +1886,7 @@ def process_transcode_automation_run(
                 return
             rules = _scope_rules(db, scope)
             app_settings = get_app_settings(db, settings)
-            candidates = _load_candidates(db, scope, rules, offset=offset, limit=AUTOMATION_PAGE_SIZE)
+            candidates = _load_candidates(db, scope, rules, after_id=after_id, limit=AUTOMATION_PAGE_SIZE)
             if not candidates:
                 break
             page += 1
@@ -1926,11 +1934,12 @@ def process_transcode_automation_run(
                     run.skipped += 1
                 elif status == "unmatched":
                     run.unmatched += 1
-            offset += len(candidates)
+            after_id = candidates[-1].id
+            processed += len(candidates)
             run.current_page = page
             run.summary = {
                 "last_page_size": len(candidates),
-                "offset": offset,
+                "offset": processed,
                 "rule_count": len(rules),
             }
             db.commit()

@@ -1,14 +1,15 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, type ResolutionCategory, type TranscodeRuleTestAsset, type TranscodeRuleTestRequest, type TranscodeRuleTestResult } from "../lib/api";
+import { api, type ResolutionCategory, type TranscodeAutomationTrigger, type TranscodeRuleTestAsset, type TranscodeRuleTestRequest, type TranscodeRuleTestResult } from "../lib/api";
 import { RuleConditionTrace, RuleInput, validRuleConditions } from "./TranscodeRuleConditions";
 
 const key = "transcoding.automation.";
 
-export function TranscodeRuleTest({ draft, presetName, resolutionCategories }: {
+export function TranscodeRuleTest({ draft, presetName, resolutionCategories, automationTrigger = "scan" }: {
   draft: Omit<TranscodeRuleTestRequest, "file_id">;
   presetName?: string;
   resolutionCategories?: ResolutionCategory[];
+  automationTrigger?: TranscodeAutomationTrigger;
 }) {
   const { t } = useTranslation();
   const optionsId = useId();
@@ -117,6 +118,7 @@ export function TranscodeRuleTest({ draft, presetName, resolutionCategories }: {
         </ul>}
       </div>
     </div>
+    {automationTrigger === "scan" && <p className="field-hint">{t(key + "testScanScopeHint")}</p>}
     {asset && <div className="transcode-condition-group transcode-rule-test-result" aria-live="polite">
       {result ? <>
         <ul className="transcode-rule-layers"><RuleConditionTrace node={draft.conditions} trace={result.trace} resolutionCategories={resolutionCategories} /></ul>

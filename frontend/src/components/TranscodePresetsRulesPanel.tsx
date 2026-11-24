@@ -9,6 +9,11 @@ import { formatLanguageName, languageOptions, normalizeLanguageTag, sharedStream
 
 import {
   api,
+  type AppSettings,
+  type TranscodeAutomationPreview,
+  type TranscodeAutomationRun,
+  type TranscodeAutomationTrigger,
+  type TranscodingSettings,
   type LibrarySummary,
   type ResolutionCategory,
   type TranscodeConditionGroup,
@@ -78,6 +83,8 @@ type TranscodePresetsRulesPanelProps = {
   acceleratorsTooltip: ReactNode;
   standaloneTab?: AutomationTab;
   resolutionCategories?: ResolutionCategory[];
+  automationSettings?: TranscodingSettings;
+  onAutomationSettingsUpdated?: (settings: AppSettings) => void;
   standalonePresetTabs?: ReactNode;
   standaloneCollapsed?: boolean;
   onStandaloneToggle?: () => void;
@@ -609,6 +616,8 @@ export function TranscodePresetsRulesPanel({
   acceleratorsTooltip,
   standaloneTab,
   resolutionCategories,
+  automationSettings,
+  onAutomationSettingsUpdated,
   standalonePresetTabs,
   standaloneCollapsed,
   onStandaloneToggle,
@@ -621,6 +630,20 @@ export function TranscodePresetsRulesPanel({
   const { t } = useTranslation();
   const { identity, has } = useAuth();
   const canReadPresets = !identity || has("settings.presets.view");
+  const canRunAutomation = Boolean(identity?.owner);
+  const savedTrigger = automationSettings?.automation_trigger ?? "scan";
+  const savedInterval = automationSettings?.automation_interval_minutes ?? 60;
+  const [triggerDraft, setTriggerDraft] = useState<{ mode: TranscodeAutomationTrigger; interval: string } | null>(null);
+  const trigger = triggerDraft ?? { mode: savedTrigger, interval: String(savedInterval) };
+  const interval = trigger.mode === "interval" ? Number(trigger.interval) : savedInterval;
+  const validInterval = Number.isInteger(interval) && interval >= 5 && interval <= 10080;
+  const [automationPending, setAutomationPending] = useState(false);
+  const [automationError, setAutomationError] = useState<string | null>(null);
+  const [automationPreview, setAutomationPreview] = useState<TranscodeAutomationPreview | null>(null);
+  const [automationRun, setAutomationRun] = useState<TranscodeAutomationRun | null>(null);
+  const runId = automationRun?.id;
+  const runActive = automationRun?.status === "queued" || automationRun?.status === "running";
+
   const notifications = useNotifications();
   const notificationIdentity = identityGeneration();
   const { trackSave } = useAutosaveNotifications({
@@ -723,6 +746,62 @@ export function TranscodePresetsRulesPanel({
   }, [standaloneTab, canReadPresets, notificationIdentity]);
 
   const canOpenRuleEditor = standaloneTab !== "rules" || ruleOptionsReady;
+
+  useEffect(() => {
+    if (!canRunAutomation || tab !== "rules") return;
+    let current = true;
+    void api.transcodeAutomationStatus().then((status) => {
+      if (current) setAutomationRun((previous) => previous ?? status);
+    }).catch(() => {});
+    return () => { current = false; };
+  }, [canRunAutomation, tab]);
+
+  useEffect(() => {
+    if (!canRunAutomation || !runActive || runId === undefined) return;
+    let current = true;
+    const timer = window.setInterval(() => {
+      void api.transcodeAutomation(runId).then((status) => {
+        if (current) setAutomationRun(status);
+      }).catch(() => {});
+    }, 2000);
+    return () => { current = false; window.clearInterval(timer); };
+  }, [canRunAutomation, runActive, runId]);
+
+  const saveAutomationTrigger = async () => {
+    if (!validInterval || !onAutomationSettingsUpdated) return;
+    setAutomationPending(true);
+    setAutomationError(null);
+    try {
+      const updated = await api.updateAppSettings({
+        transcoding: { automation_trigger: trigger.mode, automation_interval_minutes: interval },
+      });
+      onAutomationSettingsUpdated(updated);
+      setTriggerDraft(null);
+    } catch (reason) {
+      setAutomationError((reason as Error).message);
+    } finally {
+      setAutomationPending(false);
+    }
+  };
+
+  const runAutomation = async (dryRun: boolean) => {
+    if (!dryRun && !window.confirm(t("transcoding.automation.startAllConfirm"))) return;
+    if (standaloneCollapsed) onStandaloneToggle?.();
+    setAutomationPending(true);
+    setAutomationError(null);
+    setAutomationPreview(null);
+    try {
+      if (dryRun) {
+        setAutomationPreview(await api.previewTranscodeAutomation({ preview_all: true, limit: 100 }));
+      } else {
+        setAutomationRun(await api.startTranscodeAutomation());
+      }
+    } catch (reason) {
+      setAutomationError((reason as Error).message);
+    } finally {
+      setAutomationPending(false);
+    }
+  };
 
   const startNewPreset = () => {
     setTab("presets");
@@ -1257,7 +1336,7 @@ export function TranscodePresetsRulesPanel({
           {!ruleDraft.profile_id && <p className="field-hint">{t(canReadPresets ? "transcoding.automation.ruleNeedsPreset" : "transcoding.automation.ruleNeedsPresetAccess")}</p>}
           {ruleDraft.output_mode === "replace_original" && <p className="field-hint">{t("transcoding.replacementWarning")}</p>}
         </section>
-        {identity?.owner && <TranscodeRuleTest resolutionCategories={resolutionCategories} draft={{
+        {identity?.owner && <TranscodeRuleTest automationTrigger={savedTrigger} resolutionCategories={resolutionCategories} draft={{
           rule_id: ruleDraft.id ?? undefined, library_ids: ruleDraft.library_ids, conditions: ruleDraft.conditions,
           profile_id: ruleDraft.profile_id, output_mode: ruleDraft.output_mode, output_subfolder: ruleDraft.output_subfolder,
           prevent_output_growth: ruleDraft.prevent_output_growth,
@@ -1457,10 +1536,57 @@ export function TranscodePresetsRulesPanel({
     return standalonePresetTabs ? list : <section className="transcode-automation-tab-content">{list}</section>;
   };
 
+  const renderAutomationControls = () => canRunAutomation && (
+    <>
+      {onAutomationSettingsUpdated && <div className="transcode-actions">
+        <SettingsInlineLabelSelect label={t("transcoding.automation.trigger")} value={trigger.mode}
+          disabled={automationPending}
+          onChange={(event) => setTriggerDraft({ ...trigger, mode: event.target.value as TranscodeAutomationTrigger })}>
+          <option value="scan">{t("transcoding.automation.triggerScan")}</option>
+          <option value="manual">{t("transcoding.automation.triggerManual")}</option>
+          <option value="interval">{t("transcoding.automation.triggerInterval")}</option>
+        </SettingsInlineLabelSelect>
+        {trigger.mode === "interval" && <RuleInput label={t("transcoding.automation.intervalMinutes")}
+          type="number" min={5} max={10080} value={trigger.interval} disabled={automationPending}
+          onChange={(event) => setTriggerDraft({ ...trigger, interval: event.target.value })} />}
+        <button type="button" className="secondary small settings-panel-header-action" onClick={() => void saveAutomationTrigger()}
+          disabled={automationPending || !validInterval || (trigger.mode === savedTrigger && interval === savedInterval)}>
+          {t("common.save")}
+        </button>
+      </div>}
+      {automationError && <div className="alert" role="alert">{automationError}</div>}
+      {automationRun && <div className="field-hint" role="status">
+        {t("transcoding.automation.inventoryStatus")} · {t("transcoding.automation.inventory." + automationRun.status)} · {t("transcoding.automation.runCounts", automationRun)}
+        {automationRun.error && <p>{automationRun.error}</p>}
+      </div>}
+      {automationPreview && <div className="transcode-condition-group">
+        <strong>{t("transcoding.automation.previewResult", { total: automationPreview.total_files })}</strong>
+        <p className="field-hint">{t("transcoding.automation.previewCounts", automationPreview)}</p>
+        {automationPreview.matched + automationPreview.blocked + automationPreview.skipped > automationPreview.items.length &&
+          <p className="field-hint">{t("transcoding.automation.previewSample", { count: automationPreview.items.length })}</p>}
+        {!!automationPreview.items.length && <ul className="transcode-rule-layers">
+          {automationPreview.items.map((item) => <li key={item.file_id}>
+            <strong>{libraryNames.get(item.library_id) ?? item.library_id} / {item.relative_path}</strong>
+            <div className="field-hint">
+              {[t("transcoding.automation." + item.status), item.rule_name, item.profile_name, item.reason || item.output_path].filter(Boolean).join(" · ")}
+            </div>
+          </li>)}
+        </ul>}
+      </div>}
+    </>
+  );
+
   const renderRuleList = () => (
     <section className="transcode-automation-tab-content">
       <div className="compatibility-profile-list compatibility-profile-catalog-list transcode-rule-list">
         {standaloneTab && !hasStandaloneCollapse ? renderStandaloneHeader(panelAction) : !standaloneTab ? renderAutomationToggleRow(panelAction) : null}
+        {renderAutomationControls()}
+        <div className="transcode-actions">
+          <button type="button" className="secondary small settings-panel-header-action" onClick={startNewRule}
+            disabled={busy || !canOpenRuleEditor || Boolean(identity && !has("settings.app.edit"))}>
+            <Plus aria-hidden="true" size={14} />{t("transcoding.automation.newRule")}
+          </button>
+        </div>
         {ruleOptionsError && <div className="alert" role="alert">{ruleOptionsError}</div>}
         {rules.map((rule) => {
           const expanded = expandedRuleId === rule.id;
@@ -1746,10 +1872,17 @@ export function TranscodePresetsRulesPanel({
     <button type="button" className="secondary small settings-panel-header-action" onClick={startNewPreset} disabled={busy}>
       <Plus aria-hidden="true" size={14} />{t("transcoding.automation.newPreset")}
     </button>
-  ) : tab === "rules" ? (
-    <button type="button" className="secondary small settings-panel-header-action" onClick={startNewRule} disabled={busy || !canOpenRuleEditor || Boolean(identity && !has("settings.app.edit"))}>
-      <Plus aria-hidden="true" size={14} />{t("transcoding.automation.newRule")}
-    </button>
+  ) : tab === "rules" && canRunAutomation ? (
+    <>
+      <button type="button" className="secondary small settings-panel-header-action"
+        disabled={automationPending || !rules.some(rule => rule.enabled)} onClick={() => void runAutomation(true)}>
+        {t("transcoding.automation.dryRun")}
+      </button>
+      <button type="button" className="small settings-panel-header-action"
+        disabled={automationPending || runActive || !rules.some(rule => rule.enabled)} onClick={() => void runAutomation(false)}>
+        {t("transcoding.automation.startAll")}
+      </button>
+    </>
   ) : null;
 
   const hasStandaloneCollapse = (

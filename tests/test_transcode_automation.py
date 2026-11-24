@@ -481,6 +481,14 @@ def test_automation_applies_rule_priority_independently_per_library(tmp_path, mo
             (episode.id, rules[1].id, "matched"),
         ], [item.reason for item in preview.items]
 
+        monkeypatch.setattr(automation, "AUTOMATION_PREVIEW_QUERY_BATCH_SIZE", 1)
+        dry_run = automation.preview_transcode_automation(
+            db, settings, TranscodeAutomationScope(preview_all=True, limit=1)
+        )
+        assert dry_run.total_files == dry_run.matched == 2
+        assert [item.file_id for item in dry_run.items] == [movie.id]
+        assert db.scalar(select(TranscodeAutomationRecord.id)) is None
+
 
 def test_durable_record_skips_same_source_and_rule_version(tmp_path: Path) -> None:
     factory = _session_factory()

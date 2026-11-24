@@ -215,7 +215,7 @@ describe("FileComparePage", () => {
     );
     expect(resolutionRows[0]).toHaveClass("is-identical");
     expect(screen.getByRole("button", { name: "Video streams" })).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByRole("heading", { name: "Synchronized wipe comparison" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Synchronized wipe comparison" })).toBeInTheDocument();
   });
 
   it("can show only differing comparison rows without the old comparison header", async () => {

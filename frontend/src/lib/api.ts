@@ -1559,6 +1559,7 @@ export type TranscodeAutomationScope = {
   library_ids?: number[];
   source_file_ids?: number[];
   retry_failed?: boolean;
+  preview_all?: boolean;
   limit?: number;
 };
 
@@ -2160,6 +2161,8 @@ export type AppSettings = {
   };
 };
 
+export type TranscodeAutomationTrigger = "scan" | "manual" | "interval";
+
 export type TranscodingSettings = {
   execution_mode: "hardware_required" | "cpu_only";
   cpu_budget_percent: number;
@@ -2170,6 +2173,8 @@ export type TranscodingSettings = {
   retry_count: number;
   existing_output: "fail" | "skip";
   remove_partial_output: boolean;
+  automation_trigger?: TranscodeAutomationTrigger;
+  automation_interval_minutes?: number;
 };
 
 export type TelemetryPreviewMode = "none" | "minimal" | "enabled";

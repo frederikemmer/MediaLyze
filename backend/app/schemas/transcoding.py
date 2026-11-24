@@ -502,6 +502,7 @@ class TranscodeAutomationScope(BaseModel):
     library_ids: list[int] = Field(default_factory=list, max_length=256)
     source_file_ids: list[int] = Field(default_factory=list, max_length=100000)
     retry_failed: bool = False
+    preview_all: bool = False
     limit: int = Field(default=5000, ge=1, le=100000)
 
 

@@ -1,5 +1,5 @@
 import { GripVertical, Pause, Play, Volume2, VolumeX } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 
 type VideoWipeSource = {
@@ -12,6 +12,70 @@ type AudioMixGraph = {
   firstGain: GainNode;
   secondGain: GainNode;
 };
+
+type NativeAudioTrack = {
+  enabled: boolean;
+  label: string;
+  language: string;
+};
+
+function WipeAudioTrackSelect({
+  videoRef,
+  side,
+}: {
+  videoRef: RefObject<HTMLVideoElement | null>;
+  side: "first" | "second";
+}) {
+  const { t } = useTranslation();
+  const [tracks, setTracks] = useState<NativeAudioTrack[]>([]);
+
+  useEffect(() => {
+    const video = videoRef.current as (HTMLVideoElement & {
+      audioTracks?: Partial<EventTarget> & ArrayLike<NativeAudioTrack>;
+    }) | null;
+    const trackList = video?.audioTracks;
+    if (!video || !trackList) return;
+
+    const refresh = () => setTracks(Array.from(trackList));
+    video.addEventListener("loadedmetadata", refresh);
+    const events = ["addtrack", "removetrack", "change"];
+    events.forEach((event) => trackList.addEventListener?.(event, refresh));
+    refresh();
+    return () => {
+      video.removeEventListener("loadedmetadata", refresh);
+      events.forEach((event) => trackList.removeEventListener?.(event, refresh));
+    };
+  }, [videoRef]);
+
+  const selected = tracks.findIndex((track) => track.enabled);
+
+  return (
+    <label className="video-wipe-audio-track">
+      {t(side === "first" ? "videoWipe.firstAudioTrack" : "videoWipe.secondAudioTrack")}
+      <select
+        value={selected}
+        disabled={tracks.length < 2}
+        onChange={(event) => {
+          const next = Number(event.target.value);
+          if (!tracks[next]) return;
+          tracks.forEach((track, index) => {
+            track.enabled = index === next;
+          });
+          setTracks([...tracks]);
+        }}
+      >
+        {selected < 0 ? (
+          <option value={-1}>{t(tracks.length ? "videoWipe.noAudioTrack" : "videoWipe.defaultAudioTrack")}</option>
+        ) : null}
+        {tracks.map((track, index) => (
+          <option key={index} value={index}>
+            {track.label || [t("videoWipe.audioTrackNumber", { number: index + 1 }), track.language].filter(Boolean).join(" · ")}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 export function VideoWipeCompare({
   first,
@@ -260,46 +324,51 @@ export function VideoWipeCompare({
         <span className="video-wipe-label video-wipe-label-second">{second.label}</span>
       </div>
       <div className="video-wipe-controls">
-        <button type="button" className="secondary icon-only-button" onClick={() => void togglePlayback()} aria-label={playing ? t("videoWipe.pause") : t("videoWipe.play")}>
-          {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
-        </button>
-        <input
-          type="range"
-          min={0}
-          max={duration || 0}
-          step={0.01}
-          value={Math.min(currentTime, duration || 0)}
-          onChange={(event) => seek(Number(event.target.value))}
-          aria-label={t("videoWipe.seek")}
-          disabled={!duration}
-        />
-        <div className="video-wipe-audio-mix">
-          <span className="video-wipe-audio-mix-label">{t("videoWipe.audioMix")}</span>
+        <div className="video-wipe-playback-controls">
+          <button type="button" className="secondary icon-only-button" onClick={() => void togglePlayback()} aria-label={playing ? t("videoWipe.pause") : t("videoWipe.play")}>
+            {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+          </button>
           <input
             type="range"
             min={0}
-            max={100}
-            step={1}
-            value={audioMix}
-            onChange={(event) => setAudioMix(Number(event.target.value))}
-            aria-label={t("videoWipe.audioMix")}
-            aria-valuetext={audioMixValue}
+            max={duration || 0}
+            step={0.01}
+            value={Math.min(currentTime, duration || 0)}
+            onChange={(event) => seek(Number(event.target.value))}
+            aria-label={t("videoWipe.seek")}
+            disabled={!duration}
           />
-          <output className="video-wipe-audio-mix-value" aria-label={t("videoWipe.audioMix")} aria-live="polite">{audioMixValue}</output>
+          <button type="button" className="secondary icon-only-button" onClick={() => setMuted((current) => !current)} aria-label={muted ? t("videoWipe.unmute") : t("videoWipe.mute")}>
+            {muted ? <VolumeX aria-hidden="true" /> : <Volume2 aria-hidden="true" />}
+          </button>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={volume}
+            onChange={(event) => setVolume(Number(event.target.value))}
+            aria-label={t("videoWipe.volume")}
+          />
         </div>
-        <button type="button" className="secondary icon-only-button" onClick={() => setMuted((current) => !current)} aria-label={muted ? t("videoWipe.unmute") : t("videoWipe.mute")}>
-          {muted ? <VolumeX aria-hidden="true" /> : <Volume2 aria-hidden="true" />}
-        </button>
-        <input
-          className="video-wipe-volume"
-          type="range"
-          min={0}
-          max={1}
-          step={0.05}
-          value={volume}
-          onChange={(event) => setVolume(Number(event.target.value))}
-          aria-label={t("videoWipe.volume")}
-        />
+        <div className="video-wipe-audio-controls">
+          <WipeAudioTrackSelect videoRef={firstRef} side="first" />
+          <div className="video-wipe-audio-mix">
+            <span className="video-wipe-audio-mix-label">{t("videoWipe.audioMix")}</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={audioMix}
+              onChange={(event) => setAudioMix(Number(event.target.value))}
+              aria-label={t("videoWipe.audioMix")}
+              aria-valuetext={audioMixValue}
+            />
+            <output className="video-wipe-audio-mix-value" aria-label={t("videoWipe.audioMix")} aria-live="polite">{audioMixValue}</output>
+          </div>
+          <WipeAudioTrackSelect videoRef={secondRef} side="second" />
+        </div>
       </div>
       {durationsDiffer ? <p className="notice compact">{t("videoWipe.durationWarning")}</p> : null}
       {unsupported ? <p className="notice compact error">{t("videoWipe.unsupported")}</p> : null}

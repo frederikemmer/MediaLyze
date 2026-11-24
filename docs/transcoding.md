@@ -36,7 +36,11 @@ Open **Settings → Transcoding → Automation Rules** to select libraries, cond
 
 The Owner can use **Test rule** to search the catalog by title or filename and evaluate the current draft on one file. The result shows which conditions matched and, when the plan validates, the proposed output path. The test simulates this rule in isolation, including when it is disabled. It never queues a job or saves the draft.
 
-New rules are saved inactive. Turn on the switch beside the rule name to apply the rule to new or changed primary videos after successful scans. To replace originals, approve that specific rule version before activating it. See [Execution safety](#execution-safety) for the effects of replacing an original.
+At the top of **Automation Rules**, the Owner can choose a trigger. **After successful scans** is the default. **Manual only** disables automatic runs. **At an interval** checks the analyzed catalog every 5 to 10,080 minutes independently of library scans.
+
+**Dry Run** checks all active rules against the analyzed catalog. It reports counts for all candidates and shows up to 100 matching, skipped, or blocked files with their rule and planned output or reason. **Start All** queues eligible work for those rules, including unchanged files. Both actions use saved rules and honor priority, replacement approval, and previous attempts.
+
+New rules are saved inactive. Turn on the switch beside the rule name to include it in automation. With the scan trigger, active rules apply to primary videos analyzed during a scan that completes without errors. An incremental scan usually analyzes only new or changed files. Run a full scan to include unchanged files already in the library. To replace originals, approve that specific rule version before activating it. See [Execution safety](#execution-safety) for the effects of replacing an original.
 **Output must not exceed source size** is enabled by default for new rules. MediaLyze discards a larger result before publishing or replacing the original. Equal-sized results are accepted. The draft test cannot predict the encoded file size.
 
 ## CPU- and APU-integrated media engines

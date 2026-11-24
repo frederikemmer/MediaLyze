@@ -53,7 +53,8 @@ const DEFAULT_TRANSCODING_SETTINGS: TranscodingSettings = {
 };
 
 function cloneTranscodingSettings(settings: TranscodingSettings): TranscodingSettings {
-  return { ...settings };
+  const { automation_trigger: _trigger, automation_interval_minutes: _interval, ...execution } = settings;
+  return execution;
 }
 
 function errorMessage(reason: unknown): string {
@@ -841,6 +842,8 @@ export function TranscodingSettingsPanel({
           capabilityMatrix={() => null}
           acceleratorsTooltip={null}
           standaloneTab="rules"
+          automationSettings={settings.transcoding}
+          onAutomationSettingsUpdated={onUpdated}
           resolutionCategories={settings.resolution_categories}
           standaloneCollapsed={automationRulesCollapsed}
           onStandaloneToggle={() => setAutomationRulesCollapsed((current) => !current)}

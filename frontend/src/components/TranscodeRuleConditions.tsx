@@ -5,6 +5,7 @@ import type { ResolutionCategory, TranscodeCondition, TranscodeConditionGroup, T
 import { formatBitrate, formatBytes, formatDuration } from "../lib/format";
 import { formatLanguageLabel, languageOptions } from "../lib/language";
 import { DEFAULT_RESOLUTION_CATEGORIES } from "../lib/resolution-categories";
+import { TooltipTrigger } from "./TooltipTrigger";
 import { SettingsInlineLabelSelect } from "./SettingsInlineLabelSelect";
 
 const equals = ["equals", "not_equals"];
@@ -100,13 +101,24 @@ export function ConditionGroupEditor({ group, onChange, onRemove, depth = 0, res
           const fieldLabel = (field: string) => t(key + "fields." + field, { defaultValue: field });
           const opLabel = (op: string) => t(key + "operators." + symbols[op]?.[1], { defaultValue: op });
           const valueLabel = t(key + "conditionValue");
-          return <div className="transcode-condition-row transcode-rule-condition-row">
+          const helpField = ["track_number", "audio_disc"].includes(child.field) ? "trackOrDiscNumber" : child.field;
+          const help = t(key + "fieldHelp." + helpField, { defaultValue: "" });
+          const fieldSelect = (
             <SettingsInlineLabelSelect label={t(key + "conditionField")} value={child.field} onChange={event => {
               const field = event.target.value;
               update(index, { ...child, field, operator: fieldOptions(field).operators[0], value: "" });
             }}>
               {[...new Set([...Object.keys(fields), child.field])].map(field => <option key={field} value={field}>{fieldLabel(field)}</option>)}
             </SettingsInlineLabelSelect>
+          );
+          return <div className="transcode-condition-row transcode-rule-condition-row">
+            {help ? (
+              <TooltipTrigger as="span" className="transcode-rule-field" tabIndex={-1}
+                ariaLabel={t(key + "fieldHelpLabel", { field: fieldLabel(child.field) })}
+                content={help} placement="auto" pinOnClick={false} ariaExpanded={null}>
+                {fieldSelect}
+              </TooltipTrigger>
+            ) : fieldSelect}
             <select className="settings-choice-input transcode-rule-operator" value={child.operator}
               title={opLabel(child.operator)} aria-label={t(key + "conditionOperator")}
               onChange={event => update(index, { ...child, operator: event.target.value })}>

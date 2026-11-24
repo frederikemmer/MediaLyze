@@ -388,6 +388,9 @@ def authorize(request, db, principal, name, params, body):
     if name in {"app_settings", "update_status"}:
         return  # app_settings returns a safe UI projection without its global view right.
     if name == "app_settings_update":
+        transcoding = body.get("transcoding")
+        if isinstance(transcoding, dict) and {"automation_trigger", "automation_interval_minutes"} & transcoding.keys():
+            fail(403, "Automation trigger settings are available to the Owner only")
         if set(body) - {"ui_preferences"}:
             require("settings.app.view")
             require("settings.app.edit")

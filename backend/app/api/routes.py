@@ -788,6 +788,13 @@ def app_settings_update(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     runtime.refresh_worker_settings()
+    old_automation = current_settings.transcoding
+    new_automation = updated_settings.transcoding
+    if (
+        old_automation.automation_trigger != new_automation.automation_trigger
+        or old_automation.automation_interval_minutes != new_automation.automation_interval_minutes
+    ):
+        runtime.refresh_transcode_automation_schedule()
     if updated_settings.history_retention != current_settings.history_retention:
         runtime.run_history_retention()
     if (
