@@ -1583,7 +1583,7 @@ export function TranscodePresetsRulesPanel({
       {standaloneTab && !hasStandaloneCollapse ? renderStandaloneHeader(panelAction) : !standaloneTab ? renderAutomationToggleRow(panelAction) : null}
       {renderAutomationControls()}
       <div className="compatibility-profile-list compatibility-profile-catalog-list transcode-rule-list">
-        <div className="transcode-actions">
+        <div className="transcode-actions transcode-rule-list-actions">
           <button type="button" className="secondary small settings-panel-header-action" onClick={startNewRule}
             disabled={busy || !canOpenRuleEditor || Boolean(identity && !has("settings.app.edit"))}>
             <Plus aria-hidden="true" size={14} />{t("transcoding.automation.newRule")}

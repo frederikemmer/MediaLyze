@@ -18165,6 +18165,7 @@ html[data-theme="dark"] .notification-card[data-palette="contrast"][data-type="e
 /* Transcoding rule editor and read-only file test. */
 .transcode-rule-panel { display: grid; gap: 12px; }
 .transcode-rule-list.compatibility-profile-list { overflow: visible; }
+.transcode-rule-list-actions { padding: 10px 12px; }
 .transcode-rule-switch { margin-inline-start: 12px; }
 .transcode-rule-name-row {
   display: grid;

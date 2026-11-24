@@ -4,19 +4,6 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
-- Separate automation triggers from the rule list and keep Dry Run details in Logs, with a notification linking to each result.
-
-- Run active transcoding rules manually or on a configurable interval, and preview the full rule set without queuing jobs.
-
-- Explain when automation rules run after scans and how to include unchanged files.
-
-- Use compact inline labels for the Transcoding Center search and filters, with a shared style for inline text fields and dropdowns. Filters size to their contents up to a compact maximum and wrap based on available space.
-
-- Explain transcoding rule fields with hover help covering path syntax, units, and track matching.
-
-- Tightened the file comparison layout and added per-video audio track controls to the synchronized wipe where supported by the browser.
-- Updated pyasn1 and i18next to address denial-of-service advisories.
-
 ## v0.21.0
 
 This release adds scan-driven transcoding rules, reusable presets, and the option to remove bad scans from library history.
@@ -30,10 +17,15 @@ This release adds scan-driven transcoding rules, reusable presets, and the optio
 ### ✨ Enhancements
 
 - Notifications now report results from account, library, connector, compatibility, transcoding, export, and clipboard actions. Autosave failures appear immediately, and successful changes are summarized when leaving the relevant settings section.
+- Tightened the file comparison layout and added per-video audio track controls to the synchronized wipe where supported by the browser.
 
 ### 🐛 Bug fixes
 
 - Hide Quick scan when the account lacks the required library permissions.
+
+### 🔒 Security
+
+- Updated pyasn1 and i18next to address denial-of-service advisories.
 
 ## v0.20.0
 
