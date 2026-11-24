@@ -609,6 +609,8 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
             "retry_count": 0,
             "existing_output": "fail",
             "remove_partial_output": True,
+            "automation_trigger": "scan",
+            "automation_interval_minutes": 60,
         },
         "history_retention": {
             "file_history": {"days": 120, "storage_limit_gb": 1.5},
