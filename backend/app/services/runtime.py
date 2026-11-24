@@ -35,6 +35,7 @@ from backend.app.models.entities import (
     TranscodeAutomationRun,
     TranscodeFederationMember,
     TranscodeJob,
+    TranscodeRule,
 )
 from backend.app.schemas.transcoding import TranscodePlan, TranscodeValidationRead
 from backend.app.schemas.transcoding import TranscodeAutomationScope, TranscodeAutomationRunRead
@@ -269,6 +270,7 @@ class ScanRuntimeManager:
         self._refresh_federation_transport()
         self._ensure_federation_maintenance_job()
         self._recover_orphaned_transcode_automation_runs()
+        self.refresh_transcode_automation_schedule()
         self.request_update_check()
         self.sync_all_libraries()
         self.maintenance_executor.submit(self.run_history_retention)
@@ -842,6 +844,37 @@ class ScanRuntimeManager:
             finally:
                 failed_db.close()
             raise
+
+    def refresh_transcode_automation_schedule(self) -> None:
+        with self.lock:
+            with SessionLocal() as db:
+                automation = get_app_settings(db, self.settings).transcoding
+            job_id = "transcode-automation-interval"
+            if automation.automation_trigger != "interval":
+                if self.scheduler.get_job(job_id) is not None:
+                    self.scheduler.remove_job(job_id)
+                return
+            self.scheduler.add_job(
+                self._run_scheduled_transcode_automation,
+                trigger="interval",
+                minutes=automation.automation_interval_minutes,
+                id=job_id,
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+            )
+
+    def _run_scheduled_transcode_automation(self) -> None:
+        with self.lock:
+            if self.submitted_automation_run_ids:
+                return
+        with SessionLocal() as db:
+            automation = get_app_settings(db, self.settings).transcoding
+            if automation.automation_trigger != "interval":
+                return
+            if db.scalar(select(TranscodeRule.id).where(TranscodeRule.enabled.is_(True)).limit(1)) is None:
+                return
+        self.request_transcode_automation(TranscodeAutomationScope(), trigger="scheduled")
 
     def request_transcode_automation(
         self,
@@ -1806,7 +1839,9 @@ class ScanRuntimeManager:
                         )
                 )
                 reconcile_transcode_variants(match_db, library_id)
-                if scan_completed:
+                if scan_completed and analyzed_video_ids and (
+                    get_app_settings(match_db, self.settings).transcoding.automation_trigger == "scan"
+                ):
                     # Variant reconciliation must happen before automatic
                     # processing is selected.  A same-directory output can
                     # be discovered by the follow-up scan while it still has

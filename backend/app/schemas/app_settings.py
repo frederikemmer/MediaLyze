@@ -76,6 +76,8 @@ class TranscodingSettingsRead(BaseModel):
     retry_count: int = Field(default=0, ge=0, le=5)
     existing_output: Literal["fail", "skip"] = "fail"
     remove_partial_output: bool = True
+    automation_trigger: Literal["scan", "manual", "interval"] = "scan"
+    automation_interval_minutes: int = Field(default=60, ge=5, le=10080)
 
 
 class TranscodingSettingsUpdate(BaseModel):
@@ -88,6 +90,8 @@ class TranscodingSettingsUpdate(BaseModel):
     retry_count: int | None = Field(default=None, ge=0, le=5)
     existing_output: Literal["fail", "skip"] | None = None
     remove_partial_output: bool | None = None
+    automation_trigger: Literal["scan", "manual", "interval"] | None = None
+    automation_interval_minutes: int | None = Field(default=None, ge=5, le=10080)
 
 
 InterfaceLanguage = Literal["en", "de", "es", "uk"]

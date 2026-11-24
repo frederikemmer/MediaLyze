@@ -2,5 +2,5 @@
 // Keep the implementation and its existing test coverage intact.
 export const releaseVisibility = {
   federation: false,
-  automationRules: false,
+  automationRules: true,
 };

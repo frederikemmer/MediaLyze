@@ -8,6 +8,9 @@ import { api, type AppSettings, type TranscodeCapabilities, type TranscodeJob, t
 import { TRANSCODING_COLUMN_WIDTHS_STORAGE_KEY } from "../lib/transcoding-column-widths";
 import { TranscodingPage } from "./TranscodingPage";
 
+const notifyMock = vi.hoisted(() => vi.fn());
+vi.mock("../lib/notifications", () => ({ useNotifications: () => ({ notify: notifyMock }) }));
+
 const appDataMock = vi.hoisted(() => ({
   value: {
     appSettings: {
@@ -151,6 +154,7 @@ function renderPage() {
 
 beforeEach(() => {
   window.localStorage.clear();
+  notifyMock.mockClear();
   vi.spyOn(api, "activeTranscodeJobs").mockResolvedValue({
     items: [
       createJob(1, { started_at: "2026-09-07T12:20:00Z", updated_at: "2026-09-07T12:29:00Z" }),
@@ -325,14 +329,28 @@ describe("TranscodingPage", () => {
     expect(screen.queryByRole("link", { name: "Open synchronized preview" })).not.toBeInTheDocument();
   });
 
-  it("retains the history run and displays an error when deletion fails", async () => {
+  it("retains the history run and reports a safe error when deletion fails", async () => {
     vi.spyOn(api, "deleteTranscodeJob").mockRejectedValue(new Error("Cannot delete run"));
     vi.spyOn(window, "confirm").mockReturnValue(true);
     renderPage();
     fireEvent.click(await screen.findByRole("tab", { name: /History/ }));
     fireEvent.click(await screen.findByRole("button", { name: /^Delete run for/ }));
-    expect(await screen.findByText("Cannot delete run")).toBeInTheDocument();
+    await waitFor(() => expect(notifyMock).toHaveBeenCalledWith(expect.objectContaining({ type: "error", message: "The transcoding action failed.", topicKey: "transcode:3" })));
+    expect(screen.queryByText("Cannot delete run")).not.toBeInTheDocument();
     expect(screen.getByTestId("transcode-job-3")).toBeInTheDocument();
+  });
+
+  it("reports a successful deletion separately from a failed refresh", async () => {
+    vi.spyOn(api, "deleteTranscodeJob").mockResolvedValue(undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderPage();
+    fireEvent.click(await screen.findByRole("tab", { name: /History/ }));
+    const button = await screen.findByRole("button", { name: /^Delete run for/ });
+    vi.mocked(api.activeTranscodeJobs).mockRejectedValue(new Error("private backend details"));
+    fireEvent.click(button);
+    await waitFor(() => expect(notifyMock).toHaveBeenCalledWith(expect.objectContaining({ type: "warning", message: "The action succeeded, but the job list could not be refreshed." })));
+    expect(notifyMock).toHaveBeenCalledWith(expect.objectContaining({ type: "success", message: "The job was removed from history." }));
+    expect(notifyMock).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
   });
 
   it("restores and persists resizable transcoding column widths", async () => {
@@ -375,6 +393,7 @@ describe("TranscodingPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Cancel Naturefilm-1.mkv" }));
 
     await waitFor(() => expect(cancel).toHaveBeenCalledWith(1));
+    expect(notifyMock).toHaveBeenCalledWith(expect.objectContaining({ type: "info", message: "Cancellation was requested." }));
   });
 
 });

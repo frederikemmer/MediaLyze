@@ -132,6 +132,9 @@ from backend.app.schemas.transcoding import (
     TranscodeRuleCreate,
     TranscodeRuleRead,
     TranscodeRuleReorder,
+    TranscodeRuleTestAsset,
+    TranscodeRuleTestRead,
+    TranscodeRuleTestRequest,
     TranscodeRuleUpdate,
     TranscodeValidationRead,
 )
@@ -171,6 +174,7 @@ from backend.app.models.entities import (
     JellyfinUserItemData,
     JobStatus,
     Library,
+    LibraryHistory,
     LibraryRoot,
     LibraryType,
     MediaFile,
@@ -297,6 +301,9 @@ from backend.app.services.transcode_automation import (
     list_transcode_presets,
     list_transcode_rules,
     preview_transcode_automation,
+    record_transcode_automation_preview,
+    search_transcode_rule_assets,
+    test_transcode_rule_draft,
     reorder_transcode_rules,
     serialize_transcode_automation_run,
     serialize_transcode_preset,
@@ -643,6 +650,35 @@ def scan_job_detail(job_id: int, db: Session = Depends(get_db_session)) -> ScanJ
     return payload
 
 
+@router.delete("/scan-jobs/{job_id}", status_code=204)
+def delete_scan_job(job_id: int, finished_at: datetime, db: Session = Depends(get_db_session)) -> Response:
+    job = db.execute(
+        delete(ScanJob)
+        .where(
+            ScanJob.id == job_id,
+            ScanJob.finished_at == finished_at,
+            ScanJob.status.in_([JobStatus.completed, JobStatus.failed, JobStatus.canceled]),
+            ScanJob.job_type.in_(["incremental", "full"]),
+        )
+        .returning(ScanJob.library_id, ScanJob.finished_at)
+    ).one_or_none()
+    if job is None:
+        raise HTTPException(status_code=404, detail="Past scan not found")
+    library_id, finished_at = job
+    # SQLite can reuse scan IDs after retention removes old logs.
+    db.execute(
+        delete(LibraryHistory).where(
+            LibraryHistory.library_id == library_id,
+            LibraryHistory.snapshot_day == finished_at.date().isoformat(),
+            LibraryHistory.source_scan_job_id == job_id,
+            LibraryHistory.captured_at == finished_at,
+        )
+    )
+    db.commit()
+    stats_cache.invalidate(str(id(db.get_bind())), library_id)
+    return Response(status_code=204)
+
+
 @router.get("/app-settings", response_model=AppSettingsRead)
 def app_settings(
     db: Session = Depends(get_db_session),
@@ -753,6 +789,13 @@ def app_settings_update(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     runtime.refresh_worker_settings()
+    old_automation = current_settings.transcoding
+    new_automation = updated_settings.transcoding
+    if (
+        old_automation.automation_trigger != new_automation.automation_trigger
+        or old_automation.automation_interval_minutes != new_automation.automation_interval_minutes
+    ):
+        runtime.refresh_transcode_automation_schedule()
     if updated_settings.history_retention != current_settings.history_retention:
         runtime.run_history_retention()
     if (
@@ -3306,6 +3349,26 @@ def transcoding_rule_delete(
     return Response(status_code=204)
 
 
+@router.get("/transcoding/automation/test-assets", response_model=list[TranscodeRuleTestAsset])
+def transcoding_rule_test_assets(
+    q: str = Query(min_length=1, max_length=512),
+    db: Session = Depends(get_db_session),
+) -> list[TranscodeRuleTestAsset]:
+    return search_transcode_rule_assets(db, q)
+
+
+@router.post("/transcoding/automation/test-rule", response_model=TranscodeRuleTestRead)
+def transcoding_rule_test(
+    payload: TranscodeRuleTestRequest,
+    db: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> TranscodeRuleTestRead:
+    try:
+        return test_transcode_rule_draft(db, settings, payload)
+    except TranscodeAutomationError as exc:
+        raise _transcode_automation_error(exc) from exc
+
+
 @router.post("/transcoding/automation/preview", response_model=TranscodeAutomationPreviewRead)
 def transcoding_automation_preview(
     payload: TranscodeAutomationScope,
@@ -3313,7 +3376,8 @@ def transcoding_automation_preview(
     settings: Settings = Depends(get_app_settings),
 ) -> TranscodeAutomationPreviewRead:
     try:
-        return preview_transcode_automation(db, settings, payload)
+        preview = preview_transcode_automation(db, settings, payload)
+        return record_transcode_automation_preview(db, payload, preview) if payload.preview_all else preview
     except TranscodeAutomationError as exc:
         raise _transcode_automation_error(exc) from exc
 
@@ -3343,6 +3407,7 @@ def transcoding_automation_status(
     if run is None:
         run = db.scalar(
             select(TranscodeAutomationRun)
+            .where(TranscodeAutomationRun.trigger_source != "dry_run")
             .order_by(TranscodeAutomationRun.created_at.desc(), TranscodeAutomationRun.id.desc())
         )
     return serialize_transcode_automation_run(run) if run else None

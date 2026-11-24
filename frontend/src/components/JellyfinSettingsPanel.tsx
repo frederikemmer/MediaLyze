@@ -12,6 +12,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
+import { useAutosaveNotifications } from "../lib/notification-actions";
 import { trackExplicitJobStart } from "../lib/notification-job-tracking";
 
 import { AsyncPanel } from "./AsyncPanel";
@@ -69,6 +70,9 @@ function validJellyfinBaseUrl(value: string) {
 
 export function JellyfinSettingsPanel({ onCatalogChanged }: { onCatalogChanged?: () => void }) {
   const { t } = useTranslation();
+  const source = { area: "connectors" as const, href: "/settings?section=jellyfin", label: t("connectors.title") };
+  const autosave = useAutosaveNotifications({ scopeKey: "legacy-jellyfin-settings", topicKey: "connector:legacy", source, successMessage: t("notifications.actions.connectors.legacySaved", { defaultValue: "Jellyfin settings saved." }), errorMessage: t("notifications.actions.connectors.legacyFailed", { defaultValue: "Could not save Jellyfin settings." }), partialMessage: t("notifications.actions.connectors.partial", { defaultValue: "Some changes were saved; others failed." }) });
+  const usersAutosave = useAutosaveNotifications({ scopeKey: "legacy-jellyfin-users", topicKey: "connector:legacy", source, successMessage: t("notifications.actions.connectors.usersSaved", { defaultValue: "Analyzed users saved." }), errorMessage: t("notifications.actions.connectors.usersFailed", { defaultValue: "Could not save analyzed users." }), partialMessage: t("notifications.actions.connectors.partial", { defaultValue: "Some changes were saved; others failed." }) });
   const [connection, setConnection] = useState<JellyfinConnection>(EMPTY_CONNECTION);
   const [status, setStatus] = useState<JellyfinSyncStatus | null>(null);
   const [users, setUsers] = useState<JellyfinUser[]>([]);
@@ -81,11 +85,9 @@ export function JellyfinSettingsPanel({ onCatalogChanged }: { onCatalogChanged?:
   const [pending, setPending] = useState<string | null>(null);
   const [autoSaving, setAutoSaving] = useState(false);
   const [connectionSaveState, setConnectionSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [connectionSaveError, setConnectionSaveError] = useState<string | null>(null);
   const [apiKeyFocused, setApiKeyFocused] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [connectionActionError, setConnectionActionError] = useState<string | null>(null);
-  const [usersError, setUsersError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [cancelNotice, setCancelNotice] = useState<string | null>(null);
   const [cancelPending, setCancelPending] = useState(false);
@@ -157,26 +159,23 @@ export function JellyfinSettingsPanel({ onCatalogChanged }: { onCatalogChanged?:
     const timer = window.setTimeout(async () => {
       setAutoSaving(true);
       setConnectionSaveState("saving");
-      setConnectionSaveError(null);
       if (saveFeedbackTimerRef.current !== null) window.clearTimeout(saveFeedbackTimerRef.current);
       try {
-        const updated = await api.updateJellyfinConnection({
+        const updated = await autosave.trackSave(api.updateJellyfinConnection({
           base_url: nextBaseUrl,
           ...(nextApiKey ? { api_key: nextApiKey } : {}),
           sync_interval_minutes: nextInterval,
-        });
+        }));
         setConnection(updated);
         failedAutoSaveSignatureRef.current = null;
         setStatus((current) => current ? { ...current, ...updated } : current);
         if (nextApiKey) {
           setApiKey((current) => current.trim() === nextApiKey ? "" : current);
         }
-        setConnectionSaveState("saved");
-        saveFeedbackTimerRef.current = window.setTimeout(() => setConnectionSaveState("idle"), 2000);
-      } catch (reason) {
+        setConnectionSaveState("idle");
+      } catch {
         failedAutoSaveSignatureRef.current = autoSaveSignature;
-        setConnectionSaveError((reason as Error).message);
-        setConnectionSaveState("error");
+        setConnectionSaveState("idle");
       } finally {
         setAutoSaving(false);
       }
@@ -338,11 +337,10 @@ export function JellyfinSettingsPanel({ onCatalogChanged }: { onCatalogChanged?:
 
   async function saveEnabledUsers(enabledIds: string[], pendingKey: string) {
     setPending(pendingKey);
-    setUsersError(null);
     try {
-      setUsers(await api.updateJellyfinUsers(enabledIds));
-    } catch (reason) {
-      setUsersError((reason as Error).message);
+      setUsers(await usersAutosave.trackSave(api.updateJellyfinUsers(enabledIds)));
+    } catch {
+      // The autosave helper reports a safe error.
     } finally {
       setPending(null);
     }
@@ -460,7 +458,7 @@ export function JellyfinSettingsPanel({ onCatalogChanged }: { onCatalogChanged?:
             {connectionSaveState !== "idle" ? (
               <span className={`jellyfin-auto-save-status status-${connectionSaveState}`} role="status" aria-live="polite">
                 {connectionSaveState === "saving" ? <RefreshCw className="is-spinning" aria-hidden="true" /> : connectionSaveState === "error" ? <AlertTriangle aria-hidden="true" /> : <CheckCircle2 aria-hidden="true" />}
-                {connectionSaveState === "error" ? connectionSaveError || t("jellyfin.autoSaveFailed") : t(`jellyfin.autoSave.${connectionSaveState}`)}
+                {t(`jellyfin.autoSave.${connectionSaveState}`)}
               </span>
             ) : null}
             {pending === "test" ? <span className="jellyfin-operation-status" role="status"><RefreshCw aria-hidden="true" className="is-spinning" />{t("jellyfin.operation.testingConnection")}</span> : null}
@@ -623,7 +621,6 @@ export function JellyfinSettingsPanel({ onCatalogChanged }: { onCatalogChanged?:
               )}
             </div>
           )}
-          {usersError ? <div className="alert jellyfin-inline-error" role="alert">{usersError}</div> : null}
           {usersBusy ? <div className="jellyfin-operation-status" role="status"><RefreshCw aria-hidden="true" className="is-spinning" />{t("jellyfin.operation.savingUsers")}</div> : null}
         </section>
 

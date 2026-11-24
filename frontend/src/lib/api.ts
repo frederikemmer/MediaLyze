@@ -1457,6 +1457,7 @@ export type TranscodePresetDefinition = {
   subtitle_rules: TranscodePresetStreamRule[];
   external_subtitle_rules: TranscodePresetStreamRule[];
   default_video_action: "copy" | "convert" | "remove";
+  copy_dolby_vision_video?: boolean;
   default_audio_action: "copy" | "convert" | "remove";
   default_subtitle_action: "copy" | "convert" | "remove";
   default_external_subtitle_action: "copy" | "convert" | "remove";
@@ -1511,7 +1512,7 @@ export type TranscodeCondition = {
 
 export type TranscodeConditionGroup = {
   type: "group";
-  operator: "and" | "or";
+  operator: "and" | "or" | "xor";
   children: Array<TranscodeCondition | TranscodeConditionGroup>;
 };
 
@@ -1528,9 +1529,29 @@ export type TranscodeRule = {
   profile_version: number;
   output_mode: "transcode_output" | "same_directory" | "replace_original";
   output_subfolder: string;
+  prevent_output_growth?: boolean;
   replacement_approved: boolean;
   created_at: string;
   updated_at: string;
+};
+
+export type TranscodeRuleTestAsset = { id: number; filename: string; title: string | null; library_id: number };
+export type TranscodeRuleTestTrace = {
+  matched: boolean;
+  values: Array<string | number | boolean>;
+  children: TranscodeRuleTestTrace[];
+};
+export type TranscodeRuleTestRequest = Pick<TranscodeRule, "library_ids" | "conditions" | "profile_id" | "output_mode" | "output_subfolder" | "prevent_output_growth"> & {
+  file_id: number;
+  rule_id?: number;
+};
+export type TranscodeRuleTestResult = {
+  in_scope: boolean;
+  trace: TranscodeRuleTestTrace;
+  status: "matched" | "unmatched" | "blocked" | "skipped";
+  reason: string | null;
+  output_path: string | null;
+  output_relative_path: string | null;
 };
 
 export type TranscodeAutomationScope = {
@@ -1538,6 +1559,7 @@ export type TranscodeAutomationScope = {
   library_ids?: number[];
   source_file_ids?: number[];
   retry_failed?: boolean;
+  preview_all?: boolean;
   limit?: number;
 };
 
@@ -1560,6 +1582,7 @@ export type TranscodeAutomationDecision = {
 };
 
 export type TranscodeAutomationPreview = {
+  run_id?: number | null;
   generated_at: string;
   total_files: number;
   matched: number;
@@ -1589,7 +1612,7 @@ export type TranscodeAutomationRun = {
   failed: number;
   canceled: number;
   current_page: number;
-  summary: Record<string, unknown>;
+  summary: Record<string, unknown> & { preview_items?: Omit<TranscodeAutomationDecision, "plan">[] };
   error: string | null;
   cancellation_requested: boolean;
   created_at: string;
@@ -2139,6 +2162,8 @@ export type AppSettings = {
   };
 };
 
+export type TranscodeAutomationTrigger = "scan" | "manual" | "interval";
+
 export type TranscodingSettings = {
   execution_mode: "hardware_required" | "cpu_only";
   cpu_budget_percent: number;
@@ -2149,6 +2174,8 @@ export type TranscodingSettings = {
   retry_count: number;
   existing_output: "fail" | "skip";
   remove_partial_output: boolean;
+  automation_trigger?: TranscodeAutomationTrigger;
+  automation_interval_minutes?: number;
 };
 
 export type TelemetryPreviewMode = "none" | "minimal" | "enabled";
@@ -2692,6 +2719,8 @@ export const api = {
     const query = searchParams.toString();
     return request<RecentScanJobPage>(`/scan-jobs/recent${query ? `?${query}` : ""}`);
   },
+  deleteScanJob: (jobId: number, finishedAt: string) =>
+    request<void>(`/scan-jobs/${jobId}?${new URLSearchParams({ finished_at: finishedAt })}`, { method: "DELETE" }),
   scanJobDetail: (jobId: string | number) => request<ScanJobDetail>(`/scan-jobs/${jobId}`),
   libraries: () => request<LibrarySummary[]>("/libraries"),
   librarySummary: (id: string | number, signal?: AbortSignal) =>
@@ -2977,6 +3006,7 @@ export const api = {
     profile_id: number;
     output_mode?: TranscodeRule["output_mode"];
     output_subfolder?: string;
+    prevent_output_growth?: boolean;
   }) => request<TranscodeRule>("/transcoding/rules", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -2990,6 +3020,7 @@ export const api = {
     profile_id: number;
     output_mode: TranscodeRule["output_mode"];
     output_subfolder: string;
+    prevent_output_growth?: boolean;
   }>) => request<TranscodeRule>(`/transcoding/rules/${id}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
@@ -3003,6 +3034,10 @@ export const api = {
     method: "POST",
     body: JSON.stringify({ confirm }),
   }),
+  searchTranscodeRuleAssets: (query: string, signal?: AbortSignal) =>
+    request<TranscodeRuleTestAsset[]>(`/transcoding/automation/test-assets?${new URLSearchParams({ q: query })}`, { signal }),
+  testTranscodeRule: (payload: TranscodeRuleTestRequest, signal?: AbortSignal) =>
+    request<TranscodeRuleTestResult>("/transcoding/automation/test-rule", { method: "POST", body: JSON.stringify(payload), signal }),
   previewTranscodeAutomation: (payload: TranscodeAutomationScope = {}) => request<TranscodeAutomationPreview>("/transcoding/automation/preview", {
     method: "POST",
     body: JSON.stringify(payload),

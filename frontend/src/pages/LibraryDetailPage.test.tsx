@@ -28,6 +28,7 @@ import {
 import { ScanJobsProvider } from "../lib/scan-jobs";
 import { buildFileColumns, LibraryDetailPage } from "./LibraryDetailPage";
 import * as auth from "../lib/auth";
+import * as notifications from "../lib/notifications";
 
 const scrollIntoViewMock = vi.fn();
 
@@ -619,6 +620,71 @@ beforeEach(() => {
 });
 
 describe("LibraryDetailPage", () => {
+  it.each([
+    { name: "metadata-only reader", rights: ["library.read"], owner: false, scan: false, sync: false },
+    { name: "scan reader without connector rights", rights: ["library.read", "library.scan"], owner: false, scan: true, sync: false },
+    { name: "scan reader without connector rights when scan fails", rights: ["library.read", "library.scan"], owner: false, scan: true, sync: false, scanFails: true },
+    { name: "scan and connector manager", rights: ["library.read", "library.scan", "connector.view", "connector.manage"], owner: false, scan: true, sync: true },
+    { name: "owner", rights: [], owner: true, scan: true, sync: true },
+  ])("applies Quick scan rights for $name", async ({ rights, owner, scan, sync, scanFails = false }) => {
+    const libraryId = 918;
+    vi.spyOn(auth, "useAuth").mockReturnValue({ identity: {
+      id: "test", username: "Test", kind: "account", owner,
+      revision: 1, must_change_password: false, policy: auth.emptyPolicy(),
+    }, status: null, has: (right, target) => rights.includes(right) && (!right.startsWith("library.") || target === libraryId),
+      refresh: async () => {}, logout: async () => {} });
+    const notify = vi.fn();
+    vi.spyOn(notifications, "useOptionalNotifications").mockReturnValue({ notify } as never);
+    mockAppSettings();
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId, {
+      linked_jellyfin_library: { id: 7, name: "Movies", last_synced_at: "2026-10-27T10:00:00Z" },
+    }));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+    const scanSpy = vi.spyOn(api, "scanLibrary");
+    if (sync || scanFails) scanSpy.mockRejectedValue(new Error("private scan details"));
+    else scanSpy.mockResolvedValue({ id: 82, library_id: libraryId, library_name: `Series ${libraryId}`, status: "queued", job_type: "incremental", files_total: 0, files_scanned: 0, errors: 0, started_at: null, finished_at: null, progress_percent: 0, phase_label: "Queued", phase_detail: null });
+    const syncSpy = vi.spyOn(api, "syncJellyfin").mockResolvedValue({ job_id: 91, status: "queued", trigger_source: "manual", accepted: true });
+    renderPage(libraryId);
+    await screen.findByText(`Series ${libraryId}`);
+    const button = screen.queryByRole("button", { name: "Quick scan" });
+    if (!scan) {
+      expect(button).not.toBeInTheDocument();
+      expect(scanSpy).not.toHaveBeenCalled();
+      expect(syncSpy).not.toHaveBeenCalled();
+      return;
+    }
+    expect(button).toBeInTheDocument();
+    fireEvent.click(button!);
+    await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+      type: sync || scanFails ? "error" : "success",
+      message: sync ? "Synchronization requested, but the scan could not be requested." : scanFails ? "Could not request the scan." : "Scan requested.",
+      source: { area: "library", href: `/libraries/${libraryId}`, label: `Series ${libraryId}` },
+    })));
+    expect(scanSpy).toHaveBeenCalledWith(libraryId, "incremental");
+    expect(syncSpy).toHaveBeenCalledTimes(sync ? 1 : 0);
+  });
+  it("guards a still-visible Quick scan when its permissions are revoked", async () => {
+    const libraryId = 919;
+    let allowed = true;
+    vi.spyOn(auth, "useAuth").mockReturnValue({ identity: {
+      id: "test", username: "Test", kind: "account", owner: false,
+      revision: 1, must_change_password: false, policy: auth.emptyPolicy(),
+    }, status: null, has: (right, target) => allowed && target === libraryId && ["library.read", "library.scan"].includes(right),
+      refresh: async () => {}, logout: async () => {} });
+    mockAppSettings();
+    vi.spyOn(api, "librarySummary").mockResolvedValue(createLibrarySummary(libraryId));
+    vi.spyOn(api, "libraryStatistics").mockResolvedValue(createLibraryStatistics());
+    vi.spyOn(api, "libraryFiles").mockResolvedValue(createFilesPage(libraryId));
+    const scanSpy = vi.spyOn(api, "scanLibrary");
+    const syncSpy = vi.spyOn(api, "syncJellyfin");
+    renderPage(libraryId);
+    const button = await screen.findByRole("button", { name: "Quick scan" });
+    allowed = false;
+    fireEvent.click(button);
+    expect(scanSpy).not.toHaveBeenCalled();
+    expect(syncSpy).not.toHaveBeenCalled();
+  });
   it("shows the per-user play panel only for a linked Jellyfin library", async () => {
     const libraryId = 99101;
     mockAppSettings();

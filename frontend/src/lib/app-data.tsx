@@ -187,6 +187,8 @@ function normalizeAppSettings(payload: Partial<AppSettings> | null | undefined):
       existing_output: payload?.transcoding?.existing_output ?? DEFAULT_TRANSCODING.existing_output,
       remove_partial_output:
         payload?.transcoding?.remove_partial_output ?? DEFAULT_TRANSCODING.remove_partial_output,
+      automation_trigger: payload?.transcoding?.automation_trigger ?? "scan",
+      automation_interval_minutes: payload?.transcoding?.automation_interval_minutes ?? 60,
     },
     history_retention: {
       notification_history_days: payload?.history_retention?.notification_history_days ?? 30,

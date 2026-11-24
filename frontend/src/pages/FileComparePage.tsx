@@ -1,3 +1,5 @@
+import { useOptionalNotifications } from "../lib/notifications";
+import { identityGeneration } from "../lib/access-session";
 import { preferenceStorage } from "../lib/preference-storage";
 import {
   ChevronDown,
@@ -92,6 +94,7 @@ type CompareFileColumn = CompareSlot & {
 };
 
 type CompareRawJsonEntry = {
+  fileId: number | undefined;
   key: CompareSlotKey;
   label: string;
   value: Record<string, unknown> | null;
@@ -682,6 +685,8 @@ function CompareSectionView({
   showOnlyDifferences?: boolean;
 }) {
   const { t } = useTranslation();
+  const notifications = useOptionalNotifications();
+  const generation = identityGeneration();
   const changedCount = section.rows.filter(compareRowHasDifference).length;
   const [open, setOpen] = useState(() => changedCount > 0);
   const [showAllChapters, setShowAllChapters] = useState(false);
@@ -712,8 +717,10 @@ function CompareSectionView({
   }, []);
 
   const copyRawJson = useCallback(async (side: CompareSlotKey) => {
-    const value = section.rawJson?.find((entry) => entry.key === side)?.value ?? {};
+    const entry = section.rawJson?.find((item) => item.key === side);
+    const value = entry?.value ?? {};
     const copied = await copyTextToClipboard(JSON.stringify(value, null, 2));
+    if (entry?.fileId && generation === identityGeneration()) notifications?.notify({ type: copied ? "success" : "error", message: t(`notifications.actions.integration.${copied ? "copied" : "copyFailed"}`, { defaultValue: copied ? "Copied to the clipboard." : "Could not copy to the clipboard." }), topicKey: `file:${entry.fileId}:clipboard`, source: { area: "library", href: `/files/${entry.fileId}`, label: entry.label } });
     if (!copied) {
       return;
     }
@@ -725,7 +732,7 @@ function CompareSectionView({
       setCopiedRawSide(null);
       rawCopyResetTimeoutRef.current = null;
     }, 1600);
-  }, [section.rawJson]);
+  }, [section.rawJson, notifications, generation, t]);
 
   return (
     <section className="panel file-compare-section">
@@ -854,9 +861,6 @@ export function FileComparePage() {
     }
   }, [librariesLoaded, loadLibraries]);
 
-  useEffect(() => {
-    preferenceStorage.setItem(COMPARE_COLUMN_COUNT_STORAGE_KEY, String(columnCount));
-  }, [columnCount]);
 
   useEffect(() => {
     setSearchParams((current) => {
@@ -1008,6 +1012,7 @@ export function FileComparePage() {
       rows: buildRawRows(columns, t),
       rawJson: columns.map((column) => ({
         key: column.key,
+        fileId: column.detail?.id,
         label: column.detail?.filename ?? getSlotLabel(column.key, t),
         value: column.detail?.raw_ffprobe_json ?? {},
       })),
@@ -1035,9 +1040,40 @@ export function FileComparePage() {
           <div className="page-heading-row">
             <GitCompare aria-hidden="true" className="page-heading-icon" />
             <h2>{t("fileCompare.title")}</h2>
+            <div
+              className="distribution-chart-mode-toggle duplicate-panel-view-toggle file-compare-display-toggle"
+              role="group"
+              aria-label={t("fileCompare.displayMode.label")}
+            >
+              <SlidingTogglePill
+                activeKey={displayMode}
+                className="nav-active-pill distribution-chart-mode-pill"
+              />
+              {displayModeOptions.map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  data-toggle-key={key}
+                  className={`distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button${
+                    displayMode === key ? " active" : ""
+                  }`}
+                  aria-label={label}
+                  title={label}
+                  onClick={() => setDisplayMode(key)}
+                >
+                  <span className="distribution-chart-mode-button-content">
+                    <Icon aria-hidden="true" className="distribution-chart-mode-icon" />
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
           <div className="file-compare-title-actions">
-            <ColumnCountPicker value={columnCount} onChange={setColumnCount} />
+            <ColumnCountPicker value={columnCount} onChange={(count) => {
+              if (count === columnCount) return;
+              try { preferenceStorage.setItem(COMPARE_COLUMN_COUNT_STORAGE_KEY, String(count)); } catch { /* The preference bridge reports failed writes. */ }
+              setColumnCount(count);
+            }} />
           </div>
         </div>
         <div className="file-compare-body">
@@ -1046,35 +1082,6 @@ export function FileComparePage() {
               hasFileLabels ? " has-file-labels" : ""
             }`}
           >
-            <div className="file-compare-toolbar-controls">
-              <div
-                className="distribution-chart-mode-toggle duplicate-panel-view-toggle file-compare-display-toggle"
-                role="group"
-                aria-label={t("fileCompare.displayMode.label")}
-              >
-                <SlidingTogglePill
-                  activeKey={displayMode}
-                  className="nav-active-pill distribution-chart-mode-pill"
-                />
-                {displayModeOptions.map(({ key, label, icon: Icon }) => (
-                  <button
-                    key={key}
-                    type="button"
-                    data-toggle-key={key}
-                    className={`distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button${
-                      displayMode === key ? " active" : ""
-                    }`}
-                    aria-label={label}
-                    title={label}
-                    onClick={() => setDisplayMode(key)}
-                  >
-                    <span className="distribution-chart-mode-button-content">
-                      <Icon aria-hidden="true" className="distribution-chart-mode-icon" />
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
             {visibleSlots.map((slot, index) => (
               <Fragment key={slot.key}>
                 {columnCount === 2 && index === 1 ? (
@@ -1127,9 +1134,9 @@ export function FileComparePage() {
               visibleSections.length > 0 ? (
                 <div className="file-compare-sections">
                   {selectedVisibleFiles.length === 2 && selectedVisibleFiles.every((entry) => entry.detail?.video_streams.length) ? (
-                    <section className="panel file-compare-section file-compare-wipe-section">
-                      <h3>{t("transcoding.wipeComparison")}</h3>
+                    <section className="panel file-compare-section file-compare-wipe-section" aria-label={t("transcoding.wipeComparison")}>
                       <VideoWipeCompare
+                        key={selectedVisibleFiles.map(({ detail }) => detail!.id).join(":")}
                         first={{
                           src: api.fileMediaUrl(selectedVisibleFiles[0].detail!.id),
                           label: selectedVisibleFiles[0].detail!.filename,

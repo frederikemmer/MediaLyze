@@ -1530,6 +1530,7 @@ class TranscodeRule(TimestampMixin, Base):
     )
     output_mode: Mapped[str] = mapped_column(String(32), default="transcode_output", nullable=False)
     output_subfolder: Mapped[str] = mapped_column(String(512), default="", nullable=False)
+    prevent_output_growth: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     replacement_approved_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 

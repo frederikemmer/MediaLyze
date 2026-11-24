@@ -1,4 +1,7 @@
+import { identityGeneration } from "../lib/access-session";
 import { useAuth } from "../lib/auth";
+import { useOptionalNotifications } from "../lib/notifications";
+import { useAutosaveNotifications } from "../lib/notification-actions";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, Github, Plus, Save, Search, SquareArrowOutUpRight, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -408,7 +411,11 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
   const [compatibility, setCompatibility] = useState<CompatibilityProfile[]>(initialCatalog?.compatibility ?? []);
   const [loading, setLoading] = useState(initialCatalog === null);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const notifications = useOptionalNotifications();
+  const source = { area: "settings" as const, href: "/settings?section=compatibility-profiles", label: t("notifications.actions.profiles.open", { defaultValue: "Open compatibility profiles" }) };
+  const notice = (type: "success" | "error" | "warning", key: string, fallback: string) => notifications?.notify({ type, message: t(`notifications.actions.profiles.${key}`, { defaultValue: fallback }), topicKey: "settings:compatibility-profiles", source });
+  const { trackSave } = useAutosaveNotifications({ scopeKey: "settings:compatibility-profiles", topicKey: "settings:compatibility-profiles", source, successMessage: t("notifications.actions.profiles.favoritesSaved", { defaultValue: "Favorite profiles saved." }), errorMessage: t("notifications.actions.profiles.favoritesFailed", { defaultValue: "Could not save favorite profiles." }), partialMessage: t("notifications.actions.profiles.favoritesPartial", { defaultValue: "Some favorite profile changes could not be saved." }) });
   const [draft, setDraft] = useState<EditableProfile | null>(null);
   const [draftOriginId, setDraftOriginId] = useState<string | null>(null);
   const [expandedProfileId, setExpandedProfileId] = useState<string | null>(null);
@@ -458,8 +465,10 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
         compatibility: nextCompatibility,
       });
       setError(null);
+      return true;
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : t("compatibilityProfiles.loadFailed"));
+      return false;
     } finally {
       setLoading(false);
     }
@@ -499,17 +508,15 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
   }
 
   function toggleFavorite(type: ProfileTab, id: string) {
-    setFavoriteProfileKeys((current) => {
-      const next = new Set(current);
-      const key = favoriteProfileKey(type, id);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-      writeFavoriteProfileKeys(next);
-      return next;
-    });
+    const next = new Set(favoriteProfileKeys);
+    const key = favoriteProfileKey(type, id);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    setFavoriteProfileKeys(next);
+    const saved = writeFavoriteProfileKeys(next);
+    // Account/Desktop writes are confirmed by PreferenceAutosaveFeedback after PATCH.
+    if (!saved || !auth.identity || auth.identity.kind === "guest") {
+      void trackSave(saved ? Promise.resolve() : Promise.reject(new Error("Storage unavailable"))).catch(() => {});
+    }
   }
 
   function renderFavoriteAction(type: ProfileTab, id: string, name: string) {
@@ -570,7 +577,7 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
       sources: JSON.stringify(next.sources, null, 2),
     });
     setReason("");
-    setMessage(null);
+    setValidationMessage(null);
   }
 
   function editProfile(profile: EditableProfile) {
@@ -656,10 +663,10 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
       setDraft(null);
       setDraftOriginId(null);
       setExpandedProfileId(parsed.id);
-      setMessage(t("compatibilityProfiles.saved"));
-      await load();
-    } catch (saveError) {
-      setMessage(saveError instanceof Error ? saveError.message : t("compatibilityProfiles.saveFailed"));
+      notice("success", "saved", "Profile saved.");
+      if (!await load()) notice("warning", "refreshFailed", "Profile saved, but the list could not be refreshed.");
+    } catch {
+      notice("error", "saveFailed", "Could not save the profile.");
     }
   }
 
@@ -669,9 +676,10 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
     try {
       if ("manufacturer" in profile) await api.deleteHardwareProfile(profile.id);
       else await api.deleteSoftwareProfile(profile.id);
-      await load();
-    } catch (deleteError) {
-      setMessage(deleteError instanceof Error ? deleteError.message : t("compatibilityProfiles.deleteFailed"));
+      notice("success", "deleted", "Profile deleted.");
+      if (!await load()) notice("warning", "deleteRefreshFailed", "Profile deleted, but the list could not be refreshed.");
+    } catch {
+      notice("error", "deleteFailed", "Could not delete the profile.");
     }
   }
 
@@ -682,11 +690,11 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
       const issue = buildProfileIssue(parsed, reason);
       if (issue.overflowBody) {
         await navigator.clipboard.writeText(issue.overflowBody);
-        setMessage(t("compatibilityProfiles.issueCopied"));
+        notice("success", "issueCopied", "Profile details copied to the clipboard.");
       }
       await openExternalUrl(issue.url);
-    } catch (issueError) {
-      setMessage(issueError instanceof Error ? issueError.message : t("compatibilityProfiles.issueFailed"));
+    } catch {
+      notice("error", "issueFailed", "Could not prepare the profile proposal.");
     }
   }
 
@@ -707,7 +715,7 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
     };
     setCompatibilityDraft(next);
     setExpandedProfileId(next.id);
-    setMessage(null);
+    setValidationMessage(null);
   }
 
   async function saveCompatibility() {
@@ -735,18 +743,23 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
         : await api.createCompatibilityProfile(profileToSave);
       setCompatibilityDraft(null);
       setExpandedProfileId(profileToSave.id);
-      setMessage(t("compatibilityProfiles.saved"));
-      await load();
-    } catch (saveError) {
-      setMessage(saveError instanceof Error ? saveError.message : t("compatibilityProfiles.saveFailed"));
+      notice("success", "saved", "Profile saved.");
+      if (!await load()) notice("warning", "refreshFailed", "Profile saved, but the list could not be refreshed.");
+    } catch {
+      notice("error", "saveFailed", "Could not save the profile.");
     }
   }
 
   async function removeCompatibility(profile: CompatibilityProfile) {
     if (!canEdit) return;
     if (!window.confirm(t("compatibilityProfiles.deleteConfirm", { name: profile.name }))) return;
-    await api.deleteCompatibilityProfile(profile.id);
-    await load();
+    try {
+      await api.deleteCompatibilityProfile(profile.id);
+      notice("success", "deleted", "Profile deleted.");
+      if (!await load()) notice("warning", "deleteRefreshFailed", "Profile deleted, but the list could not be refreshed.");
+    } catch {
+      notice("error", "deleteFailed", "Could not delete the profile.");
+    }
   }
 
   function updateDraft(patch: Partial<EditableProfile>) {
@@ -828,7 +841,7 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
                     className="secondary icon-only-button compatibility-source-open-button"
                     aria-label={t("compatibilityProfiles.openSourceAria", { label: source.label })}
                     title={t("compatibilityProfiles.openSource")}
-                    onClick={() => void openExternalUrl(source.url)}
+                    onClick={() => { const generation = identityGeneration(); void openExternalUrl(source.url).catch(() => { if (generation === identityGeneration()) notice("error", "sourceOpenFailed", "Could not open the profile source."); }); }}
                   >
                     <SquareArrowOutUpRight size={17} aria-hidden="true" />
                   </button>
@@ -1272,8 +1285,9 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
                   if (!editable) return;
                   try {
                     updateEntry(key, { conditions: JSON.parse(event.target.value) });
+                    setValidationMessage(null);
                   } catch {
-                    setMessage(t("compatibilityProfiles.invalidConditions"));
+                    setValidationMessage(t("compatibilityProfiles.invalidConditions"));
                   }
                 }}
               />
@@ -1662,7 +1676,7 @@ export function CompatibilityProfilesPanel({ searchFocus = null }: Compatibility
           <div className="settings-profile-toggle-actions">{createAction}</div>
         </div>
 
-        {message ? <div className="compatibility-profile-catalog-message alert">{message}</div> : null}
+        {validationMessage ? <div className="compatibility-profile-catalog-message alert" role="alert">{validationMessage}</div> : null}
 
         {tab !== "compatibility" ? (
           <>

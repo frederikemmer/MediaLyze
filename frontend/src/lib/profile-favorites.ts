@@ -24,7 +24,9 @@ export function readFavoriteProfileKeys() {
 export function writeFavoriteProfileKeys(keys: Set<string>) {
   try {
     preferenceStorage.setItem(FAVORITE_PROFILES_STORAGE_KEY, JSON.stringify([...keys]));
+    return true;
   } catch {
     // Keep the in-memory preference usable when browser storage is unavailable.
+    return false;
   }
 }

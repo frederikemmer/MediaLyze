@@ -36,6 +36,43 @@ def test_access_environment_names(monkeypatch):
     assert (current.owner_username, current.owner_password.get_secret_value(), current.guest_enabled, current.no_users) == ("current", NEW_SECRET, False, False)
 
 
+def test_notification_actions_history_is_personal_idempotent_and_permission_scoped(env):
+    from uuid import uuid4
+    app, factory, _ = env
+    owner = setup(app)
+    visible = library(factory, "visible-notifications")
+    hidden = library(factory, "hidden-notifications")
+    client, account = user(owner, app, {
+        "global": ["settings.presets.view"], "mode": "per_library", "create": False,
+        "shared": [], "libraries": {str(visible): ["library.read"]},
+    })
+    payload = {
+        "event_id": str(uuid4()), "type": "success", "message": "Preset saved.",
+        "source": {"area": "transcoding", "href": "/settings?section=transcoding-presets", "label": "Presets"},
+    }
+    saved = post(client, "/api/notification-history", payload)
+    assert saved.status_code == 200, saved.text
+    retry = post(client, "/api/notification-history", payload)
+    assert retry.status_code == 200 and retry.json()["id"] == saved.json()["id"]
+    page = client.get("/api/notification-history").json()
+    assert page["total"] == 1 and page["items"][0]["message"] == "Preset saved."
+    assert owner.get("/api/notification-history").json()["total"] == 0
+    for area, href in (("settings", "/settings?section=accounts&account=me"), ("library", f"/libraries/{visible}")):
+        response = post(client, "/api/notification-history", {**payload, "event_id": str(uuid4()), "source": {"area": area, "href": href, "label": "Open"}})
+        assert response.status_code == 200, response.text
+    denied = post(client, "/api/notification-history", {**payload, "event_id": str(uuid4()), "source": {"area": "library", "href": f"/libraries/{hidden}", "label": "Hidden"}})
+    assert denied.status_code == 204
+    assert client.get("/api/notification-history").json()["total"] == 3
+    changed = post(owner, f"/api/users/{account['id']}", {"policy": EMPTY_POLICY}, method="patch")
+    assert changed.status_code == 200, changed.text
+    # Revocation prunes scoped library and preset targets, retaining the personal target.
+    from backend.app.models.entities import NotificationHistoryEntry
+    with factory() as db:
+        entries = list(db.scalars(select(NotificationHistoryEntry).where(NotificationHistoryEntry.owner_key == f"account:{account['id']}")))
+        assert len(entries) == 1
+        assert entries[0].source["href"] == "/settings?section=accounts&account=me"
+
+
 @pytest.fixture
 def env(tmp_path):
     config = tmp_path / "config"
@@ -1048,6 +1085,60 @@ def test_scan_and_quality_views_follow_metadata_scope_before_pagination(env, kin
     assert len(owner.get("/api/scan-jobs/recent?limit=50").json()["items"]) == 4
 
 
+def test_deleting_past_scan_removes_only_its_current_daily_snapshot(env):
+    from datetime import datetime, UTC, timedelta
+    from backend.app.models.entities import JobStatus, LibraryHistory, ScanJob
+
+    app, factory, _ = env
+    target = library(factory, "scanned")
+    owner = setup(app)
+    reader_policy = {**EMPTY_POLICY, "libraries": {str(target): ["library.read"]}}
+    assert post(owner, "/api/access/guest", {"enabled": True, "policy": reader_policy}, "put").status_code == 200
+    reader = TestClient(app)
+    assert post(reader, "/api/auth/guest").status_code == 200
+    editor, _ = user(owner, app, {**EMPTY_POLICY, "libraries": {str(target): ["library.read", "library.edit"]}})
+    finished = datetime(2026, 11, 24, 2, 0, 0, 123456, tzinfo=UTC)
+    with factory() as db:
+        older = ScanJob(library_id=target, job_type="full", status=JobStatus.completed,
+                        finished_at=finished - timedelta(hours=1))
+        current = ScanJob(library_id=target, job_type="incremental", status=JobStatus.completed,
+                          finished_at=finished)
+        running = ScanJob(library_id=target, job_type="full", status=JobStatus.running,
+                          finished_at=finished)
+        db.add_all([older, current, running])
+        db.flush()
+        stale_time = finished - timedelta(days=1)
+        stale = LibraryHistory(library_id=target, snapshot_day=stale_time.date().isoformat(),
+                               captured_at=stale_time, source_scan_job_id=current.id)
+        daily = LibraryHistory(library_id=target, snapshot_day=finished.date().isoformat(),
+                               captured_at=finished, source_scan_job_id=current.id)
+        db.add_all([stale, daily])
+        db.commit()
+
+    def remove(client, job, stamp=None):
+        return client.delete(
+            f"/api/scan-jobs/{job.id}",
+            params={"finished_at": stamp or job.finished_at.isoformat()},
+            headers=headers(client),
+        )
+
+    assert remove(reader, current).status_code == 404
+    assert remove(editor, running).status_code == 404
+    assert remove(editor, current, older.finished_at.isoformat()).status_code == 404
+    assert remove(editor, older).status_code == 204
+    with factory() as db:
+        assert db.get(LibraryHistory, daily.id) is not None
+
+    assert remove(editor, current).status_code == 204
+    assert remove(editor, current).status_code == 404
+    with factory() as db:
+        assert db.get(ScanJob, current.id) is None
+        assert db.get(ScanJob, running.id) is not None
+        assert db.get(LibraryHistory, daily.id) is None
+        assert db.get(LibraryHistory, stale.id) is not None
+        assert db.scalar(select(MediaFile.id).where(MediaFile.library_id == target)) is not None
+
+
 def test_scan_views_with_no_library_access_are_empty_and_never_fall_back_to_guest(env):
     from backend.app.models.entities import ScanJob, JobStatus
 
@@ -1790,3 +1881,39 @@ def test_reconstruction_checks_only_selected_scan_conflicts_and_hides_other_job_
     assert "allowed" not in response.text and "other" not in response.text
     assert client.get(f"/api/libraries/{b}/history/reconstruct").status_code == 404
     assert len(executor.tasks) == 2
+
+
+def test_rule_file_search_uses_only_titles_and_filenames_and_requires_owner(env):
+    app, factory, _ = env
+    library_id = library(factory, "automation-search")
+    owner = setup(app)
+    with factory() as db:
+        for index in range(7):
+            db.add(MediaFile(
+                library_id=library_id, filename=f"Clip-{index}.mkv",
+                relative_path=f"hidden-directory/Clip-{index}.mkv", extension="mkv",
+                size_bytes=10, mtime=1, episode_title="Find this title" if index == 1 else None,
+            ))
+        db.commit()
+
+    path = "/api/transcoding/automation/test-assets"
+    response = owner.get(path, params={"q": "find this title"})
+    assert response.status_code == 200, response.text
+    assert [(item["filename"], item["title"]) for item in response.json()] == [("Clip-1.mkv", "Find this title")]
+    assert len(owner.get(path, params={"q": "clip"}).json()) == 5
+    assert owner.get(path, params={"q": "hidden-directory"}).json() == []
+    assert owner.get(path, params={"q": "%"}).json() == []
+    payload = {
+        "file_id": response.json()[0]["id"], "library_ids": [library_id],
+        "profile_id": 1, "output_mode": "transcode_output",
+    }
+    preview = post(owner, "/api/transcoding/automation/test-rule", payload)
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["status"] == "blocked"  # The catalog asset has no video stream.
+
+    client, _ = user(owner, app, {
+        **EMPTY_POLICY, "global": ["settings.app.view", "settings.app.edit"],
+        "libraries": {str(library_id): ["library.read", "transcode.view", "transcode.run"]},
+    })
+    assert client.get(path, params={"q": "clip"}).status_code == 403
+    assert post(client, "/api/transcoding/automation/test-rule", payload).status_code == 403

@@ -47,6 +47,8 @@ Server mode uses local Owner, account and optional Guest identities. `backend/ap
 
 The complete contract, safety invariants, profiles, and API are documented in [Transcoding](transcoding.md).
 
+After a successful scan, the automation inventory evaluates enabled rules against new or changed primary videos. Its own executor persists decisions and hands validated plans to the Transcoding runtime. The single-file draft test uses the same matching and validation without creating a run or job.
+
 ## Connector data flow
 
 External catalogs use the architecture documented in [connectors.md](connectors.md):

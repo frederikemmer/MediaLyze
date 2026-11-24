@@ -1,4 +1,6 @@
 import { useAuth } from "../lib/auth";
+import { useOptionalNotifications } from "../lib/notifications";
+import { identityGeneration } from "../lib/access-session";
 import { preferenceStorage } from "../lib/preference-storage";
 import {
   AudioLines,
@@ -80,6 +82,15 @@ import {
 } from "../lib/profile-favorites";
 import { formatVisualDensityGbPerHour } from "../lib/quality-format";
 import { saveActiveSettingsPanel } from "../lib/settings-panel-state";
+
+function useFileActionNotice(fileId: number | undefined, t: (key: string, options?: Record<string, unknown>) => string) {
+  const notifications = useOptionalNotifications();
+  const generation = identityGeneration();
+  return (type: "info" | "success" | "error", key: string, fallback: string) => {
+    if (!fileId || generation !== identityGeneration()) return;
+    notifications?.notify({ type, message: t(`notifications.actions.integration.${key}`, { defaultValue: fallback }), topicKey: `file:${fileId}:${key}`, source: { area: "library", href: `/files/${fileId}`, label: t("notifications.actions.integration.openFile", { defaultValue: "Open file" }) } });
+  };
+}
 
 function JsonPreview({ value }: { value: unknown }) {
   return <pre className="json-preview">{JSON.stringify(value, null, 2)}</pre>;
@@ -426,6 +437,7 @@ function ChaptersList({
   detail: MediaFileDetail | null;
   t: (key: string, options?: Record<string, unknown>) => string;
 }): ReactNode {
+  const notice = useFileActionNotice(detail?.id, t);
   const [query, setQuery] = useState("");
   const [showAll, setShowAll] = useState(false);
   if (!detail) {
@@ -445,6 +457,7 @@ function ChaptersList({
     if (!detail) {
       return;
     }
+    try {
     const payload = await api.downloadFileChaptersCsv(detail.id);
     const objectUrl = window.URL.createObjectURL(payload.blob);
     const anchor = document.createElement("a");
@@ -454,6 +467,10 @@ function ChaptersList({
     anchor.click();
     anchor.remove();
     window.URL.revokeObjectURL(objectUrl);
+    notice("info", "downloadStarted", "Download started.");
+    } catch (error) {
+      if ((error as Error)?.name !== "AbortError") notice("error", "downloadFailed", "Could not prepare the download.");
+    }
   }
 
   return (
@@ -524,6 +541,7 @@ function CoverDetailsList({
   jellyfinItem?: JellyfinFileOverlay["item"];
   t: (key: string, options?: Record<string, unknown>) => string;
 }): ReactNode {
+  const notice = useFileActionNotice(detail?.id, t);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [coverBlob, setCoverBlob] = useState<Blob | null>(null);
   const [coverFilename, setCoverFilename] = useState<string | null>(null);
@@ -593,6 +611,7 @@ function CoverDetailsList({
       setCoverFilename(payload.filename ?? fallbackCoverFilename);
     } catch (error) {
       setCoverError(error instanceof Error ? error.message : t("fileDetail.coverLoadError"));
+      if ((error as Error)?.name !== "AbortError") notice("error", "coverLoadFailed", "Could not load the cover.");
     } finally {
       setIsCoverLoading(false);
     }
@@ -605,7 +624,10 @@ function CoverDetailsList({
     const anchor = document.createElement("a");
     anchor.href = coverUrl;
     anchor.download = coverFilename ?? fallbackCoverFilename;
-    anchor.click();
+    try {
+      anchor.click();
+      notice("info", "downloadStarted", "Download started.");
+    } catch { notice("error", "downloadFailed", "Could not prepare the download."); }
   }
 
   return (
@@ -1752,6 +1774,7 @@ export function FileDetailPage() {
   const auth = useAuth();
   const { t } = useTranslation();
   const { fileId = "" } = useParams();
+  const notice = useFileActionNotice(Number(fileId) || undefined, t);
   const location = useLocation();
   const navigate = useNavigate();
   const isPreviewRoute = /\/preview\/?$/.test(location.pathname);
@@ -2078,8 +2101,10 @@ export function FileDetailPage() {
   const copyRawJson = useCallback(async () => {
     const copied = await copyTextToClipboard(rawJsonText);
     if (!copied) {
+      notice("error", "copyFailed", "Could not copy to the clipboard.");
       return;
     }
+    notice("success", "copied", "Copied to the clipboard.");
     setRawJsonCopied(true);
     if (rawJsonCopyResetTimeoutRef.current !== null) {
       window.clearTimeout(rawJsonCopyResetTimeoutRef.current);
@@ -2088,7 +2113,7 @@ export function FileDetailPage() {
       setRawJsonCopied(false);
       rawJsonCopyResetTimeoutRef.current = null;
     }, 1800);
-  }, [rawJsonText]);
+  }, [rawJsonText, notice]);
 
   const changeAudioStreamPrimaryMode = useCallback((mode: AudioStreamPrimaryMode) => {
     setAudioStreamPrimaryMode(mode);
@@ -2179,11 +2204,12 @@ export function FileDetailPage() {
           type="button"
           className="secondary small settings-panel-header-action file-detail-quality-export-button"
           aria-label={t("fileDetail.exportQualityBreakdown")}
-          onClick={() => downloadQualityBreakdownReport(
-            qualityDetail,
-            `${file?.filename ?? `media-file-${qualityDetail.id}`}-quality.csv`,
-            t,
-          )}
+          onClick={() => {
+            try {
+              downloadQualityBreakdownReport(qualityDetail, `${file?.filename ?? `media-file-${qualityDetail.id}`}-quality.csv`, t);
+              notice("info", "downloadStarted", "Download started.");
+            } catch { notice("error", "downloadFailed", "Could not prepare the download."); }
+          }}
         >
           <DownloadIcon size={16} aria-hidden="true" />
           <span>{t("fileDetail.exportQualityBreakdown")}</span>

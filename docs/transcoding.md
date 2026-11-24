@@ -6,7 +6,7 @@ MediaLyze can create a new video variant with FFmpeg from the `Transcoding` pane
 
 ## Transcoding plans
 
-The file-detail panel starts with a copy plan that preserves the source streams and container where compatible. Users can edit the plan directly, select one of their saved presets, or choose `Custom`. MediaLyze no longer supplies bundled transcoding presets.
+The file-detail panel starts with a copy plan that preserves the source streams and container where compatible. Users can edit the plan directly, select one of their saved presets, or choose `Custom`.
 
 The normalized versioned plan stores the container; `copy`, `drop`, or `encode` for every stream (the legacy `keep` value remains accepted for old plans); target codec and quality fields; the resolved worker-specific encoder; resolution, frame rate, pixel format, profile, level, preset and GOP controls; dynamic-range handling; chapter, metadata, cover, and attachment behavior; selected sidecar subtitles; the filename template; and the effective execution/output policy. The file-detail UI asks only for the target codec. The selected worker resolves a compatible encoder and device at validation/queue time. Existing explicit encoder fields remain accepted for backwards-compatible API and saved-plan payloads. The API accepts no raw command or arbitrary FFmpeg argument field.
 
@@ -26,9 +26,22 @@ Video encode controls use constant-quality ranges and optional speed presets whi
 
 The Transcoding settings page stores reusable, versioned preset definitions in SQLite. A preset is an ordered set of stream rules for video, audio, internal subtitles, and optional external subtitle sidecars. Each rule can match codec, language, and default-track state and can copy, convert, or remove the matching stream. Internal streams that do not match a rule are copied; external sidecars are not embedded unless an external-subtitle rule explicitly selects them. Saved presets contain abstract stream criteria rather than file-specific stream indexes, subtitle IDs, or raw FFmpeg arguments. A saved preset is materialized against the current file into the same concrete `TranscodePlan` used by the file-detail workflow.
 
-The preset catalog starts empty on new installations. Users can create, edit, duplicate, and delete their own presets. Preset versions and the selected preset version are recorded on every queued job. Jobs retain a complete preset snapshot, so later edits do not change the provenance of an existing run.
+MediaLyze supplies an editable **X to HEVC** preset in the catalog. It converts video to HEVC in MKV at the original resolution and frame rate, copies existing HEVC and video from detected Dolby Vision sources, and keeps audio, internal subtitles, chapters, and metadata. External subtitles remain separate. The formatting preset catalogs include filename and folder examples including a season folder template. Formatting presets can be duplicated and can be selected as the default for their kind. Users can create, edit, duplicate, and delete their own presets. Preset versions and the selected preset version are recorded on every queued job. Jobs retain a complete preset snapshot, so later edits do not change the provenance of an existing run.
 
 The canonical management endpoint is `/api/transcoding/presets`. The former `/api/transcoding/profiles` paths and profile-named storage/plan fields remain compatibility aliases for existing clients and data.
+
+## Automation rules
+
+Open **Settings → Transcoding → Automation Rules** to select libraries, conditions, a saved preset, and an output destination. For each video, MediaLyze evaluates the active rules assigned to its library in list order. The first matching rule takes precedence for that video, including when its output is blocked. A rule without conditions can match every eligible primary video in its selected libraries. A nested group counts as one result in its parent group. XOR requires exactly one direct condition or subgroup to match.
+
+The Owner can use **Test rule** to search the catalog by title or filename and evaluate the current draft on one file. The result shows which conditions matched and, when the plan validates, the proposed output path. The test simulates this rule in isolation, including when it is disabled. It never queues a job or saves the draft.
+
+At the top of **Automation Rules**, the Owner can choose a trigger. **After successful scans** is the default. **Manual only** disables automatic runs. **At an interval** checks the analyzed catalog every 5 to 10,080 minutes independently of library scans.
+
+**Dry Run** checks all active rules against the analyzed catalog. It reports counts for all candidates in a notification that links to **Logs → Automation history**. The saved run shows up to 100 matching, skipped, or blocked files with their rule and planned output or reason. **Start All** queues eligible work for those rules, including unchanged files. Both actions use saved rules and honor priority, replacement approval, and previous attempts.
+
+New rules are saved inactive. Turn on the switch beside the rule name to include it in automation. With the scan trigger, active rules apply to primary videos analyzed during a scan that completes without errors. An incremental scan usually analyzes only new or changed files. Run a full scan to include unchanged files already in the library. To replace originals, approve that specific rule version before activating it. See [Execution safety](#execution-safety) for the effects of replacing an original.
+**Output must not exceed source size** is enabled by default for new rules. MediaLyze discards a larger result before publishing or replacing the original. Equal-sized results are accepted. The draft test cannot predict the encoded file size.
 
 ## CPU- and APU-integrated media engines
 

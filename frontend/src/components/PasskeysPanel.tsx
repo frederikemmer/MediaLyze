@@ -2,7 +2,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import { KeyRound, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../lib/auth";
-import { accessRequest } from "../lib/access-session";
+import { accessRequest, identityGeneration } from "../lib/access-session";
+import { useOptionalNotifications } from "../lib/notifications";
 import { passkeyCanceled, registerPasskey, supportsPasskeys, type Passkey, type PasskeyList } from "../lib/passkeys";
 import { PasswordField } from "./PasswordField";
 import { SettingsSection } from "./LogsSection";
@@ -11,6 +12,10 @@ import { TooltipTrigger } from "./TooltipTrigger";
 export function PasskeysPanel({ fixture }: { fixture?: PasskeyList }) {
   const { t, i18n } = useTranslation();
   const { identity, refresh } = useAuth();
+  const notifications = useOptionalNotifications();
+  const report = (type: "success" | "error" | "warning", key: string, fallback: string, generation: number) => {
+    if (generation === identityGeneration()) notifications?.notify({ type, message: t(`notifications.actions.rest.${key}`, { defaultValue: fallback }), topicKey: "account:passkeys", source: { area: "settings", href: "/settings?section=accounts&account=me", label: t("passkeys.title") } });
+  };
   const id = useId();
   const [data, setData] = useState<PasskeyList>(fixture ?? { enabled: false, reason: "not_configured", items: [] });
   const [loading, setLoading] = useState(!fixture);
@@ -43,32 +48,38 @@ export function PasskeysPanel({ fixture }: { fixture?: PasskeyList }) {
   async function add() {
     if (disabled) return;
     setBusy(true); setError("");
+    const generation = identityGeneration();
     try {
       ceremony.current = new AbortController();
       const item = await registerPasskey(name.trim(), password, () => setPassword(""), ceremony.current.signal);
       setData((current) => ({ ...current, items: [...current.items, item] }));
       setAdding(false); setName("");
+      report("success", "passkeyAdded", "Passkey added.", generation);
     } catch (reason) {
-      if (!passkeyCanceled(reason)) setError(t("passkeys.addError"));
+      if (!passkeyCanceled(reason)) report("error", "passkeyAddFailed", "Could not add the passkey.", generation);
     } finally { ceremony.current = null; setPassword(""); setBusy(false); }
   }
   async function rename(item: Passkey) {
     if (disabled) return;
     setBusy(true); setError("");
+    const generation = identityGeneration();
     try {
       replace(await accessRequest<Passkey>(`/me/passkeys/${item.id}`, { method: "PATCH", body: JSON.stringify({ name: editName.trim() }) }));
       setEditing(null);
-    } catch { setError(t("passkeys.renameError")); }
+      report("success", "passkeyRenamed", "Passkey renamed.", generation);
+    } catch { report("error", "passkeyRenameFailed", "Could not rename the passkey.", generation); }
     finally { setBusy(false); }
   }
   async function remove(item: Passkey) {
     if (disabled || !window.confirm(t("passkeys.confirmDelete", { name: item.name }))) return;
     setBusy(true); setError("");
+    const generation = identityGeneration();
     try {
       await accessRequest(`/me/passkeys/${item.id}`, { method: "DELETE" });
       setData((current) => ({ ...current, items: current.items.filter((entry) => entry.id !== item.id) }));
-      await refresh();
-    } catch { setError(t("passkeys.deleteError")); }
+      report("success", "passkeyDeleted", "Passkey deleted.", generation);
+      try { await refresh(); } catch { report("warning", "passkeyRefreshFailed", "Passkey deleted, but the account could not be refreshed.", generation); }
+    } catch { report("error", "passkeyDeleteFailed", "Could not delete the passkey.", generation); }
     finally { setBusy(false); }
   }
   return (

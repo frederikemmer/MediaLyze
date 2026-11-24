@@ -107,6 +107,8 @@ import {
 import { AnimatedConnectIcon } from "../components/AnimatedConnectIcon";
 import { AnimatedSearchIcon } from "../components/AnimatedSearchIcon";
 import { StreamLanguageField } from "../components/TranscodingPanel";
+import { ConditionGroupEditor, RuleConditionTrace } from "../components/TranscodeRuleConditions";
+import type { TranscodeConditionGroup } from "../lib/api";
 import { TranscodeProgressSummary } from "../components/TranscodeProgressSummary";
 import { LibraryHistoryPanel } from "../components/LibraryHistoryPanel";
 import { AsyncPanel } from "../components/AsyncPanel";
@@ -468,6 +470,25 @@ function AnalyzedFilesTable() {
       </div>
     </div>
   );
+}
+
+function TranscodeRuleFixture() {
+  const [group, setGroup] = useState<TranscodeConditionGroup>({
+    type: "group", operator: "and", children: [
+      { type: "condition", field: "size", operator: ">=", value: "10 GB" },
+      { type: "group", operator: "xor", children: [
+        { type: "condition", field: "audio_languages", operator: "contains", value: "de" },
+        { type: "condition", field: "audio_languages", operator: "contains", value: "en" },
+      ] },
+    ],
+  });
+  const example = { type: "condition", field: "size", operator: ">=", value: "10 GB" } as const;
+  return <div className="compatibility-profile-details transcode-rule-editor">
+    <ConditionGroupEditor group={group} onChange={setGroup} />
+    <ul className="transcode-rule-layers transcode-rule-test-result">
+      <RuleConditionTrace node={example} trace={{ matched: true, values: [14 * 1024 ** 3], children: [] }} />
+    </ul>
+  </div>;
 }
 
 function SettingsNavigationFixture({ collapsed = false, noResults = false, desktop = false }: { collapsed?: boolean; noResults?: boolean; desktop?: boolean }) {
@@ -2738,7 +2759,7 @@ export function UiElementsPage() {
                   </div>
                 </div>
               </VariantCard>
-              <VariantCard title="Transcoding job center" source="TranscodingPage" status="Modular ECharts core renders the shared SVG speed chart with registered tooltips; small muted metrics overlay the 30px graph; phase text interrupts the thin 6px bar with a centered white backdrop; compact actions include terminal run deletion and a borderless filter reset; column headers use half the previous height" classes={["transcoding-center-panel", "transcoding-center-heading", "transcoding-center-tabs", "library-history-range-toggle", "library-history-range-pill", "library-history-range-button", "transcoding-center-tab-count", "transcoding-reset-button", "icon-button", "icon-button-borderless", "icon-button-static", "transcoding-job-table", "column-sort", "sort-indicator", "transcoding-progress-summary", "transcoding-progress-metrics", "transcoding-progress-metric", "transcoding-progress-chart", "transcoding-progress-meta", "transcoding-progress-static", "column-resize-handle", "transcoding-job-row", "transcoding-job-action", "transcoding-job-detail-row", "transcoding-job-detail-grid", "transcoding-job-detail-time", "transcoding-job-detail-list", "transcoding-job-transform-list", "transcoding-job-command", "transcoding-detail-links", "transcoding-hardware-load", "transcoding-hardware-load-trigger", "transcoding-hardware-load-slots", "transcoding-hardware-load-slot", "settings-choice-input"]} wide>
+              <VariantCard title="Transcoding job center" source="TranscodingPage" status="Search and filters use inset labels. Modular ECharts core renders the shared SVG speed chart with registered tooltips; small muted metrics overlay the 30px graph; phase text interrupts the thin 6px bar with a centered white backdrop; compact actions include terminal run deletion and a borderless filter reset; column headers use half the previous height" classes={["transcoding-center-panel", "transcoding-center-heading", "transcoding-center-tabs", "library-history-range-toggle", "library-history-range-pill", "library-history-range-button", "transcoding-center-tab-count", "transcoding-reset-button", "icon-button", "icon-button-borderless", "icon-button-static", "transcoding-job-table", "column-sort", "sort-indicator", "transcoding-progress-summary", "transcoding-progress-metrics", "transcoding-progress-metric", "transcoding-progress-chart", "transcoding-progress-meta", "transcoding-progress-static", "column-resize-handle", "transcoding-job-row", "transcoding-job-action", "transcoding-job-detail-row", "transcoding-job-detail-grid", "transcoding-job-detail-time", "transcoding-job-detail-list", "transcoding-job-transform-list", "transcoding-job-command", "transcoding-detail-links", "transcoding-hardware-load", "transcoding-hardware-load-trigger", "transcoding-hardware-load-slots", "transcoding-hardware-load-slot", "settings-choice-input"]} wide>
                 <div className="transcoding-center-panel">
                   <div className="transcoding-center-header">
                     <div className="transcoding-center-heading">
@@ -2759,9 +2780,13 @@ export function UiElementsPage() {
                     </div>
                   </div>
                   <div className="transcoding-center-toolbar">
-                    <label className="transcoding-search-field"><Search aria-hidden="true" /><input type="search" placeholder="Search files…" /></label>
-                    <label className="transcoding-filter-field"><span>Status</span><select className="settings-choice-input" defaultValue="all"><option value="all">All statuses</option></select></label>
-                    <label className="transcoding-filter-field"><span>Hardware</span><select className="settings-choice-input" defaultValue="all"><option value="all">All hardware</option></select></label>
+                    <div className="transcoding-search-field">
+                      <Search aria-hidden="true" />
+                      <SettingsInlineLabelInput type="search" label="Search files" />
+                    </div>
+                    <SettingsInlineLabelSelect label="Status" defaultValue="all"><option value="all">All</option></SettingsInlineLabelSelect>
+                    <SettingsInlineLabelSelect label="Target" defaultValue="all"><option value="all">All</option></SettingsInlineLabelSelect>
+                    <SettingsInlineLabelSelect label="Hardware" defaultValue="all"><option value="all">All</option></SettingsInlineLabelSelect>
                     <TooltipTrigger ariaLabel="Reset filters" content="Reset filters" className="icon-button icon-button-borderless icon-button-static transcoding-reset-button" pinOnClick={false}><History aria-hidden="true" className="nav-icon" size={16} /></TooltipTrigger>
                   </div>
                   <div className="transcoding-table-scroll">
@@ -3212,6 +3237,19 @@ export function UiElementsPage() {
                     <div className="page-heading-row">
                       <GitCompare aria-hidden="true" className="page-heading-icon" />
                       <h2>Compare files</h2>
+                    <div className="distribution-chart-mode-toggle duplicate-panel-view-toggle file-compare-display-toggle" role="group" aria-label="Select compare display">
+                      <SlidingTogglePill activeKey="all" className="nav-active-pill distribution-chart-mode-pill" />
+                      <button type="button" data-toggle-key="all" className="distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button active" aria-label="Show all categories, metadata, and metrics" title="Show all categories, metadata, and metrics">
+                        <span className="distribution-chart-mode-button-content">
+                          <Layers aria-hidden="true" className="distribution-chart-mode-icon" />
+                        </span>
+                      </button>
+                      <button type="button" data-toggle-key="differences" className="distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button" aria-label="Show differences only" title="Show differences only">
+                        <span className="distribution-chart-mode-button-content">
+                          <Diff aria-hidden="true" className="distribution-chart-mode-icon" />
+                        </span>
+                      </button>
+                    </div>
                     </div>
                     <div className="file-compare-title-actions">
                       <div className="search-filter-picker file-compare-column-count-picker">
@@ -3228,21 +3266,6 @@ export function UiElementsPage() {
                     </div>
                   </div>
                   <div className="file-compare-toolbar file-compare-toolbar-3-columns has-file-labels">
-                    <div className="file-compare-toolbar-controls">
-                      <div className="distribution-chart-mode-toggle duplicate-panel-view-toggle file-compare-display-toggle" role="group" aria-label="Select compare display">
-                        <SlidingTogglePill activeKey="all" className="nav-active-pill distribution-chart-mode-pill" />
-                        <button type="button" data-toggle-key="all" className="distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button active" aria-label="Show all categories, metadata, and metrics" title="Show all categories, metadata, and metrics">
-                          <span className="distribution-chart-mode-button-content">
-                            <Layers aria-hidden="true" className="distribution-chart-mode-icon" />
-                          </span>
-                        </button>
-                        <button type="button" data-toggle-key="differences" className="distribution-chart-mode-button duplicate-panel-view-button file-compare-display-button" aria-label="Show differences only" title="Show differences only">
-                          <span className="distribution-chart-mode-button-content">
-                            <Diff aria-hidden="true" className="distribution-chart-mode-icon" />
-                          </span>
-                        </button>
-                      </div>
-                    </div>
                     <div className="file-compare-search-card">
                       <div className="file-compare-search-label">
                         <strong title="Movies / Sci-Fi/Arrival.2016.UHD.mkv">Arrival.2016.UHD.mkv</strong>
@@ -3261,14 +3284,6 @@ export function UiElementsPage() {
                         </button>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      className="file-compare-swap-button"
-                      aria-label="Swap compared files"
-                      title="Swap compared files"
-                    >
-                      <ChevronsRightLeftIcon size={22} aria-hidden="true" />
-                    </button>
                     <div className="file-compare-search-card">
                       <div className="file-compare-search-label">
                         <strong title="Movies / Sci-Fi/Arrival.2016.Remux.mkv">Arrival.2016.Remux.mkv</strong>
@@ -3331,6 +3346,11 @@ export function UiElementsPage() {
                     </button>
                   </section>
                 </div>
+              </VariantCard>
+              <VariantCard title="Transcoding rule conditions" source="Settings → Transcoding → Automation Rules"
+                status="The editor uses nested logic groups and compact comparison symbols. This fixture edits local example data."
+                classes={["transcode-rule-editor", "transcode-rule-layers", "transcode-rule-operator", "transcode-rule-test-result"]} wide>
+                <TranscodeRuleFixture />
               </VariantCard>
               <VariantCard title="Compact transcoding plan" source="TranscodingPanel" status="No bundled transcoding presets; the selector offers saved user presets and Custom. Stream tabs use the fixed 40px Settings row height and container-aware language output formats; active default-stream actions fill the Sparkles symbol; search covers source metadata; audio and subtitle rows lead with language; metadata settings use a tooltip list; an expanded disabled folder formatter remains editable and previews its output" classes={["panel-header", "panel-title-row", "async-panel-header-status", "transcoding-panel", "transcode-preset-header-slot", "transcode-preset-select", "transcode-original-card", "transcode-control", "settings-choice-input", "transcode-progress", "transcode-progress-compact", "transcode-progress-compact-content", "transcode-progress-center-link", "transcode-progress-actions", "transcoding-progress-summary", "transcoding-progress-metrics", "transcoding-progress-metric", "transcoding-progress-chart", "transcoding-progress-meta", "compatibility-profile-list", "transcode-stream-catalog", "transcode-stream-tabs", "transcode-stream-tab", "transcode-stream-tab-count", "transcode-stream-tabpanel", "transcode-stream-list", "transcode-stream-search", "compatibility-profile-search", "compatibility-profile-search-icon", "compatibility-profile-search-clear", "transcode-stream-list-item", "is-dropped", "transcode-stream-list-row", "transcode-stream-row-actions", "transcode-stream-row-trigger", "transcode-stream-row-copy", "transcode-stream-format", "is-language-first", "transcode-stream-default-button", "compatibility-profile-quick-action", "transcode-stream-action-icon", "transcode-action-field", "transcode-action-select", "transcode-stream-details", "transcode-stream-copy-details", "transcode-stream-copy-note", "transcode-stream-encode-fields", "transcode-video-encode-fields", "transcode-control-field", "transcode-field-label", "transcode-dynamic-range-field", "transcode-codec-field", "transcode-preset-field", "transcode-range-row", "transcode-quality-range", "transcode-range-value", "transcode-filename-section", "transcode-folder-section", "transcode-metadata-settings", "transcode-filename-header", "transcode-filename-header-tooltip", "transcode-filename-chevron-toggle", "transcode-filename-toggle", "transcode-filename-chevron", "transcode-formatting-toggle", "transcode-formatting-preset-select", "transcode-filename-body", "transcode-filename-template-input", "transcode-filename-template-editor", "transcode-filename-inline-token", "transcode-filename-inline-text", "transcode-filename-metadata-tools", "transcode-filename-metadata-toggle", "transcode-filename-token-list", "transcode-filename-token-group", "transcode-filename-token-group-items", "transcode-filename-token-pill", "transcode-filename-token-tooltip-portal", "transcode-filename-token-tooltip", "transcode-filename-token-tooltip-heading", "transcode-filename-token-tooltip-example", "transcode-filename-options-row", "transcode-filename-divider-field", "transcode-filename-cleanup", "transcode-filename-cleanup-heading", "transcode-filename-cleanup-control", "transcode-language-code-field", "transcode-filename-field", "transcode-filename-preview", "is-disabled", "transcode-metadata-option-list", "transcode-global-option", "transcode-global-option-label", "toggle-switch", "toggle-switch-track", "toggle-switch-thumb", "transcode-action-button"]} wide>
                 <div className="transcoding-panel">

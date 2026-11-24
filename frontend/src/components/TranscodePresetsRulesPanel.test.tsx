@@ -1,3 +1,5 @@
+const { notify } = vi.hoisted(() => ({ notify: vi.fn() }));
+vi.mock("../lib/notifications", () => ({ useNotifications: () => ({ notify }), useOptionalNotifications: () => ({ notify }) }));
 import "../i18n";
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -5,11 +7,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   api,
+  type AppSettings,
+  type TranscodeAutomationRun,
   type TranscodeFederation,
   type TranscodePreset,
   type TranscodePresetDefinition,
+  type LibrarySummary,
+  type TranscodeRule,
 } from "../lib/api";
+import { TranscodeAutomationHistory } from "./TranscodeAutomationHistory";
 import { TranscodePresetsRulesPanel } from "./TranscodePresetsRulesPanel";
+import * as auth from "../lib/auth";
 import { releaseVisibility } from "../lib/release-visibility";
 
 const definition: TranscodePresetDefinition = {
@@ -146,6 +154,162 @@ describe("TranscodePresetsRulesPanel", () => {
     vi.restoreAllMocks();
   });
 
+  it("sets an interval, previews all active rules, and starts jobs only after confirmation", async () => {
+    vi.spyOn(auth, "useAuth").mockReturnValue({
+      identity: { owner: true } as ReturnType<typeof auth.useAuth>["identity"],
+      has: () => true, status: null, refresh: async () => {}, logout: async () => {},
+    });
+    vi.mocked(api.transcodeRules).mockResolvedValue([{
+      id: 19, name: "Encode selected files", enabled: true, priority: 0, library_ids: [6],
+      conditions: null, profile_id: builtin.id, profile_name: builtin.name, profile_version: builtin.version,
+      output_mode: "transcode_output", output_subfolder: "", replacement_approved: false, version: 1,
+      created_at: "", updated_at: "",
+    }]);
+    const save = vi.spyOn(api, "updateAppSettings").mockResolvedValue({} as AppSettings);
+    vi.spyOn(api, "transcodeAutomationStatus").mockResolvedValue(null);
+    const preview = vi.spyOn(api, "previewTranscodeAutomation").mockResolvedValue({
+      run_id: 22, generated_at: "", total_files: 3, matched: 2, queued: 0, blocked: 0, skipped: 0, unmatched: 1, items: [],
+    });
+    const start = vi.spyOn(api, "startTranscodeAutomation").mockResolvedValue({
+      id: 1, status: "completed", queued: 2, completed: 0, failed: 0, skipped: 0, blocked: 0,
+    } as TranscodeAutomationRun);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    render(<TranscodePresetsRulesPanel capabilityMatrix={() => null} acceleratorsTooltip={null}
+      standaloneTab="rules" onAutomationSettingsUpdated={vi.fn()} />);
+
+    fireEvent.change(await screen.findByRole("combobox", { name: "Trigger" }), { target: { value: "interval" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Interval (minutes)" }), { target: { value: "15" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith({
+      transcoding: { automation_trigger: "interval", automation_interval_minutes: 15 },
+    }));
+    const dryRun = screen.getByRole("button", { name: "Dry Run" });
+    await waitFor(() => expect(dryRun).toBeEnabled());
+    fireEvent.click(dryRun);
+    await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+      message: expect.stringContaining("Matched 2"),
+      source: expect.objectContaining({ href: "/settings?section=logs&automation-run=22#settings-panel-automationHistory" }),
+    })));
+    expect(preview).toHaveBeenCalledWith({ preview_all: true, limit: 100 });
+    expect(start).not.toHaveBeenCalled();
+    const startAll = screen.getByRole("button", { name: "Start All" });
+    fireEvent.click(startAll);
+    expect(start).not.toHaveBeenCalled();
+    fireEvent.click(startAll);
+    await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
+    expect(confirm).toHaveBeenCalledTimes(2);
+  });
+
+  it("opens saved dry-run details from the notification target", async () => {
+    const run = {
+      id: 22, trigger: "dry_run", status: "completed", created_at: "2026-11-24T12:00:00Z",
+      files_total: 3, matched: 1, blocked: 0, skipped: 0, unmatched: 2, queued: 0,
+      summary: { preview_items: [{
+        file_id: 9, library_id: 6, relative_path: "Test/Movie.mkv", status: "matched",
+        rule_name: "Encode selected files", profile_name: "X to HEVC", output_path: "/output/Movie.mkv",
+      }] },
+    } as TranscodeAutomationRun;
+    vi.spyOn(api, "transcodeAutomationRuns").mockResolvedValue([{ ...run, summary: {} }]);
+    const detail = vi.spyOn(api, "transcodeAutomation").mockResolvedValue(run);
+    render(<TranscodeAutomationHistory requestedRunId={22} libraries={[{ id: 6, name: "Movies" } as LibrarySummary]} />);
+    expect(await screen.findByText("Movies / Test/Movie.mkv")).toBeVisible();
+    expect(screen.getByText(/Encode selected files.*X to HEVC.*output\/Movie.mkv/)).toBeVisible();
+    expect(detail).toHaveBeenCalledWith(22);
+  });
+
+  it("shows saved rules while editor options are still loading", async () => {
+    let resolveLibraries!: (libraries: LibrarySummary[]) => void;
+    vi.mocked(api.libraries).mockReturnValue(new Promise(resolve => { resolveLibraries = resolve; }));
+    vi.mocked(api.transcodeRules).mockResolvedValue([{
+      id: 19, name: "Encode selected files", enabled: false, priority: 0, library_ids: [6],
+      conditions: null, profile_id: builtin.id, profile_name: builtin.name, profile_version: builtin.version,
+      output_mode: "transcode_output", output_subfolder: "", replacement_approved: false, version: 1,
+      created_at: "", updated_at: "",
+    }]);
+    render(<TranscodePresetsRulesPanel capabilityMatrix={() => null} acceleratorsTooltip={null} standaloneTab="rules" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Encode selected files" }));
+    expect(screen.getByText("All eligible videos in the selected libraries.")).toBeInTheDocument();
+    const newRule = screen.getByRole("button", { name: "New rule" });
+    expect(newRule).toBeDisabled();
+
+    resolveLibraries([{ id: 6, name: "Movies" } as LibrarySummary]);
+    await waitFor(() => expect(newRule).toBeEnabled());
+  });
+
+  it("places New rule inside the panel and opens a draft without a preset or library", async () => {
+    vi.mocked(api.transcodePresets).mockResolvedValue([]);
+    const onToggle = vi.fn();
+    const panel = (collapsed: boolean) => <TranscodePresetsRulesPanel
+      capabilityMatrix={() => null} acceleratorsTooltip={null} standaloneTab="rules"
+      standaloneCollapsed={collapsed} onStandaloneToggle={onToggle}
+    />;
+    const { rerender } = render(panel(true));
+    await screen.findByRole("button", { name: /Expand Automation Rules/i });
+    expect(screen.queryByRole("button", { name: "New rule" })).not.toBeInTheDocument();
+    rerender(panel(false));
+    const newRule = await screen.findByRole("button", { name: "New rule" });
+    await waitFor(() => expect(newRule).toBeEnabled());
+    fireEvent.click(newRule);
+    expect(screen.getByRole("textbox", { name: "Rule name" })).toBeVisible();
+    expect(screen.getByText(/Create a transcode preset/)).toBeVisible();
+    expect(screen.getByText(/need a library with permission/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it("saves a custom resolution category in a nested XOR rule and activates the saved row with the standard switch", async () => {
+    vi.mocked(api.libraries).mockResolvedValue([{ id: 6, name: "Movies" } as LibrarySummary]);
+    const saved: TranscodeRule = {
+      id: 19, name: "Encode selected files", enabled: false, priority: 0, library_ids: [6],
+      conditions: { type: "group", operator: "and", children: [{ type: "group", operator: "xor", children: [
+        { type: "condition", field: "resolution", operator: "equals", value: "archive_hd" },
+      ] }] },
+      profile_id: builtin.id, profile_name: builtin.name, profile_version: builtin.version,
+      output_mode: "transcode_output", output_subfolder: "", replacement_approved: false, version: 1,
+      created_at: "", updated_at: "",
+    };
+    const create = vi.spyOn(api, "createTranscodeRule").mockResolvedValue(saved);
+    const update = vi.spyOn(api, "updateTranscodeRule").mockResolvedValue({ ...saved, enabled: true });
+    render(<TranscodePresetsRulesPanel capabilityMatrix={() => null} acceleratorsTooltip={null} standaloneTab="rules"
+      resolutionCategories={[
+        { id: "archive_hd", label: "Archive HD", min_width: 1600, min_height: 800 },
+        { id: "sd", label: "SD", min_width: 0, min_height: 0 },
+      ]}
+    />);
+    const newRule = await screen.findByRole("button", { name: "New rule" });
+    await waitFor(() => expect(newRule).toBeEnabled());
+    fireEvent.click(newRule);
+    fireEvent.change(screen.getByRole("textbox", { name: "Rule name" }), { target: { value: saved.name } });
+    fireEvent.click(screen.getByRole("button", { name: "Add nested group" }));
+    const [ , nestedLogic ] = screen.getAllByRole("combobox", { name: "Logic" });
+    fireEvent.change(nestedLogic, { target: { value: "xor" } });
+    const conditionField = screen.getByRole("combobox", { name: "Condition field" });
+    fireEvent.change(conditionField, { target: { value: "path" } });
+    fireEvent.mouseEnter(conditionField);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Archiv/Dokus/");
+    expect(fireEvent.keyDown(conditionField, { key: " " })).toBe(true);
+    fireEvent.mouseLeave(conditionField);
+    fireEvent.change(conditionField, { target: { value: "resolution" } });
+    const resolution = screen.getByRole("combobox", { name: "Condition value" });
+    expect(within(resolution).getByRole("option", { name: "Archive HD" })).toHaveValue("archive_hd");
+    fireEvent.change(resolution, { target: { value: "archive_hd" } });
+    expect(screen.getByRole("checkbox", { name: "Output must not exceed source size" })).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ conditions: saved.conditions, prevent_output_growth: true })));
+    const toggle = await screen.findByRole("switch", { name: "Enable " + saved.name });
+    expect(toggle).not.toBeChecked();
+    const ruleRow = screen.getByRole("button", { name: saved.name });
+    fireEvent.click(ruleRow);
+    fireEvent.click(ruleRow);
+    expect(screen.getByText("All conditions (AND)")).toBeInTheDocument();
+    expect(screen.getByText("Exactly one matches (XOR)")).toBeInTheDocument();
+    expect(screen.getByText("Archive HD")).toBeInTheDocument();
+    expect(toggle.parentElement?.querySelector(".toggle-switch-thumb")).toBeInTheDocument();
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle).toBeChecked());
+    expect(update).toHaveBeenCalledWith(saved.id, { enabled: true });
+  });
+
   it("hides unfinished rule and member tabs in the release view", async () => {
     releaseVisibility.automationRules = false;
     releaseVisibility.federation = false;
@@ -262,7 +426,7 @@ describe("TranscodePresetsRulesPanel", () => {
     expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Rules" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "Explain transcoding rules" })).toBeInTheDocument();
-    expect(screen.queryByText("Rules are evaluated from top to bottom. A blocked winning rule does not fall through.")).not.toBeInTheDocument();
+    expect(screen.queryByText("For each video, the first active rule that matches its library and conditions takes precedence. If that rule is blocked, it still takes precedence for that video.")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reload" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Preview" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start inventory" })).not.toBeInTheDocument();

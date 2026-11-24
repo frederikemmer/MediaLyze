@@ -128,7 +128,7 @@ export function HeaderAccountMenu({ username, owner, kind, onSignOut, onAccountC
               role="menuitem"
               onClick={() => {
                 setIsOpen(false);
-                void onSignOut();
+                try { void Promise.resolve(onSignOut()).catch(() => {}); } catch { /* The auth provider reports the failure. */ }
               }}
             >
               <LogOut aria-hidden="true" />

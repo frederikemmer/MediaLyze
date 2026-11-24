@@ -1,6 +1,8 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { useAutosaveNotifications } from "../lib/notification-actions";
+import { useNotifications } from "../lib/notifications";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Plus, Save, Search, SquarePen, Star, Trash2 } from "lucide-react";
+import { ChevronDown, Copy as CopyIcon, Plus, Save, Search, SquarePen, Star, Trash2 } from "lucide-react";
 
 import { api, type TranscodeFormattingDefinition, type TranscodeFormattingPreset } from "../lib/api";
 import type { FormattingKind } from "../lib/transcode-formatting-presets";
@@ -114,6 +116,16 @@ function visibleTemplate(preset: TranscodeFormattingPreset): string {
 
 export function TranscodeFormattingPresetsPanel({ kind, tabs }: { kind: FormattingKind; tabs: ReactNode }) {
   const { t } = useTranslation();
+  const notifications = useNotifications();
+  const { trackSave } = useAutosaveNotifications({
+    scopeKey: "settings:transcoding-presets", topicKey: "transcode:formatting", source: { area: "transcoding", href: "/settings?section=transcoding-presets", label: t("notifications.actions.transcoding.openPresets", { defaultValue: "Open formatting presets" }) },
+    successMessage: t("notifications.actions.transcoding.presetsAutosaved", { defaultValue: "Transcoding preset settings saved." }),
+    errorMessage: t("notifications.actions.transcoding.presetsAutosaveFailed", { defaultValue: "Could not save transcoding preset settings." }),
+    partialMessage: t("notifications.actions.transcoding.presetsPartiallySaved", { defaultValue: "Some transcoding preset settings could not be saved." }),
+  });
+  function feedback(type: "success" | "error", key: string, fallback: string) {
+    notifications.notify({ type, message: t(`notifications.actions.transcoding.${key}`, { defaultValue: fallback }), topicKey: `transcode:formatting:${kind}`, source: { area: "transcoding", href: `/settings?section=transcoding-presets&settingsFocus=transcoding-presets-tab-${kind}`, label: t("notifications.actions.transcoding.openFormatting", { defaultValue: "Open formatting presets" }) } });
+  }
   const metadataMenuId = `formatting-metadata-${useId()}`;
   const templateInputId = `formatting-template-${kind}-${useId()}`;
   const templateInputRef = useRef<HTMLDivElement>(null);
@@ -232,8 +244,35 @@ export function TranscodeFormattingPresetsPanel({ kind, tabs }: { kind: Formatti
       setDraftId(undefined);
       setError(null);
       setMetadataMenuOpen(false);
-    } catch (reason) {
-      setError((reason as Error).message);
+      feedback("success", "formatSaved", "Formatting preset saved.");
+    } catch {
+      feedback("error", "formatSaveFailed", "Could not save the formatting preset.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function duplicate(preset: TranscodeFormattingPreset) {
+    const existingNames = new Set(presets.map((item) => item.name.toLowerCase()));
+    const copyName = (number: number) => {
+      const suffix = number === 1 ? " copy" : ` copy ${number}`;
+      return `${preset.name.slice(0, 255 - suffix.length)}${suffix}`;
+    };
+    let number = 1;
+    while (existingNames.has(copyName(number).toLowerCase())) number++;
+    setBusy(true);
+    try {
+      const copy = await api.createTranscodeFormattingPreset({
+        kind: preset.kind,
+        name: copyName(number),
+        definition: preset.definition,
+      });
+      setPresets((current) => [...current, copy].sort((a, b) => a.name.localeCompare(b.name)));
+      setSearch("");
+      startEdit(copy);
+      feedback("success", "duplicatePresetSuccess", "Preset duplicated.");
+    } catch {
+      feedback("error", "duplicatePresetFailed", "Could not duplicate the preset.");
     } finally {
       setBusy(false);
     }
@@ -242,11 +281,11 @@ export function TranscodeFormattingPresetsPanel({ kind, tabs }: { kind: Formatti
   async function setDefault(preset: TranscodeFormattingPreset) {
     setBusy(true);
     try {
-      const saved = await api.updateTranscodeFormattingPreset(preset.id, { is_default: !preset.is_default });
+      const saved = await trackSave(api.updateTranscodeFormattingPreset(preset.id, { is_default: !preset.is_default }));
       setPresets((current) => current.map((item) => ({ ...item, is_default: item.id === saved.id ? saved.is_default : saved.is_default ? false : item.is_default })));
       setError(null);
-    } catch (reason) {
-      setError((reason as Error).message);
+    } catch {
+      // trackSave reports the failed autosave.
     } finally {
       setBusy(false);
     }
@@ -261,8 +300,9 @@ export function TranscodeFormattingPresetsPanel({ kind, tabs }: { kind: Formatti
       if (draftId === preset.id) setDraftId(undefined);
       setMetadataMenuOpen(false);
       setError(null);
-    } catch (reason) {
-      setError((reason as Error).message);
+      feedback("success", "formatDeleted", "Formatting preset deleted.");
+    } catch {
+      feedback("error", "formatDeleteFailed", "Could not delete the formatting preset.");
     } finally {
       setBusy(false);
     }
@@ -378,6 +418,11 @@ export function TranscodeFormattingPresetsPanel({ kind, tabs }: { kind: Formatti
         <div className="compatibility-profile-quick-actions transcode-automation-quick-actions">
           <button type="button" className={`secondary icon-only-button compatibility-profile-quick-action${preset.is_default ? " is-favorite" : ""}`} aria-label={t(preset.is_default ? "transcoding.formattingPresets.removeDefault" : "transcoding.formattingPresets.makeDefault", { name: preset.name })} aria-pressed={preset.is_default} title={t(preset.is_default ? "transcoding.formattingPresets.removeDefault" : "transcoding.formattingPresets.makeDefault", { name: preset.name })} disabled={busy} onClick={() => void setDefault(preset)}><Star size={18} fill={preset.is_default ? "currentColor" : "none"} aria-hidden="true" /></button>
           <button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label={`${t("transcoding.automation.edit")} ${preset.name}`} disabled={busy} onClick={() => startEdit(preset)}><SquarePen size={18} aria-hidden="true" /></button>
+          <button type="button" className="secondary icon-only-button compatibility-profile-quick-action"
+            aria-label={`${t("transcoding.automation.duplicate")} ${preset.name}`}
+            title={t("transcoding.automation.duplicate")} disabled={busy} onClick={() => void duplicate(preset)}>
+            <CopyIcon className="nav-icon" size={18} aria-hidden="true" />
+          </button>
           <button type="button" className="secondary icon-only-button compatibility-profile-quick-action" aria-label={`${t("transcoding.automation.delete")} ${preset.name}`} disabled={busy} onClick={() => void remove(preset)}><Trash2 size={18} aria-hidden="true" /></button>
         </div>
       </div>

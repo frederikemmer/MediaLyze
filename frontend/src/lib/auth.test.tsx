@@ -11,6 +11,9 @@ import i18n from "../i18n";
 import type { ReactNode } from "react";
 import { MemoryRouter, useLocation } from "react-router";
 import { HeaderAccountMenu } from "../components/HeaderAccountMenu";
+import { PersonalAccountPanel } from "../components/AccountsPanel";
+import * as notifications from "./notifications";
+import { ThemeProvider } from "./theme";
 import * as passkeys from "./passkeys";
 import { AuthProvider, emptyPolicy, useAuth } from "./auth";
 import { clearIdentityRequests, setExpectedIdentity } from "./access-session";
@@ -109,6 +112,103 @@ describe("Authentication gate", () => {
     expect(preferenceStorage.getItem("medialyze-theme")).toBe("dark");
   });
 
+  it("lands on sign-in with a safe warning when status fails after a confirmed credential change", async () => {
+    let current: typeof identity | null = { ...identity, owner: true };
+    let failStatus = false;
+    const notify = vi.fn();
+    vi.spyOn(notifications, "useNotifications").mockReturnValue({ notify, dismiss: vi.fn(), clearAll: vi.fn(), retryHistory: vi.fn(), historyRevision: 0, historyWriteFailed: false });
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (path, init) => {
+      if (String(path).endsWith("/auth/status")) return failStatus ? json({ detail: "private status error" }, 500) : json(status(current));
+      if (String(path).endsWith("/me/passkeys")) return json({ enabled: false, items: [] });
+      if (String(path).endsWith("/auth/password") && init?.method === "POST") { current = null; failStatus = true; return json({}); }
+      if (String(path).endsWith("/auth/login")) { current = identity; return json({}); }
+      return json({ storage: {}, ui_preferences: {} });
+    });
+    renderAuth(<AuthProvider><ThemeProvider><div>Protected account content</div><PersonalAccountPanel /></ThemeProvider></AuthProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: "Change password" }));
+    fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "private password" } });
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "NewPassword1!" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    const warning = "Change saved, but the session could not be refreshed. Please sign in again.";
+    expect(await screen.findByRole("status")).toHaveTextContent(warning);
+    expect(screen.queryByText("Protected account content")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Username")).toHaveValue("");
+    expect(document.body).not.toHaveTextContent("private status error");
+    expect(notify).not.toHaveBeenCalled();
+    failStatus = false;
+    fireEvent.focus(window);
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(warning));
+    expect(fetch.mock.calls.some(([path]) => String(path).endsWith("/auth/guest"))).toBe(false);
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "Alex" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "new password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Login" }));
+    expect(await screen.findByText("Protected account content")).toBeInTheDocument();
+    expect(screen.queryByText(warning)).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("private status error");
+  });
+  it("shows the confirmed credential acknowledgement once after the authenticated subtree unmounts", async () => {
+    let current: typeof identity | null = identity;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (path) => {
+      if (String(path).endsWith("/auth/status")) return json(status(current));
+      if (String(path).endsWith("/auth/login")) { current = identity; return json({}); }
+      return json({ storage: {}, ui_preferences: {} });
+    });
+    function Private() {
+      const { refreshAfterCredentialChange } = useAuth();
+      return <button onClick={() => { current = null; void refreshAfterCredentialChange!(); }}>Confirm credential mutation</button>;
+    }
+    renderAuth(<AuthProvider><Private /></AuthProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm credential mutation" }));
+    expect(await screen.findByText("Change saved – please sign in again.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Confirm credential mutation" })).not.toBeInTheDocument();
+    fireEvent.focus(window);
+    await waitFor(() => expect(screen.getByText("Change saved – please sign in again.")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "Alex" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "secret" } });
+    fireEvent.click(screen.getByRole("button", { name: "Login" }));
+    await screen.findByRole("button", { name: "Confirm credential mutation" });
+    expect(screen.queryByText("Change saved – please sign in again.")).not.toBeInTheDocument();
+  });
+  it("shows a safe inline error when forced-password sign out fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (path) => {
+      if (String(path).endsWith("/auth/status")) return json(status({ ...identity, must_change_password: true }));
+      if (String(path).endsWith("/auth/logout")) return json({ detail: "private error" }, 500);
+      return json({});
+    });
+    renderAuth(<AuthProvider><div>Private</div></AuthProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: "Sign out" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not sign out.");
+    expect(screen.queryByText(/private error/)).not.toBeInTheDocument();
+  });
+  it.each(["account", "desktop"] as const)("keeps %s hydration silent and serializes partial preference writes without resending notification settings", async (kind) => {
+    let release!: (value: Response) => void;
+    let server: Record<string, unknown> = { storage: {}, ui_preferences: { notifications: { duration: 10 } }, extra: "kept" };
+    const patches: Record<string, unknown>[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (path, init) => {
+      if (String(path).endsWith("/auth/status")) return json(status({ ...identity, kind, id: kind === "desktop" ? "desktop" : identity.id }));
+      if (init?.method === "PATCH") {
+        const payload = JSON.parse(String(init.body)); patches.push(payload);
+        if (patches.length === 1) return new Promise<Response>((resolve) => { release = (response) => { server = payload; resolve(response); }; });
+        server = payload; return json(payload);
+      }
+      return json(server);
+    });
+    const changed = vi.fn(); window.addEventListener("medialyze-preferences-changed", changed);
+    renderAuth(<AuthProvider><div>Private view</div></AuthProvider>);
+    await screen.findByText("Private view");
+    expect(changed).not.toHaveBeenCalled();
+    act(() => preferenceStorage.setItem("medialyze-theme", "dark"));
+    await waitFor(() => expect(patches).toHaveLength(1), { timeout: 2000 });
+    act(() => preferenceStorage.setItem("medialyze-theme", "light"));
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    expect(patches).toHaveLength(1);
+    await act(async () => release(json(patches[0])));
+    await waitFor(() => expect(patches).toHaveLength(2));
+    expect(patches[1]).toMatchObject({ storage: { "medialyze-theme": "light" }, ui_preferences: { color_theme: "light" } });
+    expect(patches[1].ui_preferences).not.toHaveProperty("notifications");
+    expect(patches[1]).not.toHaveProperty("extra");
+    window.removeEventListener("medialyze-preferences-changed", changed);
+  });
   it("explains setup password requirements and rejects short passwords before sending", async () => {
     const fetch = vi
       .spyOn(globalThis, "fetch")

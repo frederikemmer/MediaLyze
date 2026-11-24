@@ -4,12 +4,16 @@ import re
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, or_, select
+from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.core.config import Settings
 from backend.app.models.entities import (
+    AppSetting,
+    ConnectorItem,
+    ConnectorMediaMatch,
     JobStatus,
     Library,
     MediaFile,
@@ -36,6 +40,10 @@ from backend.app.schemas.transcoding import (
     TranscodeRuleCreate,
     TranscodeRuleRead,
     TranscodeRuleReorder,
+    TranscodeRuleTestAsset,
+    TranscodeRuleTestRead,
+    TranscodeRuleTestRequest,
+    TranscodeRuleTestTrace,
     TranscodeRuleUpdate,
 )
 from backend.app.services.app_settings import get_app_settings
@@ -47,7 +55,7 @@ from backend.app.services.media_search import (
     _parse_quality_score_value,
     _parse_size_value,
 )
-from backend.app.services.resolution_categories import default_resolution_categories
+from backend.app.services.resolution_categories import classify_resolution_category
 from backend.app.services.transcoding import (
     TranscodeValidationError,
     _available_encoder,
@@ -163,6 +171,37 @@ def ensure_builtin_transcode_presets(db: Session) -> None:
         dirty = True
     if dirty:
         db.flush()
+
+
+def seed_standard_transcode_preset(db: Session) -> None:
+    marker = db.execute(
+        insert(AppSetting)
+        .values(key="standard_hevc_preset_seeded", value={})
+        .on_conflict_do_nothing(index_elements=[AppSetting.key])
+    )
+    if marker.rowcount == 0:
+        return
+
+    name = "X to HEVC"
+    if db.scalar(select(TranscodePreset.id).where(func.lower(TranscodePreset.name) == name.lower())) is not None:
+        return
+
+    definition = TranscodePresetDefinition(
+        container="mkv",
+        video_rules=[
+            TranscodePresetStreamRule(match_codecs=["hevc", "h265"], action="copy"),
+            TranscodePresetStreamRule(action="convert", codec="hevc", crf=22),
+        ],
+        default_video_action="convert",
+        copy_dolby_vision_video=True,
+    )
+    db.add(TranscodePreset(
+        name=name,
+        description="Convert video to HEVC in MKV. Copy existing HEVC, Dolby Vision, audio and subtitles.",
+        version=1,
+        is_builtin=False,
+        definition=definition.model_dump(mode="json"),
+    ))
 
 
 def remove_unreferenced_builtin_transcode_presets(db: Session) -> None:
@@ -369,6 +408,7 @@ def _rule_payload(db: Session, rule: TranscodeRule) -> TranscodeRuleRead:
         profile_version=profile.version,
         output_mode=rule.output_mode,
         output_subfolder=rule.output_subfolder or "",
+        prevent_output_growth=rule.prevent_output_growth,
         replacement_approved=rule.replacement_approved_version == rule.version,
         created_at=rule.created_at,
         updated_at=rule.updated_at,
@@ -445,6 +485,7 @@ def create_transcode_rule(db: Session, payload: TranscodeRuleCreate) -> Transcod
         profile_id=profile.id,
         output_mode=payload.output_mode,
         output_subfolder=output_subfolder,
+        prevent_output_growth=payload.prevent_output_growth,
         replacement_approved_version=None,
     )
     db.add(rule)
@@ -467,7 +508,7 @@ def update_transcode_rule(
     if not changes:
         return _rule_payload(db, rule)
     relevant_change = any(
-        key in changes for key in {"conditions", "library_ids", "profile_id", "output_mode", "output_subfolder"}
+        key in changes for key in {"conditions", "library_ids", "profile_id", "output_mode", "output_subfolder", "prevent_output_growth"}
     )
     disable_requested = changes.get("enabled") is False
     if "name" in changes:
@@ -499,6 +540,8 @@ def update_transcode_rule(
         rule.output_mode = next_output_mode
     if "output_subfolder" in changes:
         rule.output_subfolder = next_output_subfolder
+    if "prevent_output_growth" in changes:
+        rule.prevent_output_growth = payload.prevent_output_growth
     if "priority" in changes:
         rule.priority = int(payload.priority or 0)
     if "enabled" in changes:
@@ -744,6 +787,10 @@ def materialize_transcode_preset(
         if definition.execution_mode == "inherit"
         else definition.execution_mode
     )
+    copy_source_video = definition.copy_dolby_vision_video and (
+        "dolby" in (media_file.primary_video_hdr_type or "").lower()
+        or any("dolby" in (stream.hdr_type or "").lower() for stream in media_file.video_streams)
+    )
     video_plans = []
     audio_plans = []
     subtitle_plans = []
@@ -756,7 +803,7 @@ def materialize_transcode_preset(
         kind = "video" if target is video_plans else "audio" if target is audio_plans else "subtitle"
         for stream in sorted(source, key=lambda item: item.stream_index):
             rule = _first_matching_stream_rule(rules, stream)
-            if rule is None:
+            if rule is None or (kind == "video" and copy_source_video and rule.action == "convert"):
                 rule = TranscodePresetStreamRule(action="copy")
             target.append(_materialize_stream(stream, rule, kind, container, capabilities, execution_mode))
     from backend.app.schemas.transcoding import ExternalSubtitlePlan, TranscodePlan
@@ -886,15 +933,8 @@ def _field_values(media_file: MediaFile, field: str, app_settings) -> tuple[list
         values: list[str] = []
         if primary_video and primary_video.width and primary_video.height:
             values.append(f"{primary_video.width}x{primary_video.height}")
-            categories = app_settings.resolution_categories or default_resolution_categories()
-            category = next(
-                (
-                    candidate
-                    for candidate in categories
-                    if primary_video.width >= candidate.min_width
-                    and primary_video.height >= candidate.min_height
-                ),
-                None,
+            category = classify_resolution_category(
+                primary_video.width, primary_video.height, app_settings.resolution_categories
             )
             if category is not None:
                 values.extend([category.id.lower(), category.label.lower()])
@@ -903,7 +943,10 @@ def _field_values(media_file: MediaFile, field: str, app_settings) -> tuple[list
         if primary_video is None:
             return [], False
         value = str(primary_video.hdr_type).lower() if primary_video.hdr_type else "sdr"
-        return list(dict.fromkeys((value, value.replace("_", " "), value.replace(" ", "_")))), False
+        values = [value, value.replace("_", " "), value.replace(" ", "_")]
+        if value.startswith("dolby vision "):
+            values.append("dolby vision")
+        return list(dict.fromkeys(values)), False
     if key == "audio_codecs":
         return [str(stream.codec).lower() for stream in media_file.audio_streams if stream.codec], False
     if key == "audio_spatial_profiles":
@@ -983,8 +1026,7 @@ def _text_match(values: list[str], operator: str, wanted: list[str]) -> bool:
     return False
 
 
-def _condition_matches(media_file: MediaFile, condition: TranscodeCondition, app_settings) -> bool:
-    values, numeric = _field_values(media_file, condition.field, app_settings)
+def _condition_matches(values: list[Any], numeric: bool, condition: TranscodeCondition) -> bool:
     operator = condition.operator.strip().lower().replace("-", "_").replace(" ", "_")
     if operator in {"exists", "present", "has_value"}:
         return bool(values)
@@ -1045,18 +1087,117 @@ def _condition_matches(media_file: MediaFile, condition: TranscodeCondition, app
     return _text_match([str(value) for value in values], operator, wanted)
 
 
+def _group_matches(operator: str, results: list[bool]) -> bool:
+    if not results:
+        return False
+    if operator == "xor":
+        return sum(results) == 1
+    return all(results) if operator == "and" else any(results)
+
+
 def condition_matches(media_file: MediaFile, conditions: TranscodeConditionGroup | None, app_settings) -> bool:
     if conditions is None:
         return True
-    if not conditions.children:
-        return False
-    results = [
+    return _group_matches(conditions.operator, [
         condition_matches(media_file, child, app_settings)
         if isinstance(child, TranscodeConditionGroup)
-        else _condition_matches(media_file, child, app_settings)
+        else _condition_matches(*_field_values(media_file, child.field, app_settings), child)
         for child in conditions.children
-    ]
-    return all(results) if conditions.operator == "and" else any(results)
+    ])
+
+
+def _condition_trace(media_file: MediaFile, node: TranscodeConditionGroup | TranscodeCondition | None, app_settings) -> TranscodeRuleTestTrace:
+    if node is None:
+        return TranscodeRuleTestTrace(matched=True)
+    if isinstance(node, TranscodeConditionGroup):
+        children = [_condition_trace(media_file, child, app_settings) for child in node.children]
+        return TranscodeRuleTestTrace(matched=_group_matches(node.operator, [child.matched for child in children]), children=children)
+    values, numeric = _field_values(media_file, node.field, app_settings)
+    matched = _condition_matches(values, numeric, node)
+    return TranscodeRuleTestTrace(
+        matched=matched,
+        values=list(dict.fromkeys(value if isinstance(value, (str, int, float, bool)) else str(value) for value in values)),
+    )
+
+
+def search_transcode_rule_assets(db: Session, query: str) -> list[TranscodeRuleTestAsset]:
+    query = query.strip()
+    if not query:
+        return []
+    provider_title = (
+        select(ConnectorItem.title)
+        .join(ConnectorMediaMatch, ConnectorMediaMatch.connector_item_id == ConnectorItem.id)
+        .where(ConnectorMediaMatch.media_file_id == MediaFile.id, ConnectorMediaMatch.status == "matched",
+               ConnectorItem.title.icontains(query, autoescape=True))
+        .order_by(ConnectorItem.id)
+        .limit(1)
+        .correlate(MediaFile)
+        .scalar_subquery()
+    )
+    titles = (
+        provider_title,
+        func.nullif(MediaFile.episode_title, ""),
+        func.nullif(MediaFile.audio_title, ""),
+        func.json_extract(MediaFile.raw_ffprobe_json, "$.format.tags.title"),
+        func.json_extract(MediaFile.raw_ffprobe_json, "$.format.tags.TITLE"),
+    )
+    filename = MediaFile.filename
+    fields = (filename, *titles)
+    contains = [field.icontains(query, autoescape=True) for field in fields]
+    title = func.coalesce(
+        *(case((matched, field)) for matched, field in zip(contains[1:], titles)),
+        *titles,
+    )
+    rank = case(
+        (or_(*(func.lower(field) == query.lower() for field in fields)), 0),
+        (or_(*(field.istartswith(query, autoescape=True) for field in fields)), 1),
+        else_=2,
+    )
+    rows = db.execute(
+        select(MediaFile.id, filename, title.label("title"), MediaFile.library_id)
+        .where(or_(*contains))
+        .order_by(rank, func.lower(filename), MediaFile.id)
+        .limit(5)
+    )
+    return [TranscodeRuleTestAsset.model_validate(row._mapping) for row in rows]
+
+
+def test_transcode_rule_draft(db: Session, settings: Settings, payload: TranscodeRuleTestRequest) -> TranscodeRuleTestRead:
+    media_file = db.get(MediaFile, payload.file_id)
+    if media_file is None:
+        raise TranscodeAutomationError("Media file not found")
+    app_settings = get_app_settings(db, settings)
+    trace = _condition_trace(media_file, payload.conditions, app_settings)
+    in_scope = media_file.library_id in _library_ids_exist(db, payload.library_ids)
+    if not in_scope or not trace.matched:
+        return TranscodeRuleTestRead(in_scope=in_scope, trace=trace, status="unmatched")
+    if media_file.is_transcode_variant or not media_file.video_streams:
+        return TranscodeRuleTestRead(in_scope=True, trace=trace, status="blocked", reason="Only primary video files are eligible for automation.")
+    preset = get_transcode_preset(db, payload.profile_id)
+    subfolder = _normalized_rule_output_subfolder(payload.output_subfolder)
+    _validate_rule_output_layout(payload.output_mode, subfolder)
+    conditions = _conditions_payload(payload.conditions)
+    saved = get_transcode_rule(db, payload.rule_id) if payload.rule_id else None
+    unchanged = saved is not None and (
+        saved.profile_id == payload.profile_id and saved.output_mode == payload.output_mode
+        and (saved.output_subfolder or "") == subfolder and saved.conditions == conditions
+        and saved.prevent_output_growth == payload.prevent_output_growth
+        and set(saved.library_ids) == set(payload.library_ids)
+    )
+    draft = saved if unchanged else TranscodeRule(
+        id=0, name="", version=1, enabled=True, priority=0,
+        library_ids=payload.library_ids, conditions=conditions, profile_id=preset.id,
+        output_mode=payload.output_mode, output_subfolder=subfolder, prevent_output_growth=payload.prevent_output_growth,
+    )
+    decision = _decision_for_file(
+        db, settings, media_file, [draft], app_settings, get_transcode_capabilities(settings),
+        retry_failed=False, profiles_by_id={preset.id: preset},
+        records_by_identity=None if unchanged else {},
+    )
+    return TranscodeRuleTestRead(
+        in_scope=True, trace=trace, status=decision.status, reason=decision.reason,
+        output_path=decision.output_path, output_relative_path=decision.output_relative_path,
+    )
 
 
 def _candidate_options(scope: TranscodeAutomationScope, rules: list[TranscodeRule]):
@@ -1080,7 +1221,7 @@ def _load_candidates(
     scope: TranscodeAutomationScope,
     rules: list[TranscodeRule],
     *,
-    offset: int = 0,
+    after_id: int = 0,
     limit: int = AUTOMATION_PAGE_SIZE,
 ) -> list[MediaFile]:
     return db.scalars(
@@ -1094,9 +1235,8 @@ def _load_candidates(
             selectinload(MediaFile.subtitle_streams),
             selectinload(MediaFile.external_subtitles),
         )
-        .where(*_candidate_options(scope, rules))
+        .where(*_candidate_options(scope, rules), MediaFile.id > after_id)
         .order_by(MediaFile.id.asc())
-        .offset(offset)
         .limit(limit)
     ).all()
 
@@ -1340,36 +1480,60 @@ def preview_transcode_automation(
     rules = _scope_rules(db, scope)
     capabilities = get_transcode_capabilities(settings)
     total = _candidate_count(db, scope, rules)
-    limit = min(scope.limit, 100000)
     items: list[TranscodeAutomationDecisionRead] = []
-    candidates = _load_candidates(db, scope, rules, limit=limit)
+    other_items: list[TranscodeAutomationDecisionRead] = []
     profiles_by_id = _preview_profiles(db, rules)
-    for start in range(0, len(candidates), AUTOMATION_PREVIEW_QUERY_BATCH_SIZE):
-        candidate_batch = candidates[start : start + AUTOMATION_PREVIEW_QUERY_BATCH_SIZE]
+    counts = dict.fromkeys(("matched", "queued", "blocked", "skipped", "unmatched"), 0)
+    after_id = 0
+    remaining = total if scope.preview_all else min(scope.limit, total)
+    while remaining:
+        candidate_batch = _load_candidates(
+            db, scope, rules, after_id=after_id, limit=min(remaining, AUTOMATION_PREVIEW_QUERY_BATCH_SIZE)
+        )
+        if not candidate_batch:
+            break
         records_by_identity = _preview_existing_records(db, candidate_batch)
         for media_file in candidate_batch:
-            items.append(
-                _decision_for_file(
-                    db,
-                    settings,
-                    media_file,
-                    rules,
-                    app_settings,
-                    capabilities,
-                    retry_failed=scope.retry_failed,
-                    profiles_by_id=profiles_by_id,
-                    records_by_identity=records_by_identity,
-                )
+            decision = _decision_for_file(
+                db,
+                settings,
+                media_file,
+                rules,
+                app_settings,
+                capabilities,
+                retry_failed=scope.retry_failed,
+                profiles_by_id=profiles_by_id,
+                records_by_identity=records_by_identity,
             )
-    counts = {key: 0 for key in ("matched", "queued", "blocked", "skipped", "unmatched")}
-    for item in items:
-        counts[item.status] = counts.get(item.status, 0) + 1
+            counts[decision.status] += 1
+            if not scope.preview_all or (decision.status == "matched" and len(items) < scope.limit):
+                items.append(decision)
+            elif decision.status in {"blocked", "skipped"} and len(other_items) < scope.limit:
+                other_items.append(decision)
+        remaining -= len(candidate_batch)
+        after_id = candidate_batch[-1].id
     return TranscodeAutomationPreviewRead(
         generated_at=utc_now(),
         total_files=total,
-        items=items,
+        items=items + other_items[:max(0, scope.limit - len(items))],
         **counts,
     )
+
+
+def record_transcode_automation_preview(
+    db: Session, scope: TranscodeAutomationScope, preview: TranscodeAutomationPreviewRead,
+) -> TranscodeAutomationPreviewRead:
+    run = TranscodeAutomationRun(
+        status="completed", trigger_source="dry_run",
+        rule_ids=scope.rule_ids, library_ids=scope.library_ids,
+        files_total=preview.total_files, matched=preview.matched,
+        blocked=preview.blocked, skipped=preview.skipped, unmatched=preview.unmatched,
+        finished_at=preview.generated_at,
+        summary={"preview_items": [item.model_dump(mode="json", exclude={"plan"}) for item in preview.items]},
+    )
+    db.add(run)
+    db.commit()
+    return preview.model_copy(update={"run_id": run.id})
 
 
 def create_transcode_automation_run(
@@ -1394,7 +1558,7 @@ def create_transcode_automation_run(
     return serialize_transcode_automation_run(run)
 
 
-def serialize_transcode_automation_run(run: TranscodeAutomationRun) -> TranscodeAutomationRunRead:
+def serialize_transcode_automation_run(run: TranscodeAutomationRun, *, include_preview: bool = True) -> TranscodeAutomationRunRead:
     return TranscodeAutomationRunRead(
         id=run.id,
         status=run.status,
@@ -1414,7 +1578,7 @@ def serialize_transcode_automation_run(run: TranscodeAutomationRun) -> Transcode
         failed=run.failed,
         canceled=run.canceled,
         current_page=run.current_page,
-        summary=dict(run.summary or {}),
+        summary={} if run.trigger_source == "dry_run" and not include_preview else dict(run.summary or {}),
         error=run.error,
         cancellation_requested=bool(run.cancellation_requested),
         created_at=run.created_at,
@@ -1426,7 +1590,7 @@ def serialize_transcode_automation_run(run: TranscodeAutomationRun) -> Transcode
 
 def list_transcode_automation_runs(db: Session, limit: int = 100) -> list[TranscodeAutomationRunRead]:
     return [
-        serialize_transcode_automation_run(run)
+        serialize_transcode_automation_run(run, include_preview=False)
         for run in db.scalars(
             select(TranscodeAutomationRun)
             .order_by(TranscodeAutomationRun.created_at.desc(), TranscodeAutomationRun.id.desc())
@@ -1582,6 +1746,7 @@ def _rule_snapshot(rule: TranscodeRule, profile: TranscodePreset) -> dict[str, A
             "conditions": rule.conditions,
             "output_mode": rule.output_mode,
             "output_subfolder": rule.output_subfolder,
+            "prevent_output_growth": rule.prevent_output_growth,
             "replacement_approved_version": rule.replacement_approved_version,
         },
         "profile": {
@@ -1717,7 +1882,8 @@ def process_transcode_automation_run(
         capabilities = get_transcode_capabilities(settings)
         run.files_total = _candidate_count(db, scope, rules)
         db.commit()
-        offset = 0
+        after_id = 0
+        processed = 0
         page = 0
         while True:
             db.refresh(run)
@@ -1736,7 +1902,7 @@ def process_transcode_automation_run(
                 return
             rules = _scope_rules(db, scope)
             app_settings = get_app_settings(db, settings)
-            candidates = _load_candidates(db, scope, rules, offset=offset, limit=AUTOMATION_PAGE_SIZE)
+            candidates = _load_candidates(db, scope, rules, after_id=after_id, limit=AUTOMATION_PAGE_SIZE)
             if not candidates:
                 break
             page += 1
@@ -1784,11 +1950,12 @@ def process_transcode_automation_run(
                     run.skipped += 1
                 elif status == "unmatched":
                     run.unmatched += 1
-            offset += len(candidates)
+            after_id = candidates[-1].id
+            processed += len(candidates)
             run.current_page = page
             run.summary = {
                 "last_page_size": len(candidates),
-                "offset": offset,
+                "offset": processed,
                 "rule_count": len(rules),
             }
             db.commit()

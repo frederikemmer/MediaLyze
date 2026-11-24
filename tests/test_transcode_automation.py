@@ -13,6 +13,7 @@ from backend.app.models.entities import (
     TranscodePreset,
     TranscodeRule,
 )
+from backend.app.schemas.app_settings import ResolutionCategory
 from backend.app.schemas.transcoding import (
     TranscodeAutomationScope,
     TranscodeCondition,
@@ -209,6 +210,22 @@ def test_conditions_support_nested_and_or_missing_and_multitrack(tmp_path: Path)
         ) is True
 
 
+def test_resolution_conditions_use_configured_categories_for_portrait_video(tmp_path: Path) -> None:
+    with _session_factory()() as db:
+        media_file = _media_file(db, tmp_path)
+        media_file.video_streams[0].width = 1080
+        media_file.video_streams[0].height = 1920
+        app_settings = get_app_settings(db, _settings(tmp_path))
+        app_settings.resolution_categories = [
+            ResolutionCategory(id="archive_hd", label="Archive HD", min_width=1600, min_height=800),
+            ResolutionCategory(id="sd", label="SD", min_width=0, min_height=0),
+        ]
+
+        for value in ("archive_hd", "1080x1920"):
+            condition = TranscodeCondition(field="resolution", operator="equals", value=value)
+            assert automation.condition_matches(media_file, _condition_group(condition), app_settings)
+
+
 def test_reordering_keeps_approved_replace_version(tmp_path: Path) -> None:
     factory = _session_factory()
     with factory() as db:
@@ -271,6 +288,41 @@ def test_preset_stream_language_formats_fall_back_to_container_default(tmp_path:
         assert plan.subtitle_language_code_format == expected
         # Applying a preset leaves the saved preference available for other containers.
         assert profile.definition["video_language_code_format"] == format
+
+
+@pytest.mark.parametrize(("codec", "hdr_type", "expected_action"), [
+    ("h264", "SDR", "encode"),
+    ("hevc", "HDR10", "copy"),
+    ("h265", "SDR", "copy"),
+    ("h264", "Dolby Vision Profile 9", "copy"),
+])
+def test_seeded_hevc_preset_materializes_video_and_preserves_other_streams(
+    tmp_path: Path, codec: str, hdr_type: str, expected_action: str,
+) -> None:
+    settings = _settings(tmp_path)
+    with _session_factory()() as db:
+        media_file = _media_file(db, tmp_path)
+        media_file.video_streams[0].codec = codec
+        media_file.video_streams[0].hdr_type = hdr_type
+        automation.seed_standard_transcode_preset(db)
+        db.commit()
+        automation.seed_standard_transcode_preset(db)
+        db.commit()
+
+        preset, = automation.list_transcode_presets(db)
+        assert preset.name == "X to HEVC"
+        plan = automation.materialize_transcode_preset(
+            db.get(TranscodePreset, preset.id), media_file, _capabilities(), get_app_settings(db, settings),
+        )
+        video, = plan.video_streams
+        assert plan.container == "mkv"
+        assert video.action.value == expected_action
+        assert video.codec == ("hevc" if expected_action == "encode" else None)
+        assert video.width is None and video.height is None and video.frame_rate is None
+        assert [audio.action.value for audio in plan.audio_streams] == ["copy"]
+        assert [subtitle.action.value for subtitle in plan.subtitle_streams] == ["copy"]
+        assert plan.external_subtitles == []
+        assert plan.chapters == plan.metadata == "keep"
 
 
 def test_profile_materialization_copies_unmatched_internal_and_external_is_opt_in(tmp_path: Path) -> None:
@@ -396,6 +448,59 @@ def test_first_blocked_winner_does_not_fall_through(tmp_path: Path) -> None:
         assert decision.reason and "approval" in decision.reason.lower()
 
 
+def test_automation_applies_rule_priority_independently_per_library(tmp_path, monkeypatch) -> None:
+    settings = _settings(tmp_path)
+    monkeypatch.setattr(automation, "get_transcode_capabilities", lambda _settings: _capabilities())
+    monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda _settings: _capabilities())
+    with _session_factory()() as db:
+        movie = _media_file(db, tmp_path / "films")
+        movie.library.name = "Films"
+        episode = _media_file(db, tmp_path / "series")
+        episode.library.name = "Series"
+        profile = TranscodePreset(name="Convert", definition=_profile_definition().model_dump(mode="json"))
+        db.add(profile)
+        db.flush()
+        rules = [
+            TranscodeRule(
+                name=media_file.library.name,
+                priority=priority,
+                enabled=True,
+                library_ids=[media_file.library_id],
+                profile_id=profile.id,
+                output_mode="transcode_output",
+            )
+            for priority, media_file in enumerate([movie, episode])
+        ]
+        db.add_all(rules)
+        db.commit()
+
+        preview = automation.preview_transcode_automation(db, settings, TranscodeAutomationScope())
+
+        assert [(item.file_id, item.rule_id, item.status) for item in preview.items] == [
+            (movie.id, rules[0].id, "matched"),
+            (episode.id, rules[1].id, "matched"),
+        ], [item.reason for item in preview.items]
+
+        monkeypatch.setattr(automation, "AUTOMATION_PREVIEW_QUERY_BATCH_SIZE", 1)
+        dry_run = automation.preview_transcode_automation(
+            db, settings, TranscodeAutomationScope(preview_all=True, limit=1)
+        )
+        assert dry_run.total_files == dry_run.matched == 2
+        assert [item.file_id for item in dry_run.items] == [movie.id]
+        assert db.scalar(select(TranscodeAutomationRecord.id)) is None
+
+        logged = automation.record_transcode_automation_preview(
+            db, TranscodeAutomationScope(preview_all=True, limit=1), dry_run
+        )
+        run = automation.get_transcode_automation_run(db, logged.run_id)
+        assert run.trigger_source == "dry_run"
+        assert run.matched == 2
+        assert run.summary["preview_items"][0]["file_id"] == movie.id
+        assert "plan" not in run.summary["preview_items"][0]
+        assert not automation.list_transcode_automation_runs(db)[0].summary
+        assert db.scalar(select(TranscodeAutomationRecord.id)) is None
+
+
 def test_durable_record_skips_same_source_and_rule_version(tmp_path: Path) -> None:
     factory = _session_factory()
     settings = _settings(tmp_path)
@@ -517,3 +622,54 @@ def test_preview_batches_profiles_and_existing_decisions(tmp_path: Path, monkeyp
             sum("FROM transcode_automation_records" in statement for statement in statements)
             == 1
         )
+
+
+def test_draft_rule_preview_uses_execution_logic_without_creating_work(tmp_path, monkeypatch):
+    from backend.app.models.entities import TranscodeJob
+    from backend.app.schemas.transcoding import TranscodeRuleTestRequest
+
+    settings = _settings(tmp_path)
+    monkeypatch.setattr(automation, "get_transcode_capabilities", lambda _: _capabilities())
+    monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda _: _capabilities())
+    with _session_factory()() as db:
+        media = _media_file(db, tmp_path)
+        preset = automation.create_transcode_preset(db, TranscodePresetCreate(name="Draft", definition=_profile_definition()))
+        codec = TranscodeCondition(field="video_codec", operator="equals", value="hevc")
+        size = TranscodeCondition(field="size", operator=">", value=10**20)
+        tree = _condition_group(codec, size, operator="xor")
+        request = TranscodeRuleTestRequest(
+            file_id=media.id, library_ids=[media.library_id], profile_id=preset.id,
+            conditions=tree, output_mode="transcode_output", output_subfolder="preview",
+        )
+        decision = automation.test_transcode_rule_draft(db, settings, request)
+        assert [child.matched for child in decision.trace.children] == [True, False]
+        assert decision.trace.matched == automation.condition_matches(media, tree, get_app_settings(db, settings))
+        assert decision.status == "matched", decision.reason
+        assert "preview/" in decision.output_relative_path
+        conflicting = request.model_copy(update={"conditions": _condition_group(codec, codec, operator="xor")})
+        decision = automation.test_transcode_rule_draft(db, settings, conflicting)
+        assert decision.status == "unmatched"
+        assert [child.matched for child in decision.trace.children] == [True, True]
+        replacing = request.model_copy(update={"output_mode": "replace_original", "output_subfolder": ""})
+        assert automation.test_transcode_rule_draft(db, settings, replacing).status == "blocked"
+        assert db.scalars(select(TranscodeRule)).all() == []
+        assert db.scalars(select(TranscodeJob)).all() == []
+        assert db.scalars(select(TranscodeAutomationRecord)).all() == []
+
+
+@pytest.mark.parametrize(("guard", "size", "discarded"), [
+    (True, 9, False), (True, 10, False), (True, 11, True), (False, 11, False),
+])
+def test_automation_output_size_guard(tmp_path, guard, size, discarded):
+    from backend.app.models.entities import TranscodeJob
+
+    result = tmp_path / "result.mkv"
+    result.write_bytes(b"x" * size)
+    job = TranscodeJob(source_size_snapshot=10, rule_snapshot={"rule": {"prevent_output_growth": guard}})
+    if discarded:
+        with pytest.raises(ValueError, match="11 > 10 bytes"):
+            transcoding.enforce_automation_output_size(job, result)
+        assert not result.exists()
+    else:
+        transcoding.enforce_automation_output_size(job, result)
+        assert result.stat().st_size == size

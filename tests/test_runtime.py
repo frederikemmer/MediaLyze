@@ -19,7 +19,7 @@ from backend.app.db.base import Base
 from backend.app.db.session import create_engine_for_settings
 from watchdog.events import FileModifiedEvent
 
-from backend.app.models.entities import JobStatus, Library, LibraryType, MediaFile, ScanJob, ScanMode, ScanStatus, ScanTriggerSource
+from backend.app.models.entities import JobStatus, Library, LibraryType, MediaFile, ScanJob, ScanMode, ScanStatus, ScanTriggerSource, TranscodePreset, TranscodeRule
 from backend.app.services import runtime as runtime_module
 from backend.app.schemas.app_settings import AppSettingsUpdate
 from backend.app.services.app_settings import update_app_settings
@@ -62,6 +62,37 @@ def test_runtime_scheduler_uses_configured_tz_environment(monkeypatch) -> None:
     runtime = runtime_module.ScanRuntimeManager(Settings())
 
     assert getattr(runtime.scheduler.timezone, "key", None) == "Europe/Berlin"
+
+
+def test_transcode_automation_schedule_can_be_enabled_and_removed(monkeypatch) -> None:
+    factory = _session_factory()
+    monkeypatch.setattr(runtime_module, "SessionLocal", factory)
+    runtime = runtime_module.ScanRuntimeManager(Settings())
+    requests = []
+    monkeypatch.setattr(runtime, "request_transcode_automation", lambda scope, *, trigger: requests.append(trigger))
+    job_id = "transcode-automation-interval"
+
+    with factory() as db:
+        update_app_settings(db, AppSettingsUpdate(transcoding={
+            "automation_trigger": "interval", "automation_interval_minutes": 15,
+        }), runtime.settings)
+        preset = TranscodePreset(name="Scheduled preset", definition={})
+        db.add(preset)
+        db.flush()
+        db.add(TranscodeRule(name="Scheduled rule", enabled=True, profile_id=preset.id))
+        db.commit()
+
+    runtime.refresh_transcode_automation_schedule()
+    assert runtime.scheduler.get_job(job_id).trigger.interval.total_seconds() == 900
+    runtime._run_scheduled_transcode_automation()
+    assert requests == ["scheduled"]
+
+    with factory() as db:
+        update_app_settings(db, AppSettingsUpdate(transcoding={"automation_trigger": "manual"}), runtime.settings)
+    runtime.refresh_transcode_automation_schedule()
+    assert runtime.scheduler.get_job(job_id) is None
+    runtime._run_scheduled_transcode_automation()
+    assert requests == ["scheduled"]
 
 
 def test_federation_listener_reports_port_conflict() -> None:

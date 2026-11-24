@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildProfileIssue, CompatibilityProfilesPanel } from "./CompatibilityProfilesPanel";
 import * as auth from "../lib/auth";
+import * as notifications from "../lib/notifications";
 import {
   api,
   type CompatibilityProfile,
@@ -98,6 +99,37 @@ describe("buildProfileIssue", () => {
 });
 
 describe("CompatibilityProfilesPanel", () => {
+  it("reports a confirmed save and a separate refresh warning", async () => {
+    const notify = vi.fn();
+    vi.spyOn(notifications, "useOptionalNotifications").mockReturnValue({ notify } as unknown as ReturnType<typeof notifications.useOptionalNotifications>);
+    vi.spyOn(api, "hardwareProfiles").mockResolvedValueOnce([{ ...profile(), catalog_source: "local" }]).mockRejectedValue(new Error("private detail"));
+    vi.spyOn(api, "softwareProfiles").mockResolvedValue([]);
+    vi.spyOn(api, "compatibilityProfiles").mockResolvedValue([]);
+    vi.spyOn(api, "updateHardwareProfile").mockResolvedValue(profile());
+    render(<CompatibilityProfilesPanel />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit profile Test Device" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: "warning", message: "Profile saved, but the list could not be refreshed." })));
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: "success", message: "Profile saved." }));
+    expect(notify).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
+  });
+
+  it("reports combination deletion failure without exposing the server error", async () => {
+    const notify = vi.fn();
+    vi.spyOn(notifications, "useOptionalNotifications").mockReturnValue({ notify } as unknown as ReturnType<typeof notifications.useOptionalNotifications>);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.spyOn(api, "hardwareProfiles").mockResolvedValue([profile()]);
+    vi.spyOn(api, "softwareProfiles").mockResolvedValue([softwareProfile()]);
+    vi.spyOn(api, "compatibilityProfiles").mockResolvedValue([combinationProfile()]);
+    vi.spyOn(api, "deleteCompatibilityProfile").mockRejectedValue(new Error("secret"));
+    render(<CompatibilityProfilesPanel />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Combination" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Test Combination" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: "error", message: "Could not delete the profile." })));
+    expect(JSON.stringify(notify.mock.calls)).not.toContain("secret");
+  });
+
   it("keeps all three profile kinds readable without shared edit actions", async () => {
     vi.spyOn(auth, "useAuth").mockReturnValue({ identity: {
       id: "reader", username: "Reader", kind: "account", owner: false,

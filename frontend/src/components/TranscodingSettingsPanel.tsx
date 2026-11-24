@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useAutosaveNotifications } from "../lib/notification-actions";
+import { identityGeneration } from "../lib/access-session";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, Cpu, FlaskConical, Gpu, Network } from "lucide-react";
 
@@ -51,7 +53,8 @@ const DEFAULT_TRANSCODING_SETTINGS: TranscodingSettings = {
 };
 
 function cloneTranscodingSettings(settings: TranscodingSettings): TranscodingSettings {
-  return { ...settings };
+  const { automation_trigger: _trigger, automation_interval_minutes: _interval, ...execution } = settings;
+  return execution;
 }
 
 function errorMessage(reason: unknown): string {
@@ -246,6 +249,15 @@ export function TranscodingSettingsPanel({
   searchFocus = null,
 }: TranscodingSettingsPanelProps) {
   const { t, i18n } = useTranslation();
+  const originGeneration = useRef(identityGeneration());
+  const saveInFlight = useRef(false);
+  const { trackSave } = useAutosaveNotifications({
+    scopeKey: "settings:transcoding", topicKey: "transcode:settings",
+    source: { area: "transcoding", href: "/settings?section=transcoding", label: t("notifications.actions.transcoding.openSettings", { defaultValue: "Open transcoding settings" }) },
+    successMessage: t("notifications.actions.transcoding.settingsSaved", { defaultValue: "Transcoding settings saved." }),
+    errorMessage: t("notifications.actions.transcoding.settingsSaveFailed", { defaultValue: "Could not save transcoding settings." }),
+    partialMessage: t("notifications.actions.transcoding.settingsPartiallySaved", { defaultValue: "Some transcoding settings could not be saved." }),
+  });
   const currentSettings = settings.transcoding ?? DEFAULT_TRANSCODING_SETTINGS;
   const [draft, setDraft] = useState<TranscodingSettings>(() => cloneTranscodingSettings(currentSettings));
   const [capabilities, setCapabilities] = useState<TranscodeCapabilities | null>(null);
@@ -265,7 +277,6 @@ export function TranscodingSettingsPanel({
   const [pendingSave, setPendingSave] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [networkTestMessage, setNetworkTestMessage] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     setDraft(cloneTranscodingSettings(currentSettings));
@@ -416,30 +427,35 @@ export function TranscodingSettingsPanel({
   }
 
   function updateDraft<K extends keyof TranscodingSettings>(key: K, value: TranscodingSettings[K]) {
-    setSaved(false);
     setPendingSave(true);
     setError(null);
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
   const saveSettings = useCallback(async (settingsToSave: TranscodingSettings) => {
+    if (originGeneration.current !== identityGeneration()) return;
+    saveInFlight.current = true;
     setSaving(true);
-    setSaved(false);
     setError(null);
     try {
-      const updated = await api.updateAppSettings({
+      const updated = await trackSave(api.updateAppSettings({
         transcoding: { ...settingsToSave },
-      });
+      }));
       onUpdated(updated);
       setPendingSave(false);
-      setSaved(true);
-    } catch (reason) {
+    } catch {
       setPendingSave(false);
-      setError((reason as Error).message);
     } finally {
+      saveInFlight.current = false;
       setSaving(false);
     }
-  }, [onUpdated]);
+  }, [onUpdated, trackSave]);
+
+  const flushPending = useRef(() => {});
+  flushPending.current = () => {
+    if (appSettingsLoaded && pendingSave && !saveInFlight.current) void saveSettings(draft);
+  };
+  useEffect(() => () => flushPending.current(), []);
 
   useEffect(() => {
     if (!appSettingsLoaded || !pendingSave) return;
@@ -804,9 +820,9 @@ export function TranscodingSettingsPanel({
           </div>
         ) : null}
 
-        {saving || saved ? (
+        {saving ? (
           <div className="transcode-autosave-status" role="status" aria-live="polite">
-            {saving ? t("transcoding.autoSaving") : t("transcoding.autoSaved")}
+            {t("transcoding.autoSaving")}
           </div>
         ) : null}
 
@@ -826,6 +842,9 @@ export function TranscodingSettingsPanel({
           capabilityMatrix={() => null}
           acceleratorsTooltip={null}
           standaloneTab="rules"
+          automationSettings={settings.transcoding}
+          onAutomationSettingsUpdated={onUpdated}
+          resolutionCategories={settings.resolution_categories}
           standaloneCollapsed={automationRulesCollapsed}
           onStandaloneToggle={() => setAutomationRulesCollapsed((current) => !current)}
           searchFocus={searchFocus}

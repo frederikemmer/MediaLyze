@@ -148,6 +148,8 @@ def authorize(request, db, principal, name, params, body):
         params[key] = resource_id(params[key])
     if principal.owner:
         return
+    if name in {"transcoding_rule_test_assets", "transcoding_rule_test"}:
+        fail(403, "Automation rule tests are available to the Owner only")
     if name in {"notification_history_list", "notification_history_create"}:
         return  # The endpoint derives its owner solely from the authenticated request.
     query = request.query_params
@@ -329,13 +331,15 @@ def authorize(request, db, principal, name, params, body):
         return  # The route cancels only the caller's permitted libraries.
     if name in {"active_scan_jobs", "recent_scan_jobs"}:
         return  # SQL scopes scan/quality jobs before deduplication and pagination.
-    if name == "scan_job_detail":
+    if name in {"scan_job_detail", "delete_scan_job"}:
         from backend.app.models.entities import ScanJob
 
-        job = db.get(ScanJob, int(params["job_id"]))
-        if job is None:
+        target = db.scalar(select(ScanJob.library_id).where(ScanJob.id == int(params["job_id"])))
+        if target is None:
             fail(404, "Not found")
-        require("library.read", job.library_id)
+        require("library.read", target)
+        if name == "delete_scan_job":
+            require("library.edit", target)
         return
     if name in {"file_transcode_detail", "file_transcode_validate", "file_transcode_start"}:
         require("transcode.view", library_id)
@@ -384,6 +388,9 @@ def authorize(request, db, principal, name, params, body):
     if name in {"app_settings", "update_status"}:
         return  # app_settings returns a safe UI projection without its global view right.
     if name == "app_settings_update":
+        transcoding = body.get("transcoding")
+        if isinstance(transcoding, dict) and {"automation_trigger", "automation_interval_minutes"} & transcoding.keys():
+            fail(403, "Automation trigger settings are available to the Owner only")
         if set(body) - {"ui_preferences"}:
             require("settings.app.view")
             require("settings.app.edit")

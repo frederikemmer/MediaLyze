@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+## v0.21.0
+
+This release adds scan-driven transcoding rules, reusable presets, and the option to remove bad scans from library history.
+
+### ✨ New
+
+- **Transcoding automation** - choose libraries, a preset, and an output destination. Build nested AND, OR, and XOR conditions, including configured resolution categories. Expanded rules show the condition tree. Active rules apply to new or changed videos after a successful scan.
+- **Transcoding and formatting presets** - start with the editable **X to HEVC** preset, which copies existing HEVC and Dolby Vision video, or use the supplied filename, folder, and series season folder templates.
+- **Delete past scans** - remove a finished scan from Recent scan logs and remove its linked daily library history point if there are any problems with it ([#202](https://github.com/frederikemmer/MediaLyze/issues/202)).
+
+### ✨ Enhancements
+
+- Notifications now report results from account, library, connector, compatibility, transcoding, export, and clipboard actions. Autosave failures appear immediately, and successful changes are summarized when leaving the relevant settings section.
+- Tightened the file comparison layout and added per-video audio track controls to the synchronized wipe where supported by the browser.
+
+### 🐛 Bug fixes
+
+- Hide Quick scan when the account lacks the required library permissions.
+
+### 🔒 Security
+
+- Updated pyasn1 and i18next to address denial-of-service advisories.
+
 ## v0.20.0
 
 >2026-11-02

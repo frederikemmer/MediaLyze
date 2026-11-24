@@ -12,6 +12,8 @@ import {
   type NotificationSettings,
 } from "../lib/notification-settings";
 import { useNotifications, type NotificationInput, type NotificationType } from "../lib/notifications";
+import { useAutosaveNotifications } from "../lib/notification-actions";
+import { identityGeneration } from "../lib/access-session";
 
 const NOTIFICATION_SETTINGS_AUTOSAVE_DELAY_MS = 350;
 
@@ -100,10 +102,17 @@ export function NotificationPreviewControls({ disabled = false, clearDisabled = 
 export function NotificationSettingsPanel({ sectionId = "notification-settings", readOnly = false }: { sectionId?: string; readOnly?: boolean } = {}) {
   const { t } = useTranslation();
   const { identity, has } = useAuth();
-  const { notify } = useNotifications();
   const location = useLocation();
   const bodyId = useId();
+  const originGeneration = useRef(identityGeneration());
   const settingsHref = "/settings?section=application#notification-settings";
+  const { trackSave } = useAutosaveNotifications({
+    scopeKey: "settings:application", topicKey: "notification-settings",
+    source: { area: "settings", href: settingsHref, label: t("notifications.title") },
+    successMessage: t("notifications.actions.common.saved", { defaultValue: "Changes saved." }),
+    errorMessage: t("notifications.saveFailed"),
+    partialMessage: t("notifications.actions.common.partial", { defaultValue: "Some changes could not be saved." }),
+  });
   const { appSettings, appSettingsLoaded, setAppSettings } = useAppData();
   // Keep the editor's baseline stable; read current Guest storage when saving.
   const [guestStored, setGuestStored] = useState(readGuestNotificationSettings);
@@ -131,7 +140,7 @@ export function NotificationSettingsPanel({ sectionId = "notification-settings",
   }, [location.hash, location.key, sectionId]);
 
   const save = useEffectEvent(async (attemptedDraftKey: string) => {
-    if (!editable || saving || !appSettingsLoaded || JSON.stringify(draft) !== attemptedDraftKey) return;
+    if (originGeneration.current !== identityGeneration() || !editable || saving || !appSettingsLoaded || JSON.stringify(draft) !== attemptedDraftKey) return;
     setSaving(true);
     try {
       const changes: Partial<NotificationSettings> = {};
@@ -139,29 +148,27 @@ export function NotificationSettingsPanel({ sectionId = "notification-settings",
         if (draft[key] !== stored[key]) Object.assign(changes, { [key]: draft[key] });
       }
       if (identity?.kind === "guest") {
-        const updated = saveGuestNotificationSettings({ ...readGuestNotificationSettings(), ...changes });
+        const updated = await trackSave(Promise.resolve().then(() => saveGuestNotificationSettings({ ...readGuestNotificationSettings(), ...changes })));
         setGuestStored(updated);
         setDraft(updated);
-        notify({
-          type: "success", message: t("notifications.saved"), topicKey: "notification-settings",
-          source: { area: "settings", href: settingsHref, label: t("notifications.title") },
-        });
         return;
       }
-      const updated = await api.updateAppSettings({ ui_preferences: { notifications: changes } });
+      const updated = await trackSave(api.updateAppSettings({ ui_preferences: { notifications: changes } }));
       setAppSettings(updated);
-      notify({
-        type: "success", message: t("notifications.saved"), topicKey: "notification-settings",
-        source: { area: "settings", href: settingsHref, label: t("notifications.title") },
-      });
     } catch {
-      notify({
-        type: "error", message: t("notifications.saveFailed"), topicKey: "notification-settings",
-        source: { area: "settings", href: settingsHref, label: t("notifications.title") },
-      });
+      // The autosave session emits a safe immediate failure; retain the draft.
     }
     finally { setSaving(false); }
   });
+
+  const flush = useRef(() => {});
+  flush.current = () => {
+    if (dirty && !saving && lastAutosaveAttemptRef.current !== draftKey) {
+      lastAutosaveAttemptRef.current = draftKey;
+      void save(draftKey);
+    }
+  };
+  useEffect(() => () => flush.current(), []);
 
   useEffect(() => {
     if (!editable || !appSettingsLoaded || !dirty || saving || lastAutosaveAttemptRef.current === draftKey) return;

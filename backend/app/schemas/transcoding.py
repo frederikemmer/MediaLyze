@@ -234,6 +234,7 @@ class TranscodePresetDefinition(BaseModel):
     subtitle_rules: list[TranscodePresetStreamRule] = Field(default_factory=list, max_length=128)
     external_subtitle_rules: list[TranscodePresetStreamRule] = Field(default_factory=list, max_length=128)
     default_video_action: Literal["copy", "convert", "remove"] = "copy"
+    copy_dolby_vision_video: bool = False
     default_audio_action: Literal["copy", "convert", "remove"] = "copy"
     default_subtitle_action: Literal["copy", "convert", "remove"] = "copy"
     default_external_subtitle_action: Literal["copy", "convert", "remove"] = "remove"
@@ -356,7 +357,7 @@ class TranscodeConditionGroup(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     type: Literal["group"] = "group"
-    operator: Literal["and", "or"] = "and"
+    operator: Literal["and", "or", "xor"] = "and"
     children: list[Annotated[Union[TranscodeCondition, "TranscodeConditionGroup"], Field(discriminator="type")]] = Field(
         min_length=1,
         max_length=128,
@@ -393,6 +394,7 @@ class TranscodeRuleCreate(BaseModel):
     profile_id: int = Field(ge=1)
     output_mode: Literal["transcode_output", "same_directory", "replace_original"] = "transcode_output"
     output_subfolder: str = Field(default="", max_length=512)
+    prevent_output_growth: bool = True
 
     @model_validator(mode="before")
     @classmethod
@@ -416,6 +418,7 @@ class TranscodeRuleUpdate(BaseModel):
     profile_id: int | None = Field(default=None, ge=1)
     output_mode: Literal["transcode_output", "same_directory", "replace_original"] | None = None
     output_subfolder: str | None = Field(default=None, max_length=512)
+    prevent_output_growth: bool = False
 
     @model_validator(mode="before")
     @classmethod
@@ -443,6 +446,7 @@ class TranscodeRuleRead(BaseModel):
     profile_version: int
     output_mode: str
     output_subfolder: str
+    prevent_output_growth: bool = False
     replacement_approved: bool = False
     created_at: datetime
     updated_at: datetime
@@ -456,6 +460,41 @@ class TranscodeReplacementApproval(BaseModel):
     confirm: bool = True
 
 
+class TranscodeRuleTestAsset(BaseModel):
+    id: int
+    filename: str
+    title: str | None
+    library_id: int
+
+
+class TranscodeRuleTestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    file_id: int = Field(ge=1)
+    rule_id: int | None = Field(default=None, ge=1)
+    library_ids: list[int] = Field(min_length=1, max_length=256)
+    conditions: TranscodeConditionGroup | None = None
+    profile_id: int = Field(ge=1)
+    output_mode: Literal["transcode_output", "same_directory", "replace_original"]
+    output_subfolder: str = Field(default="", max_length=512)
+    prevent_output_growth: bool = False
+
+
+class TranscodeRuleTestTrace(BaseModel):
+    matched: bool
+    values: list[str | int | float | bool] = Field(default_factory=list)
+    children: list["TranscodeRuleTestTrace"] = Field(default_factory=list)
+
+
+class TranscodeRuleTestRead(BaseModel):
+    in_scope: bool
+    trace: TranscodeRuleTestTrace
+    status: Literal["matched", "unmatched", "blocked", "skipped"]
+    reason: str | None = None
+    output_path: str | None = None
+    output_relative_path: str | None = None
+
+
 class TranscodeAutomationScope(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -463,6 +502,7 @@ class TranscodeAutomationScope(BaseModel):
     library_ids: list[int] = Field(default_factory=list, max_length=256)
     source_file_ids: list[int] = Field(default_factory=list, max_length=100000)
     retry_failed: bool = False
+    preview_all: bool = False
     limit: int = Field(default=5000, ge=1, le=100000)
 
 
@@ -485,6 +525,7 @@ class TranscodeAutomationDecisionRead(BaseModel):
 
 
 class TranscodeAutomationPreviewRead(BaseModel):
+    run_id: int | None = None
     generated_at: datetime
     total_files: int = 0
     matched: int = 0

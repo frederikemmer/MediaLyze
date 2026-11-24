@@ -1,3 +1,4 @@
+import { useOptionalNotifications } from "../lib/notifications";
 import { useAuth, hasLibraryPermission } from "../lib/auth";
 import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
@@ -384,6 +385,7 @@ function ConnectorSyncJobCard({
 export function AppShell() {
   const auth = useAuth();
   const { t } = useTranslation();
+  const notifications = useOptionalNotifications();
   const navigate = useNavigate();
   const location = useLocation();
   const { activeJobs, hasActiveJobs, stopLibrary } = useScanJobs();
@@ -399,11 +401,9 @@ export function AppShell() {
   );
   const [expandedReleaseVersion, setExpandedReleaseVersion] = useState(currentReleaseVersion);
   const [stoppingScans, setStoppingScans] = useState(false);
-  const [scanCancelError, setScanCancelError] = useState<string | null>(null);
   const isPageVisible = usePageVisibility();
   const [activeConnectorJobs, setActiveConnectorJobs] = useState<ActiveConnectorJob[]>([]);
   const [stoppingConnectorJobs, setStoppingConnectorJobs] = useState<Set<number>>(() => new Set());
-  const [connectorCancelError, setConnectorCancelError] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [pendingTelemetryMode, setPendingTelemetryMode] = useState<TelemetryMode | null>(null);
   const [telemetryError, setTelemetryError] = useState<string | null>(null);
@@ -677,7 +677,6 @@ export function AppShell() {
 
   useEffect(() => {
     if (hadActiveJobsRef.current && !hasActiveJobs) {
-      setScanCancelError(null);
       void Promise.all([loadLibraries(true), loadDashboard(true)])
         .then(() => setSyncError(null))
         .catch((reason: Error) => {
@@ -881,16 +880,6 @@ export function AppShell() {
         </div>
         {activeJobs.length > 0 || activeConnectorJobs.length > 0 ? (
           <div className="scan-banner">
-            {scanCancelError ? (
-              <div className="scan-banner-error" role="alert">
-                {scanCancelError}
-              </div>
-            ) : null}
-            {connectorCancelError ? (
-              <div className="scan-banner-error" role="alert">
-                {connectorCancelError}
-              </div>
-            ) : null}
             <div className="scan-banner-list">
               {activeJobs.map((job) => (
                 <ScanJobCard
@@ -900,11 +889,11 @@ export function AppShell() {
                   canStop={!auth.identity || auth.has("library.scan", job.library_id)}
                   onStop={async () => {
                     setStoppingScans(true);
-                    setScanCancelError(null);
                     try {
                       await stopLibrary(job.library_id);
+                      notifications?.notify({ type: "info", message: t("notifications.actions.rest.scanCancelRequested", { defaultValue: "Scan cancellation requested." }), topicKey: `scan-job:${job.id}`, source: auth.has("library.read", job.library_id) ? { area: "library", href: `/libraries/${job.library_id}`, label: job.library_name ?? t("scanBanner.libraryFallback", { id: job.library_id }) } : { area: "settings", href: "/settings?section=accounts&account=me", label: t("access.myAccount") } });
                     } catch {
-                      setScanCancelError(t("scanBanner.cancelFailed"));
+                      notifications?.notify({ type: "error", message: t("scanBanner.cancelFailed"), topicKey: `scan-job:${job.id}`, source: auth.has("library.read", job.library_id) ? { area: "library", href: `/libraries/${job.library_id}`, label: job.library_name ?? t("scanBanner.libraryFallback", { id: job.library_id }) } : { area: "settings", href: "/settings?section=accounts&account=me", label: t("access.myAccount") } });
                     } finally {
                       setStoppingScans(false);
                     }
@@ -918,12 +907,12 @@ export function AppShell() {
                   stopping={stoppingConnectorJobs.has(activeJob.job.id)}
                   onStop={async () => {
                     setStoppingConnectorJobs((current) => new Set(current).add(activeJob.job.id));
-                    setConnectorCancelError(null);
                     try {
                       await api.cancelConnectorSync(activeJob.connection.id, activeJob.job.id);
+                      notifications?.notify({ type: "info", message: t("notifications.actions.rest.connectorCancelRequested", { defaultValue: "Sync cancellation requested." }), topicKey: `connector:${activeJob.connection.id}`, source: { area: "connectors", href: `/settings?section=jellyfin#connector-${activeJob.connection.id}`, label: activeJob.connection.name } });
                       setActiveConnectorJobs((current) => current.filter((entry) => entry.job.id !== activeJob.job.id));
                     } catch {
-                      setConnectorCancelError(t("connectors.syncBanner.cancelFailed"));
+                      notifications?.notify({ type: "error", message: t("connectors.syncBanner.cancelFailed"), topicKey: `connector:${activeJob.connection.id}`, source: { area: "connectors", href: `/settings?section=jellyfin#connector-${activeJob.connection.id}`, label: activeJob.connection.name } });
                     } finally {
                       setStoppingConnectorJobs((current) => {
                         const next = new Set(current);

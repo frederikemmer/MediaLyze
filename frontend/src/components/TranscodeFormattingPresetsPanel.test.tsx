@@ -1,3 +1,4 @@
+vi.mock("../lib/notifications", () => ({ useNotifications: () => ({ notify: vi.fn() }), useOptionalNotifications: () => ({ notify: vi.fn() }) }));
 import "../i18n";
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -63,6 +64,31 @@ describe("TranscodeFormattingPresetsPanel", () => {
       kind: "folder",
       definition: expect.objectContaining({ enabled: true, language_code_format: "iso_639_2" }),
     })));
+  });
+
+  it("duplicates a default preset under an available name and opens the copy for editing", async () => {
+    const source: TranscodeFormattingPreset = {
+      id: 1, kind: "folder", name: "MediaLyze Standard", is_default: true,
+      definition: {
+        enabled: true, template: "{folderName} ({releaseYear})", source_name_explicit: false,
+        metadata_separator: ", ", cleanup_preset: "none", cleanup_regex: null,
+        include_subtitle_languages: false, language_code_format: "iso_639_1",
+      },
+    };
+    vi.spyOn(api, "transcodeFormattingPresets").mockResolvedValue([
+      source, { ...source, id: 2, name: "MediaLyze Standard copy", is_default: false },
+    ]);
+    const create = vi.spyOn(api, "createTranscodeFormattingPreset").mockImplementation(async (input) => (
+      { ...input, id: 3, is_default: false }
+    ));
+
+    render(<TranscodeFormattingPresetsPanel kind="folder" tabs={<span>Foldername Presets</span>} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Duplicate MediaLyze Standard" }));
+
+    expect(await screen.findByRole("textbox", { name: "Preset name" })).toHaveValue("MediaLyze Standard copy 2");
+    expect(create).toHaveBeenCalledWith({ kind: "folder", name: "MediaLyze Standard copy 2", definition: source.definition });
+    expect(screen.getByRole("button", { name: "Remove MediaLyze Standard as default" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Set MediaLyze Standard copy 2 as default" })).toBeInTheDocument();
   });
 
   it("starts a fresh folder draft when switching away from a filename draft", async () => {

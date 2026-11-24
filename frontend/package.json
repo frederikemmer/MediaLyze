@@ -1,6 +1,6 @@
 {
   "name": "medialyze-frontend",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "private": true,
   "license": "AGPL-3.0",
   "type": "module",
@@ -16,7 +16,7 @@
     "@tanstack/react-virtual": "^3.13.21",
     "echarts": "^6.1.0",
     "echarts-for-react": "^3.0.2",
-    "i18next": "^25.0.1",
+    "i18next": "^26.7.2",
     "lucide-react": "^0.577.0",
     "motion": "^12.35.2",
     "react": "^19.2.7",

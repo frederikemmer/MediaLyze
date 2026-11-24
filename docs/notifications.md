@@ -31,9 +31,15 @@ Toasts are local to the tab where their action was triggered and are not broadca
 
 Sync acceptance and cancellation requests are not reported as completed jobs. A successful mutation followed by a failed view refresh produces a refresh warning rather than a false mutation-failure message. Terminal sync results are sent once for accepted manual requests and link to the connection.
 
-History reconstruction start failures and terminal results use notifications from both the Logs retention action and the library-detail action. History-retention value save failures also use notifications. The live progress summary stays beside its action; completed/canceled/failed summaries are not repeated inline.
+History reconstruction start failures and terminal results use notifications from the Logs retention action. History-retention value save failures also use notifications. The live progress summary stays beside its action; completed/canceled/failed summaries are not repeated inline.
 
 One-time terminal results are tracked for scan, transcode, accepted connector/Jellyfin sync, and history-reconstruction job IDs explicitly returned to the current UI session. The provider watcher survives internal route changes, polls while the page is visible, and emits one localized terminal result with a target link. Scheduled/watch jobs and sync side effects of another action are not registered. Guest scan and history-reconstruction tracking is suppressed because shared Guest job provenance cannot establish which Guest session started a returned job.
+
+Account, library/settings, connector mapping, compatibility/transcoding profile, export and clipboard actions use localized notifications for transient results. Input validation, loading failures, live progress and necessary technical diagnoses remain inline. Hidden Federation and the unimported legacy Jellyfin editor are outside this integration.
+
+Automatic preference changes report errors immediately and emit one combined summary when leaving a page/settings section, after pending persistence settles. Account and Desktop display/layout writes use the atomic partial `PATCH /api/me/preferences` API; they do not resend Notification settings. Guest writes are confirmed from local storage. Profile username/email autosaves keep the current account editor; password changes use its separate confirmation dialog. A confirmed password change returns to sign-in with a one-time safe acknowledgement, including a warning if session refresh fails.
+
+Historical implementation and test evidence: [October action matrix](prototyping/notifications/action-coverage-2026-10-27.md) and [browser report](prototyping/notifications/browser-validation-2026-10-27.md). Those describe the pre-integration checkout and do not certify the current branch.
 
 ## Personal notification history
 

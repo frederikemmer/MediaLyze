@@ -1,3 +1,5 @@
+import { SettingsInlineLabelInput } from "../components/SettingsInlineLabelInput";
+import { SettingsInlineLabelSelect } from "../components/SettingsInlineLabelSelect";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
   Activity,
@@ -19,6 +21,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router";
+import { useNotifications } from "../lib/notifications";
 import { trackExplicitJobStart } from "../lib/notification-job-tracking";
 
 import { getIdlePollInterval, usePageVisibility } from "../lib/page-visibility";
@@ -676,6 +679,7 @@ function HardwareLoadStrip({
 
 export function TranscodingPage() {
   const { t } = useTranslation();
+  const notifications = useNotifications();
   const [searchParams] = useSearchParams();
   const requestedJobId = Number(searchParams.get("job"));
   const { appSettings, libraries } = useAppData();
@@ -695,7 +699,6 @@ export function TranscodingPage() {
   const [retryingIds, setRetryingIds] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [capabilitiesError, setCapabilitiesError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [columnWidthOverrides, setColumnWidthOverrides] = useState<TranscodingColumnWidths>(() => getTranscodingColumnWidths());
   const [, setSpeedRevision] = useState(0);
   const speedHistoryRef = useRef<Map<number, number[]>>(new Map());
@@ -742,10 +745,12 @@ export function TranscodingPage() {
       }
     } catch (reason) {
       failures.push(reason instanceof Error ? reason.message : String(reason));
+      if (forceHistory) return false;
     } finally {
       setError(failures.length > 0 ? failures.join(" · ") : null);
       refreshInFlightRef.current = false;
     }
+    return true;
   }, []);
 
   useEffect(() => {
@@ -901,17 +906,21 @@ export function TranscodingPage() {
     };
   }, []);
 
+  function feedback(type: "success" | "info" | "warning" | "error", key: string, fallback: string, jobId: number) {
+    notifications.notify({ type, message: t(`notifications.actions.transcoding.${key}`, { defaultValue: fallback }), topicKey: `transcode:${jobId}`, source: { area: "transcoding", href: "/transcoding", label: t("notifications.actions.transcoding.openCenter", { defaultValue: "Open transcoding" }) } });
+  }
+
   async function deleteJob(job: TranscodeJob) {
     if (!window.confirm(t("transcoding.center.deleteJobConfirm", { filename: basename(job.source_path_snapshot) }))) return;
     setDeletingIds((current) => new Set(current).add(job.id));
-    setNotice(null);
     try {
       await api.deleteTranscodeJob(job.id);
+      feedback("success", "deleted", "The job was removed from history.", job.id);
       setHistoryJobs((current) => current.filter((item) => item.id !== job.id));
       setExpandedJobId((current) => current === job.id ? null : current);
-      await refreshJobs(true);
-    } catch (reason) {
-      setNotice(reason instanceof Error ? reason.message : String(reason));
+      if (await refreshJobs(true) === false) feedback("warning", "refreshFailed", "The action succeeded, but the job list could not be refreshed.", job.id);
+    } catch {
+      feedback("error", "actionFailed", "The transcoding action failed.", job.id);
     } finally {
       setDeletingIds((current) => { const next = new Set(current); next.delete(job.id); return next; });
     }
@@ -919,12 +928,12 @@ export function TranscodingPage() {
 
   async function cancelJob(job: TranscodeJob) {
     setCancelingIds((current) => new Set(current).add(job.id));
-    setNotice(null);
     try {
       await api.cancelTranscodeJob(job.id);
-      await refreshJobs(true);
-    } catch (reason) {
-      setNotice(reason instanceof Error ? reason.message : String(reason));
+      feedback("info", "cancelRequested", "Cancellation was requested.", job.id);
+      if (await refreshJobs(true) === false) feedback("warning", "refreshFailed", "The action succeeded, but the job list could not be refreshed.", job.id);
+    } catch {
+      feedback("error", "actionFailed", "The transcoding action failed.", job.id);
     } finally {
       setCancelingIds((current) => {
         const next = new Set(current);
@@ -937,14 +946,13 @@ export function TranscodingPage() {
   async function retryJob(job: TranscodeJob) {
     if (!job.source_file_id) return;
     setRetryingIds((current) => new Set(current).add(job.id));
-    setNotice(null);
     try {
       const started = await api.startFileTranscode(job.source_file_id, job.plan);
       trackExplicitJobStart({ kind: "transcode", job: started });
-      setNotice(t("transcoding.center.retryStarted"));
-      await refreshJobs(true);
-    } catch (reason) {
-      setNotice(reason instanceof Error ? reason.message : String(reason));
+      feedback("info", "retryAccepted", "The retry was accepted.", job.id);
+      if (await refreshJobs(true) === false) feedback("warning", "refreshFailed", "The action succeeded, but the job list could not be refreshed.", job.id);
+    } catch {
+      feedback("error", "actionFailed", "The transcoding action failed.", job.id);
     } finally {
       setRetryingIds((current) => {
         const next = new Set(current);
@@ -979,15 +987,29 @@ export function TranscodingPage() {
         </header>
 
         <div className="transcoding-center-toolbar">
-          <label className="transcoding-search-field">
-            <span className="sr-only">{t("transcoding.center.searchFiles")}</span>
+          <div className={`transcoding-search-field${search ? " has-clear" : ""}`}>
             <Search aria-hidden="true" />
-            <input type="search" value={search} placeholder={t("transcoding.center.searchPlaceholder")} onChange={(event) => setSearch(event.target.value)} />
+            <SettingsInlineLabelInput
+              type="search"
+              label={t("transcoding.center.searchFiles")}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
             {search ? <button type="button" className="transcoding-search-clear" aria-label={t("transcoding.center.clearSearch")} onClick={() => setSearch("")}><X aria-hidden="true" /></button> : null}
-          </label>
-          <label className="transcoding-filter-field"><span>{t("transcoding.center.statusFilter")}</span><select className="settings-choice-input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}><option value="all">{t("common.all")}</option>{(["running", "queued", "completed", "failed", "canceled"] as JobStatus[]).map((status) => <option key={status} value={status}>{statusLabel(status, t)}</option>)}</select></label>
-          <label className="transcoding-filter-field"><span>{t("transcoding.center.targetFilter")}</span><select className="settings-choice-input" value={targetFilter} onChange={(event) => setTargetFilter(event.target.value as TargetFilter)}><option value="all">{t("common.all")}</option>{PRESET_KEYS.map((profile) => <option key={profile} value={profile}>{t(`transcoding.presets.${profile}`)}</option>)}</select></label>
-          <label className="transcoding-filter-field"><span>{t("transcoding.center.hardwareFilter")}</span><select className="settings-choice-input" value={hardwareFilter} onChange={(event) => setHardwareFilter(event.target.value as HardwareFilter)}><option value="all">{t("common.all")}</option><option value="hardware">{t("transcoding.hardware")}</option><option value="cpu">{t("transcoding.cpu")}</option></select></label>
+          </div>
+          <SettingsInlineLabelSelect label={t("transcoding.center.statusFilter")} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
+            <option value="all">{t("common.all")}</option>
+            {(["running", "queued", "completed", "failed", "canceled"] as JobStatus[]).map((status) => <option key={status} value={status}>{statusLabel(status, t)}</option>)}
+          </SettingsInlineLabelSelect>
+          <SettingsInlineLabelSelect label={t("transcoding.center.targetFilter")} value={targetFilter} onChange={(event) => setTargetFilter(event.target.value as TargetFilter)}>
+            <option value="all">{t("common.all")}</option>
+            {PRESET_KEYS.map((profile) => <option key={profile} value={profile}>{t(`transcoding.presets.${profile}`)}</option>)}
+          </SettingsInlineLabelSelect>
+          <SettingsInlineLabelSelect label={t("transcoding.center.hardwareFilter")} value={hardwareFilter} onChange={(event) => setHardwareFilter(event.target.value as HardwareFilter)}>
+            <option value="all">{t("common.all")}</option>
+            <option value="hardware">{t("transcoding.hardware")}</option>
+            <option value="cpu">{t("transcoding.cpu")}</option>
+          </SettingsInlineLabelSelect>
           <TooltipTrigger
             ariaLabel={t("transcoding.center.resetFilters")}
             content={t("transcoding.center.resetFilters")}
@@ -1000,7 +1022,6 @@ export function TranscodingPage() {
         </div>
 
         {error ? <div className="alert" role="alert">{error}</div> : null}
-        {notice ? <div className="alert success" role="status">{notice}</div> : null}
         <div className="transcoding-table-scroll">
           <table className="transcoding-job-table">
             <colgroup>

@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MediaLyze · Regeleditor</title>
+<link rel="stylesheet" href="../../frontend/globals.css">
+<link rel="stylesheet" href="../../frontend/src/medialyze.css">
+<style>
+html,body{height:auto;min-height:0;background:transparent}
+html::before{display:none}
+body{padding:0}
+.prototype-content{display:grid;gap:12px}
+.prototype-content section{display:grid;gap:8px}
+.prototype-content h3,.prototype-content p{margin:0}
+.rule-test{margin-block-start:6px}
+.rule-test-picker{display:flex;align-items:flex-start;flex-wrap:wrap;gap:6px 12px}
+.rule-test-picker > h3{padding-block-start:8px}
+.prototype-rule-list.compatibility-profile-list{overflow:visible}
+.rule-test-search{position:relative;flex:1 1 15rem;min-width:0}
+.rule-test-options.compatibility-profile-list{
+  position:absolute;z-index:5;inset-block-start:100%;inset-inline:0;
+  list-style:none;margin:4px 0 0;padding:0;
+  background:linear-gradient(var(--panel-strong),var(--panel-strong)),var(--bg);
+  box-shadow:var(--shadow);
+}
+.rule-test-options .compatibility-profile-list-trigger{width:100%;padding:4px 8px;overflow-wrap:anywhere}
+.rule-test-options .field-hint{padding:6px 8px}
+.rule-test-result{display:grid;gap:6px;overflow-wrap:anywhere}
+.rule-test [hidden]{display:none}
+.rule-test-result .rule-layers{gap:4px}
+.rule-test-result .rule-layers > .rule-layer::before{inset-block-start:10px}
+.rule-test-line{display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;min-width:0}
+.rule-test-line .jellyfin-status-badge{max-width:100%}
+.rule-test-line .test-field-or-value{background:color-mix(in srgb,var(--accent-3) 16%,var(--panel));color:var(--ink)}
+.rule-test-line{padding:3px 6px;border-radius:5px}
+.rule-test-group{display:grid;gap:4px;padding:4px 6px;border-radius:7px;box-shadow:inset 0 0 0 1px var(--border)}
+/* Resolve each tint against a fresh panel surface instead of the parent tint. */
+.rule-test-result :is(.is-match,.is-miss,.is-unknown){
+  background:linear-gradient(var(--test-tint),var(--test-tint)),linear-gradient(var(--panel-strong),var(--panel-strong)),var(--bg);
+}
+.rule-test-result .is-match{--test-tint:rgba(115,153,108,.12)}
+.rule-test-result .is-miss{--test-tint:rgba(207,83,69,.11)}
+.rule-test-result .is-unknown{--test-tint:transparent}
+.rule-test-group > .rule-test-line{padding-inline:0}
+.rule-test-success{color:#2f6f28}
+html[data-theme="dark"] .rule-test-success{color:#9fd18f}
+.rule-test-line .field-hint{font-size:.76rem}
+.rule-header > .toggle-switch{margin-inline:12px 4px}
+.rule-scope{padding-block-end:12px}
+.rule-libraries{min-width:0;margin:8px 0 0;padding:0;border:0}
+.rule-libraries legend{padding:0;margin-block-end:6px;font-size:.82rem;font-weight:700;color:var(--muted)}
+.rule-libraries .checks{display:flex;flex-wrap:wrap;gap:8px 20px}
+.prototype-content .transcode-condition-row>.field{min-width:7rem;flex-basis:7rem}
+.rule-layers{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.rule-layer{min-width:0}
+.rule-layer .rule-layers{margin-inline-start:4px;padding-inline-start:clamp(8px,2vw,18px);border-inline-start:2px solid var(--border)}
+.rule-layer .rule-layers > .rule-layer{position:relative}
+.rule-layer .rule-layers > .rule-layer::before{content:"";position:absolute;inset-inline-end:100%;inset-block-start:17px;width:clamp(8px,2vw,18px);border-block-start:2px solid var(--border)}
+.rule-layer .transcode-condition-group.is-nested{border-style:solid}
+.rule-layer .transcode-condition-row > .field{min-width:min(100%,7rem)}
+.rule-group-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.rule-group-header > .settings-inline-label-select{width:min(100%,26rem)}
+.prototype-content .transcode-condition-row > .settings-inline-label-select{flex:1 1 12rem;min-width:min(100%,12rem)}
+.prototype-content .settings-inline-label-select > select{text-overflow:ellipsis}
+.prototype-content .transcode-condition-row > .rule-operator-select{flex:0 0 3.5rem;min-width:0;width:3.5rem;padding-inline:9px 26px;background-position:right 6px center}
+.prototype-content .rule-remove.secondary.icon-only-button{flex:0 0 38px;width:38px;height:38px;min-height:38px;padding:0;border:0;background:transparent;color:var(--muted);box-shadow:none}
+.prototype-content .rule-remove.secondary.icon-only-button:hover{background:var(--surface-subtle);color:var(--ink);transform:none}
+.rule-text-field{position:relative;min-width:0}
+.rule-text-field > .settings-choice-input{width:100%;padding-inline-end:6rem}
+.prototype-content .transcode-condition-row > .rule-text-field{flex:1 1 12rem;min-width:min(100%,12rem)}
+#rule-panel[hidden],.prototype-status:empty{display:none}
+@media(max-width:480px){.prototype-content .compatibility-profile-form-grid{grid-template-columns:1fr}}
+</style>
+<div class="app-settings-section transcode-automation-section transcode-federation-panel">
+<div class="compatibility-profile-panel transcode-automation-content">
+  <div class="transcode-federation-heading"><strong>Transcoding-Regeln</strong></div>
+  <div class="compatibility-profile-list prototype-rule-list">
+    <article class="compatibility-profile-list-item is-expanded">
+      <div class="compatibility-profile-list-row rule-header">
+        <label class="toggle-switch">
+          <input type="checkbox" role="switch" id="rule-enabled" aria-label="Regel aktivieren">
+          <span class="toggle-switch-track" aria-hidden="true"><span class="toggle-switch-thumb"></span></span>
+        </label>
+        <button class="compatibility-profile-list-trigger" type="button" aria-expanded="true" aria-controls="rule-panel">
+          <span class="transcode-automation-list-copy"><strong id="title"></strong></span>
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+      </div>
+      <div id="rule-panel" class="compatibility-profile-details transcode-automation-details transcode-automation-editor">
+        <div id="editor" class="prototype-content"></div>
+        <p id="feedback" class="field-hint prototype-status" role="status"></p>
+      </div>
+    </article>
+  </div>
+</div>
+</div>
+<script>
+const equals=['ist','ist nicht'];
+const number=['größer als','kleiner als','mindestens','höchstens','ist'];
+const text=['enthält','enthält nicht','beginnt mit','endet mit'];
+const operatorSymbols={
+  'ist':'=','ist nicht':'≠','größer als':'>','kleiner als':'<','mindestens':'≥','höchstens':'≤',
+  'enthält':'∋','enthält nicht':'∌','beginnt mit':'^','endet mit':'$',
+};
+const fields = {
+  codec:['Videocodec',equals,['H.264','HEVC','AV1','VP9','MPEG-2']],
+  resolution:['Auflösung',equals,'1920x1080'],
+  hdr:['Dynamikbereich',equals,['SDR','HDR10','HDR10+','Dolby Vision','HLG']],
+  container:['Container',equals,['MKV','MP4','MOV','AVI','WebM','TS']],
+  size:['Dateigröße',number,'10 GB'],
+  duration:['Laufzeit',number,'90 min'],
+  bitrate:['Bitrate',number,'8 Mb/s'],
+  quality:['Qualitätswert',number,'75'],
+  path:['Dateipfad',text,'Extras/'],
+  audio:['Audiosprache',text.slice(0,2),['Deutsch','Englisch','Spanisch','Ukrainisch','Französisch','Japanisch']],
+  audioCodec:['Audiocodec',text.slice(0,2),['AAC','AC-3','E-AC-3','DTS','TrueHD','FLAC','Opus']],
+  spatial:['Raumklang',text.slice(0,2),['Dolby Atmos','DTS:X']],
+  channels:['Audiokanäle',number,'6'],
+  audioBitrate:['Audio-Bitrate',number,'640 kb/s'],
+  bitDepth:['Audio-Bittiefe',number,'24'],
+  sampleRate:['Audio-Abtastrate',number,'48000'],
+  bitrateMode:['Audio-Bitratenmodus',equals,['CBR','VBR']],
+  subtitle:['Untertitelsprache',text.slice(0,2),['Deutsch','Englisch','Spanisch','Ukrainisch','Französisch','Japanisch']],
+  subtitleCodec:['Untertitelcodec',text.slice(0,2),['SRT','ASS','WebVTT','PGS','VobSub']],
+  subtitleSource:['Untertitelquelle',text.slice(0,2),['Intern','Extern']],
+  chapters:['Kapitelanzahl',number,'5'],
+  chapterTitle:['Kapiteltitel',text,'Intro'],
+  embeddedCover:['Eingebettetes Cover',equals,['Vorhanden','Fehlt']],
+  audioTitle:['Audiotitel',text,'Titel'],
+  artist:['Interpret',text,'Name'],
+  album:['Album',text,'Albumname'],
+  albumArtist:['Albuminterpret',text,'Name'],
+  genre:['Genre',text,'Genre'],
+  date:['Veröffentlichungsdatum',text,'2025'],
+  disc:['Disc-Nummer',equals,'1'],
+  composer:['Komponist',text,'Name'],
+  track:['Titelnummer',equals,'1'],
+};
+const modes={und:'Alle treffen zu (UND)',oder:'Mindestens eine trifft zu (ODER)',xor:'Genau eine trifft zu (XOR)'};
+const libraries=['Filme','Serien','Testbibliothek'];
+const sampleFilm={
+  library:'Filme',codec:'H.264',container:'MKV',resolution:'1920x1080',hdr:'SDR',size:'14 GB',
+  duration:'112 min',bitrate:'16 Mb/s',quality:'78',audio:['Deutsch'],audioCodec:['AC-3'],
+  channels:'6',audioBitrate:'640 kb/s',sampleRate:'48000',subtitle:['Deutsch'],subtitleCodec:['SRT'],
+  subtitleSource:['Intern'],chapters:'5',chapterTitle:'Intro',embeddedCover:'Fehlt',
+};
+const testAssets=[
+  {title:'Bergfilm',name:'Bergfilm.mkv',...sampleFilm},
+  {title:'Bergfilm – zweisprachig',name:'Bergfilm – zweisprachig.mkv',...sampleFilm,audio:['Deutsch','Englisch']},
+  {title:'Ein kurzer Sommer',name:'Kurzfilm.mp4',...sampleFilm,container:'MP4',size:'2 GB',duration:'14 min'},
+  {title:'Am Gipfel – Pilotfolge',name:'Pilotfolge.mkv',...sampleFilm,library:'Serien'},
+  {title:'Bergfilm – Trailer',name:'Trailer-1080p.mp4',...sampleFilm,container:'MP4',size:'85 MB',duration:'3 min'},
+  {title:'Bergfilm – Bonusmaterial',name:'Making-of.mkv',...sampleFilm,size:'4 GB',library:'Testbibliothek'},
+  {title:'Bergfilm – restaurierte Fassung',name:'Restauriert-2160p.mkv',...sampleFilm,codec:'HEVC',resolution:'3840x2160'},
+  {title:'Bergfilm – Interview',name:'Interview.mp4',...sampleFilm,container:'MP4',size:'680 MB'},
+];
+let selectedAsset=testAssets[0];
+let testQuery=selectedAsset.title;
+let searchingAssets=false;
+const state={name:'Große H.264-Filme umwandeln',libraries:['Filme'],preset:'HEVC · Qualität erhalten',mode:'Separater Ausgabeordner',folder:'Optimiert',rule:{
+  logic:'und',rows:[{field:'codec',op:'ist',value:'H.264'},{field:'size',op:'größer als',value:'10 GB'}],groups:[
+    {logic:'xor',rows:[{field:'audio',op:'enthält',value:'Deutsch'},{field:'audio',op:'enthält',value:'Englisch'}],groups:[]}
+  ]
+}};
+const editor=document.querySelector('#editor'), feedback=document.querySelector('#feedback');
+const esc=(v)=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+const options=(values,selected)=>values.map(v=>'<option'+(v===selected?' selected':'')+'>'+esc(v)+'</option>').join('');
+const button=(label,action,cls='secondary small settings-panel-header-action')=>'<button type="button" class="'+cls+'" data-action="'+action+'">'+label+'</button>';
+const closeIcon='<svg class="nav-icon" aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m18 6-12 12M6 6l12 12"/></svg>';
+const first=()=>({field:'codec',op:'ist',value:'H.264'});
+function inlineInput(label, attributes, value, placeholder=''){
+  return '<div class="rule-text-field"><input class="settings-choice-input" type="text" aria-label="'+esc(label)+'" '+attributes+
+    ' value="'+esc(value)+'" placeholder="'+esc(placeholder)+'"><span class="settings-inline-label-field-label" aria-hidden="true">'+esc(label)+'</span></div>';
+}
+function inlineSelect(label, attributes, choices, ariaLabel=label){
+  return '<span class="settings-inline-label-select"><select class="settings-choice-input" aria-label="'+esc(ariaLabel)+'" '+attributes+'>'+choices+'</select><span class="settings-inline-label-select-label" aria-hidden="true">'+esc(label)+'</span></span>';
+}
+function operatorSelect(operators, selected, attributes){
+  const choices=operators.map(op=>'<option value="'+esc(op)+'" title="'+esc(op)+'" aria-label="'+esc(op)+'"'+
+    (op===selected?' selected':'')+'>'+esc(operatorSymbols[op])+'</option>').join('');
+  return '<select class="settings-choice-input rule-operator-select" aria-label="Vergleich" title="'+esc(selected)+'" '+attributes+'>'+choices+'</select>';
+}
+const rowMarkup=(r,key)=>{
+  const [label,ops,values]=fields[r.field];
+  const attributes='data-row="'+key+'" data-key=';
+  const fieldOptions=Object.entries(fields).map(([id,[name]])=>'<option value="'+id+'"'+(r.field===id?' selected':'')+'>'+name+'</option>').join('');
+  const value=Array.isArray(values)
+    ? inlineSelect('Wert',attributes+'"value"',options(values,r.value))
+    : inlineInput('Wert',attributes+'"value"',r.value,values);
+  return '<div class="transcode-condition-row">'+inlineSelect('Merkmal',attributes+'"field"',fieldOptions)+
+    operatorSelect(ops,r.op,attributes+'"op"')+value+
+    '<button type="button" class="secondary icon-only-button rule-remove" data-action="remove:'+key+'" aria-label="Bedingung '+esc(label)+' entfernen">'+closeIcon+'</button></div>';
+};
+function getGroup(path){
+  return path.split('.').slice(1).reduce((group,index)=>group.groups[Number(index)],state.rule);
+}
+function ruleRows(group){
+  return group.rows.concat(group.groups.flatMap(ruleRows));
+}
+function emptyGroup(group){
+  return group.groups.some(child=>(!child.rows.length&&!child.groups.length)||emptyGroup(child));
+}
+function renderGroup(group,path='root'){
+  const nested=path!=='root';
+  const rows=group.rows.map((r,i)=>'<li class="rule-layer">'+rowMarkup(r,path+':'+i)+'</li>').join('');
+  const groups=group.groups.map((child,i)=>'<li class="rule-layer">'+renderGroup(child,path+'.'+i)+'</li>').join('');
+  const logicOptions=Object.entries(modes).map(([id,label])=>'<option value="'+id+'"'+(id===group.logic?' selected':'')+'>'+label+'</option>').join('');
+  const select=inlineSelect('Logik','data-logic="'+path+'"',logicOptions,nested?'Logik der Untergruppe':'Logik der Bedingungen');
+  const header=nested
+    ? '<div class="rule-group-header">'+select+'<button type="button" class="secondary icon-only-button rule-remove" data-action="remove-group:'+path+'" aria-label="Untergruppe entfernen" title="Untergruppe entfernen"> '+closeIcon+'</button></div>'
+    : '<div class="rule-group-header">'+select+'</div>';
+  return '<div class="transcode-condition-group rule-layer'+(nested?' is-nested':'')+'">'+header+
+    '<ul class="rule-layers">'+rows+groups+'</ul>'+
+    (!rows&&!groups?'<p class="field-hint">'+(nested?'Füge mindestens eine Bedingung hinzu.':'Ohne Bedingungen gilt die Regel für alle geeigneten Videos in den gewählten Bibliotheken.')+'</p>':'')+
+    '<div class="transcode-actions">'+button('+ Bedingung','add:'+path)+(path.split('.').length<4?button('+ Untergruppe','group:'+path):'')+'</div></div>';
+}
+const unitsByField={
+  size:{'':1,b:1,kb:1e3,mb:1e6,gb:1e9,tb:1e12,kib:1024,mib:1024**2,gib:1024**3,tib:1024**4},
+  duration:{'':1,s:1,min:60,h:3600},
+  bitrate:{'':1,'b/s':1,'kb/s':1e3,'mb/s':1e6,'gb/s':1e9},
+};
+unitsByField.audioBitrate=unitsByField.bitrate;
+function parseAmount(field,value){
+  const parts=value.trim().match(/^(\d+(?:[.,]\d+)?)\s*([a-z/]*?)$/i);
+  if(!parts)return NaN;
+  const units=unitsByField[field]??{'':1};
+  return Number(parts[1].replace(',','.'))*(units[parts[2].toLowerCase()]??NaN);
+}
+function checkCondition(rule,asset){
+  const actual=rule.field==='path'?asset.name:asset[rule.field];
+  const expected=rule.value.trim().toLowerCase();
+  if(!expected||(fields[rule.field][1]===number&&!Number.isFinite(parseAmount(rule.field,expected))))return {actual,valid:false,matches:false};
+  if(actual==null)return {actual,valid:true,matches:false};
+  const values=(Array.isArray(actual)?actual:[actual]).map(value=>value.toLowerCase());
+  const comparisons={
+    'ist':value=>fields[rule.field][1]===number?parseAmount(rule.field,value)===parseAmount(rule.field,expected):value===expected,
+    'ist nicht':value=>value!==expected,
+    'enthält':value=>value.includes(expected),
+    'enthält nicht':value=>!value.includes(expected),
+    'beginnt mit':value=>value.startsWith(expected),
+    'endet mit':value=>value.endsWith(expected),
+    'größer als':value=>parseAmount(rule.field,value)>parseAmount(rule.field,expected),
+    'kleiner als':value=>parseAmount(rule.field,value)<parseAmount(rule.field,expected),
+    'mindestens':value=>parseAmount(rule.field,value)>=parseAmount(rule.field,expected),
+    'höchstens':value=>parseAmount(rule.field,value)<=parseAmount(rule.field,expected),
+  };
+  const compare=comparisons[rule.op];
+  const negative=rule.op==='ist nicht'||rule.op==='enthält nicht';
+  return {actual,valid:true,matches:negative?values.every(compare):values.some(compare)};
+}
+function testPill(text,style){
+  return '<span class="jellyfin-status-badge '+style+'">'+esc(text)+'</span>';
+}
+function testOperatorPill(op){
+  return '<span class="jellyfin-status-badge" title="'+esc(op)+'"><span aria-hidden="true">'+esc(operatorSymbols[op])+
+    '</span><span class="sr-only">'+esc(op)+'</span></span>';
+}
+function testTone({valid,matches}){
+  return !valid?'is-unknown':matches?'is-match':'is-miss';
+}
+function testLine(tone,text,content){
+  return '<div class="rule-test-line'+(tone?' '+tone:'')+'">'+content+'<span class="sr-only">'+esc(text)+'</span></div>';
+}
+function testGroup(group,asset,root=false){
+  const conditions=group.rows.map(rule=>{
+    const result=checkCondition(rule,asset);
+    const value=Array.isArray(result.actual)?result.actual.join(', '):result.actual;
+    const outcome=!result.valid?'Wert ungültig':value==null?'Kein Wert in der Beispieldatei':result.matches?'✓ Trifft zu':'× Trifft nicht zu';
+    const line=testPill(fields[rule.field][0],'test-field-or-value')+testOperatorPill(rule.op)+
+      testPill(rule.value.trim()||'…','test-field-or-value')+
+      (value==null||!result.valid?'<span class="field-hint" aria-hidden="true">'+esc(outcome)+'</span>':'<span class="field-hint">Datei: '+esc(value)+'</span>');
+    return {...result,html:'<li class="rule-layer">'+testLine(testTone(result),outcome,line)+'</li>'};
+  });
+  const children=[...conditions,...group.groups.map(child=>testGroup(child,asset))];
+  const valid=(root||children.length>0)&&children.every(child=>child.valid);
+  const hits=children.filter(child=>child.matches).length;
+  const matches=valid&&((root&&!children.length)||(group.logic==='xor'?hits===1:group.logic==='oder'?hits>0:hits===children.length));
+  const title=children.length?modes[group.logic]+' · '+hits+' von '+children.length+' treffen zu':root?'Keine Bedingungen':'Leere Untergruppe';
+  const status=!valid?'Prüfung unvollständig':matches?'✓ Trifft zu':'× Trifft nicht zu';
+  const tone=testTone({valid,matches});
+  return {valid,matches,html:'<li class="rule-layer rule-test-group '+tone+'">'+testLine('',status,'<strong>'+esc(title)+'</strong>')+
+    (children.length?'<ul class="rule-layers">'+children.map(child=>child.html).join('')+'</ul>':'')+'</li>'};
+}
+const searchKey=value=>value.toLocaleLowerCase('de').normalize('NFD').replace(/\p{M}/gu,'');
+function searchTestAssets(query){
+  const phrase=searchKey(query.trim()).replace(/\s+/g,' ');
+  const terms=phrase?phrase.split(' '):[];
+  return testAssets.map(asset=>{
+    const names=[asset.title,asset.name].map(searchKey);
+    if(!terms.every(term=>names.some(name=>name.includes(term))))return {asset,rank:Infinity};
+    const rank=!terms.length?0:names.includes(phrase)?0:names.some(name=>name.startsWith(phrase))?1:names.some(name=>name.includes(phrase))?2:3;
+    return {asset,rank};
+  }).filter(hit=>Number.isFinite(hit.rank)).sort((a,b)=>a.rank-b.rank).slice(0,5).map(hit=>hit.asset);
+}
+function refreshAssetSearch(){
+  const list=editor.querySelector('#rule-test-options');
+  const hits=searchingAssets?searchTestAssets(testQuery):[];
+  list.hidden=!searchingAssets;
+  list.innerHTML=hits.length?hits.map(asset=>'<li class="compatibility-profile-list-item">'+
+    '<button type="button" class="compatibility-profile-list-trigger" data-asset-index="'+testAssets.indexOf(asset)+'">'+
+    '<span class="transcode-automation-list-copy"><strong>'+esc(asset.title)+'</strong><small>'+esc(asset.name)+'</small></span></button></li>').join('')
+    :'<li class="field-hint">Keine passende Datei gefunden.</li>';
+  editor.querySelector('#rule-test-search-status').textContent=searchingAssets?(hits.length?hits.length+' Vorschläge':'Keine passende Datei gefunden.'):'';
+}
+function closeAssetSearch(){
+  testQuery=selectedAsset.title;
+  searchingAssets=false;
+  editor.querySelector('[data-test-search]').value=testQuery;
+  refreshAssetSearch();
+}
+function setTestAsset(asset){
+  selectedAsset=asset;
+  closeAssetSearch();
+  refreshTest();
+  editor.querySelector('[data-test-search]').focus();
+}
+function refreshTest(){
+  const panel=editor.querySelector('#rule-test-result');
+  const asset=selectedAsset;
+  const result=testGroup(state.rule,asset,true);
+  const inLibrary=state.libraries.includes(asset.library);
+  let outcome;
+  let outputPath;
+  if(!inLibrary)outcome='Keine Aktion · Bibliothek „'+asset.library+'“ ist nicht ausgewählt.';
+  else if(!result.valid)outcome='Keine Vorschau · Prüfe die Bedingungen.';
+  else if(!result.matches)outcome='Keine Aktion · Die Bedingungen der Regel sind nicht erfüllt.';
+  else if(state.mode==='Original ersetzen')outcome=state.preset+' · Original ersetzen, sobald die separate Freigabe vorliegt.';
+  else if(state.mode==='Variante neben dem Original')outcome=state.preset+' · Variante neben dem Original erzeugen.';
+  else {
+    outcome=state.preset+' · Ausgabe in';
+    outputPath='Transcode_Output'+(state.folder.trim()?'/'+state.folder.trim():'');
+  }
+  panel.innerHTML='<ul class="rule-layers">'+result.html+'</ul><p><strong class="'+
+    (inLibrary&&result.matches?'rule-test-success':'')+'">'+esc(outcome)+'</strong>'+
+    (outputPath?' '+testPill(outputPath,''):'')+'</p>';
+}
+function refresh(){
+  document.querySelector('#title').textContent=state.name.trim()||'Neue Regel';
+  refreshTest();
+
+}
+function render(focus){
+  const scope='<section class="rule-scope">'+inlineInput('Regelname','data-key="name"',state.name)+
+    '<fieldset class="rule-libraries"><legend>Bibliotheken</legend><div class="checks">'+
+    libraries.map(lib=>'<label class="transcode-filename-option"><input type="checkbox" data-library="'+lib+'"'+(state.libraries.includes(lib)?' checked':'')+'>'+lib+'</label>').join('')+
+    '</div></fieldset></section>';
+  const conditions=renderGroup(state.rule);
+  const output='<div class="compatibility-profile-form-grid">'+
+    inlineSelect('Preset','data-key="preset"',options(['HEVC · Qualität erhalten','AV1 · Kleine Dateien','Nur Container wechseln'],state.preset),'Transcoding-Preset')+
+    inlineSelect('Ausgabe','data-key="mode"',options(['Separater Ausgabeordner','Variante neben dem Original','Original ersetzen'],state.mode))+(state.mode==='Separater Ausgabeordner'?inlineInput('Unterordner','data-key="folder"',state.folder,'Optional'):'')+'</div>'+(state.mode==='Original ersetzen'?'<p class="field-hint">Das Original wird ohne bytegenaue Sicherung ersetzt. Vor dem Aktivieren ist eine separate Freigabe nötig.</p>':'');
+  const test='<section class="rule-test"><div class="rule-test-picker"><h3>Regel testen</h3><div class="rule-test-search">'+
+    inlineInput('Datei suchen','data-test-search autocomplete="off" aria-controls="rule-test-options"',testQuery,'Titel oder Dateiname')+
+    '<ul id="rule-test-options" class="rule-test-options compatibility-profile-list" aria-label="Dateivorschläge" hidden></ul>'+
+    '<span id="rule-test-search-status" class="sr-only" role="status"></span></div></div>'+
+    '<div id="rule-test-result" class="transcode-condition-group rule-test-result" aria-live="polite"></div></section>';
+  editor.innerHTML=scope+'<section><h3>Bedingungen</h3>'+conditions+'</section><section><h3>Aktion</h3>'+output+'</section>'+test+
+    '<div class="transcode-actions">'+button('Speichern','save','transcode-action-button')+'</div>';
+  refresh();
+  refreshAssetSearch();
+  if(focus) document.querySelector(focus)?.focus();
+}
+editor.addEventListener('input',e=>{
+  if(e.target.hasAttribute('data-test-search')){
+    testQuery=e.target.value;
+    searchingAssets=true;
+    refreshAssetSearch();
+    return;
+  }
+  const {key,row,library,logic}=e.target.dataset;
+  if(logic){getGroup(logic).logic=e.target.value;refresh();return}
+  if(library){state.libraries=e.target.checked?[...state.libraries,library]:state.libraries.filter(l=>l!==library);refresh();return}
+  if(!key)return;
+  if(row){
+    const [path,index]=row.split(':');
+    const r=getGroup(path).rows[Number(index)];
+    r[key]=e.target.value;
+    if(key==='op')e.target.title=r.op;
+    if(key==='field'){
+      const [,ops,values]=fields[r.field];r.op=ops[0];r.value=Array.isArray(values)?values[0]:'';
+      render('[data-row="'+row+'"][data-key="field"]');return;
+    }
+  }else state[key]=e.target.value;
+  if(key==='mode')render('[data-key=mode]');else refresh();
+});
+editor.addEventListener('focusout',e=>{
+  if(searchingAssets&&e.target.closest('.rule-test-search')&&e.relatedTarget&&!e.relatedTarget.closest?.('.rule-test-search')){
+    closeAssetSearch();
+  }
+});
+document.addEventListener('pointerdown',e=>{
+  if(searchingAssets&&!e.target.closest('.rule-test-search'))closeAssetSearch();
+});
+editor.addEventListener('keydown',e=>{
+  const input=editor.querySelector('[data-test-search]');
+  if(e.isComposing||!e.target.closest('.rule-test-search'))return;
+  if(e.key==='Escape'&&searchingAssets){e.preventDefault();closeAssetSearch();input.focus();return}
+  const hits=[...editor.querySelectorAll('#rule-test-options:not([hidden]) [data-asset-index]')];
+  if(!hits.length)return;
+  if(e.key==='Enter'&&e.target===input){e.preventDefault();hits[0].click();return}
+  if(e.key!=='ArrowDown'&&e.key!=='ArrowUp')return;
+  const current=hits.indexOf(e.target);
+  const next=e.key==='ArrowDown'?Math.min(current+1,hits.length-1):current-1;
+  if(e.key==='ArrowUp'&&e.target===input)return;
+  e.preventDefault();
+  (hits[next]??input).focus();
+});
+editor.onclick=e=>{
+  const picked=e.target.closest('[data-asset-index]');
+  if(picked){setTestAsset(testAssets[Number(picked.dataset.assetIndex)]);return}
+  const action=e.target.closest('button')?.dataset.action;
+  if(!action)return;
+  feedback.textContent='';
+  let focus;
+  const [command,path,index]=action.split(':');
+  if(command==='add'){
+    const {rows}=getGroup(path);
+    rows.push(first());
+    focus='[data-row="'+path+':'+(rows.length-1)+'"]';
+  }
+  if(command==='group'){
+    const {groups}=getGroup(path);
+    groups.push({logic:'oder',rows:[first()],groups:[]});
+    focus='[data-logic="'+path+'.'+(groups.length-1)+'"]';
+  }
+  if(command==='remove'){
+    getGroup(path).rows.splice(Number(index),1);
+    focus='[data-action="add:'+path+'"]';
+  }
+  if(command==='remove-group'){
+    const separator=path.lastIndexOf('.');
+    const parent=path.slice(0,separator);
+    getGroup(parent).groups.splice(Number(path.slice(separator+1)),1);
+    focus='[data-action="group:'+parent+'"]';
+  }
+  if(action==='save'){
+    const rows=ruleRows(state.rule);
+    feedback.textContent=!state.name.trim()?'Gib der Regel einen Namen.':!state.libraries.length?'Wähle mindestens eine Bibliothek aus.':emptyGroup(state.rule)||rows.some(r=>!r.value.trim()||(r.field==='size'&&!/^\d+(?:[.,]\d+)?\s*(?:B|KB|MB|GB|TB)$/i.test(r.value.trim())))?'Prüfe die Untergruppen und Bedingungswerte. Gib Größen mit Einheit ein, z. B. 10 GB.':(document.querySelector('#rule-enabled').checked?'Als aktiv gespeichert (Prototyp).':'Als deaktiviert gespeichert (Prototyp).');
+    return;
+  }
+  render(focus);
+};
+const ruleToggle=document.querySelector('.compatibility-profile-list-trigger');
+ruleToggle.onclick=()=>{
+  const panel=document.querySelector('#rule-panel');
+  panel.hidden=!panel.hidden;
+  ruleToggle.setAttribute('aria-expanded',String(!panel.hidden));
+  ruleToggle.closest('article').classList.toggle('is-expanded',!panel.hidden);
+};
+render();
+</script>
+</html>
