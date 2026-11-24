@@ -525,6 +525,7 @@ class TranscodeAutomationDecisionRead(BaseModel):
 
 
 class TranscodeAutomationPreviewRead(BaseModel):
+    run_id: int | None = None
     generated_at: datetime
     total_files: int = 0
     matched: int = 0

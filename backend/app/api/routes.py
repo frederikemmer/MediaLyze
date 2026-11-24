@@ -301,6 +301,7 @@ from backend.app.services.transcode_automation import (
     list_transcode_presets,
     list_transcode_rules,
     preview_transcode_automation,
+    record_transcode_automation_preview,
     search_transcode_rule_assets,
     test_transcode_rule_draft,
     reorder_transcode_rules,
@@ -3375,7 +3376,8 @@ def transcoding_automation_preview(
     settings: Settings = Depends(get_app_settings),
 ) -> TranscodeAutomationPreviewRead:
     try:
-        return preview_transcode_automation(db, settings, payload)
+        preview = preview_transcode_automation(db, settings, payload)
+        return record_transcode_automation_preview(db, payload, preview) if payload.preview_all else preview
     except TranscodeAutomationError as exc:
         raise _transcode_automation_error(exc) from exc
 
@@ -3405,6 +3407,7 @@ def transcoding_automation_status(
     if run is None:
         run = db.scalar(
             select(TranscodeAutomationRun)
+            .where(TranscodeAutomationRun.trigger_source != "dry_run")
             .order_by(TranscodeAutomationRun.created_at.desc(), TranscodeAutomationRun.id.desc())
         )
     return serialize_transcode_automation_run(run) if run else None

@@ -1988,6 +1988,8 @@
       "dryRun": "Simular",
       "startAll": "Iniciar todas",
       "startAllConfirm": "¿Evaluar todas las reglas activas y poner en cola los trabajos coincidentes? Las reglas aprobadas pueden reemplazar los originales.",
+      "historyTitle": "Historial de automatización",
+      "historyEmpty": "Todavía no hay ejecuciones de automatización.",
       "previewSample": "Se muestran los primeros {{count}} resultados con una acción o un estado.",
       "inventory": {"queued": "En cola", "running": "En curso", "completed": "Selección terminada", "failed": "Falló", "canceled": "Cancelado"},
       "testRule": "Probar regla",

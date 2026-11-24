@@ -489,6 +489,17 @@ def test_automation_applies_rule_priority_independently_per_library(tmp_path, mo
         assert [item.file_id for item in dry_run.items] == [movie.id]
         assert db.scalar(select(TranscodeAutomationRecord.id)) is None
 
+        logged = automation.record_transcode_automation_preview(
+            db, TranscodeAutomationScope(preview_all=True, limit=1), dry_run
+        )
+        run = automation.get_transcode_automation_run(db, logged.run_id)
+        assert run.trigger_source == "dry_run"
+        assert run.matched == 2
+        assert run.summary["preview_items"][0]["file_id"] == movie.id
+        assert "plan" not in run.summary["preview_items"][0]
+        assert not automation.list_transcode_automation_runs(db)[0].summary
+        assert db.scalar(select(TranscodeAutomationRecord.id)) is None
+
 
 def test_durable_record_skips_same_source_and_rule_version(tmp_path: Path) -> None:
     factory = _session_factory()

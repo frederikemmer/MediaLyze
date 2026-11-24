@@ -2405,6 +2405,8 @@
       "dryRun": "Dry Run",
       "startAll": "Start All",
       "startAllConfirm": "Evaluate all active rules and queue matching transcoding jobs? Approved rules can replace originals.",
+      "historyTitle": "Automation history",
+      "historyEmpty": "No automation runs yet.",
       "previewSample": "Showing the first {{count}} actionable results.",
       "inventory": {"queued": "Queued", "running": "Running", "completed": "Finished selecting files", "failed": "Failed", "canceled": "Canceled"},
       "testRule": "Test rule",

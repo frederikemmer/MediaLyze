@@ -10,7 +10,6 @@ import { formatLanguageName, languageOptions, normalizeLanguageTag, sharedStream
 import {
   api,
   type AppSettings,
-  type TranscodeAutomationPreview,
   type TranscodeAutomationRun,
   type TranscodeAutomationTrigger,
   type TranscodingSettings,
@@ -639,7 +638,6 @@ export function TranscodePresetsRulesPanel({
   const validInterval = Number.isInteger(interval) && interval >= 5 && interval <= 10080;
   const [automationPending, setAutomationPending] = useState(false);
   const [automationError, setAutomationError] = useState<string | null>(null);
-  const [automationPreview, setAutomationPreview] = useState<TranscodeAutomationPreview | null>(null);
   const [automationRun, setAutomationRun] = useState<TranscodeAutomationRun | null>(null);
   const runId = automationRun?.id;
   const runActive = automationRun?.status === "queued" || automationRun?.status === "running";
@@ -789,12 +787,34 @@ export function TranscodePresetsRulesPanel({
     if (standaloneCollapsed) onStandaloneToggle?.();
     setAutomationPending(true);
     setAutomationError(null);
-    setAutomationPreview(null);
     try {
       if (dryRun) {
-        setAutomationPreview(await api.previewTranscodeAutomation({ preview_all: true, limit: 100 }));
+        const result = await api.previewTranscodeAutomation({ preview_all: true, limit: 100 });
+        if (notificationIdentity !== identityGeneration()) return;
+        notifications.notify({
+          type: "info",
+          message: [t("transcoding.automation.dryRun"), t("transcoding.automation.previewCounts", result)].join(" · "),
+          topicKey: "transcode:automation",
+          source: {
+            area: "settings",
+            href: `/settings?section=logs&automation-run=${result.run_id ?? ""}#settings-panel-automationHistory`,
+            label: t("transcoding.automation.historyTitle"),
+          },
+        });
       } else {
-        setAutomationRun(await api.startTranscodeAutomation());
+        const run = await api.startTranscodeAutomation();
+        if (notificationIdentity !== identityGeneration()) return;
+        setAutomationRun(run);
+        notifications.notify({
+          type: "info",
+          message: t("transcoding.automation.inventory.queued"),
+          topicKey: "transcode:automation",
+          source: {
+            area: "settings",
+            href: `/settings?section=logs&automation-run=${run.id}#settings-panel-automationHistory`,
+            label: t("transcoding.automation.historyTitle"),
+          },
+        });
       }
     } catch (reason) {
       setAutomationError((reason as Error).message);
@@ -1555,32 +1575,14 @@ export function TranscodePresetsRulesPanel({
         </button>
       </div>}
       {automationError && <div className="alert" role="alert">{automationError}</div>}
-      {automationRun && <div className="field-hint" role="status">
-        {t("transcoding.automation.inventoryStatus")} · {t("transcoding.automation.inventory." + automationRun.status)} · {t("transcoding.automation.runCounts", automationRun)}
-        {automationRun.error && <p>{automationRun.error}</p>}
-      </div>}
-      {automationPreview && <div className="transcode-condition-group">
-        <strong>{t("transcoding.automation.previewResult", { total: automationPreview.total_files })}</strong>
-        <p className="field-hint">{t("transcoding.automation.previewCounts", automationPreview)}</p>
-        {automationPreview.matched + automationPreview.blocked + automationPreview.skipped > automationPreview.items.length &&
-          <p className="field-hint">{t("transcoding.automation.previewSample", { count: automationPreview.items.length })}</p>}
-        {!!automationPreview.items.length && <ul className="transcode-rule-layers">
-          {automationPreview.items.map((item) => <li key={item.file_id}>
-            <strong>{libraryNames.get(item.library_id) ?? item.library_id} / {item.relative_path}</strong>
-            <div className="field-hint">
-              {[t("transcoding.automation." + item.status), item.rule_name, item.profile_name, item.reason || item.output_path].filter(Boolean).join(" · ")}
-            </div>
-          </li>)}
-        </ul>}
-      </div>}
     </>
   );
 
   const renderRuleList = () => (
-    <section className="transcode-automation-tab-content">
+    <section className="transcode-automation-tab-content transcode-rule-panel">
+      {standaloneTab && !hasStandaloneCollapse ? renderStandaloneHeader(panelAction) : !standaloneTab ? renderAutomationToggleRow(panelAction) : null}
+      {renderAutomationControls()}
       <div className="compatibility-profile-list compatibility-profile-catalog-list transcode-rule-list">
-        {standaloneTab && !hasStandaloneCollapse ? renderStandaloneHeader(panelAction) : !standaloneTab ? renderAutomationToggleRow(panelAction) : null}
-        {renderAutomationControls()}
         <div className="transcode-actions">
           <button type="button" className="secondary small settings-panel-header-action" onClick={startNewRule}
             disabled={busy || !canOpenRuleEditor || Boolean(identity && !has("settings.app.edit"))}>

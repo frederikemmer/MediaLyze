@@ -1,4 +1,5 @@
-vi.mock("../lib/notifications", () => ({ useNotifications: () => ({ notify: vi.fn() }), useOptionalNotifications: () => ({ notify: vi.fn() }) }));
+const { notify } = vi.hoisted(() => ({ notify: vi.fn() }));
+vi.mock("../lib/notifications", () => ({ useNotifications: () => ({ notify }), useOptionalNotifications: () => ({ notify }) }));
 import "../i18n";
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -14,6 +15,7 @@ import {
   type LibrarySummary,
   type TranscodeRule,
 } from "../lib/api";
+import { TranscodeAutomationHistory } from "./TranscodeAutomationHistory";
 import { TranscodePresetsRulesPanel } from "./TranscodePresetsRulesPanel";
 import * as auth from "../lib/auth";
 import { releaseVisibility } from "../lib/release-visibility";
@@ -166,7 +168,7 @@ describe("TranscodePresetsRulesPanel", () => {
     const save = vi.spyOn(api, "updateAppSettings").mockResolvedValue({} as AppSettings);
     vi.spyOn(api, "transcodeAutomationStatus").mockResolvedValue(null);
     const preview = vi.spyOn(api, "previewTranscodeAutomation").mockResolvedValue({
-      generated_at: "", total_files: 3, matched: 2, queued: 0, blocked: 0, skipped: 0, unmatched: 1, items: [],
+      run_id: 22, generated_at: "", total_files: 3, matched: 2, queued: 0, blocked: 0, skipped: 0, unmatched: 1, items: [],
     });
     const start = vi.spyOn(api, "startTranscodeAutomation").mockResolvedValue({
       id: 1, status: "completed", queued: 2, completed: 0, failed: 0, skipped: 0, blocked: 0,
@@ -184,7 +186,10 @@ describe("TranscodePresetsRulesPanel", () => {
     const dryRun = screen.getByRole("button", { name: "Dry Run" });
     await waitFor(() => expect(dryRun).toBeEnabled());
     fireEvent.click(dryRun);
-    expect(await screen.findByText(/3 candidate files/)).toBeInTheDocument();
+    await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+      message: expect.stringContaining("Matched 2"),
+      source: expect.objectContaining({ href: "/settings?section=logs&automation-run=22#settings-panel-automationHistory" }),
+    })));
     expect(preview).toHaveBeenCalledWith({ preview_all: true, limit: 100 });
     expect(start).not.toHaveBeenCalled();
     const startAll = screen.getByRole("button", { name: "Start All" });
@@ -193,6 +198,23 @@ describe("TranscodePresetsRulesPanel", () => {
     fireEvent.click(startAll);
     await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
     expect(confirm).toHaveBeenCalledTimes(2);
+  });
+
+  it("opens saved dry-run details from the notification target", async () => {
+    const run = {
+      id: 22, trigger: "dry_run", status: "completed", created_at: "2026-11-24T12:00:00Z",
+      files_total: 3, matched: 1, blocked: 0, skipped: 0, unmatched: 2, queued: 0,
+      summary: { preview_items: [{
+        file_id: 9, library_id: 6, relative_path: "Test/Movie.mkv", status: "matched",
+        rule_name: "Encode selected files", profile_name: "X to HEVC", output_path: "/output/Movie.mkv",
+      }] },
+    } as TranscodeAutomationRun;
+    vi.spyOn(api, "transcodeAutomationRuns").mockResolvedValue([{ ...run, summary: {} }]);
+    const detail = vi.spyOn(api, "transcodeAutomation").mockResolvedValue(run);
+    render(<TranscodeAutomationHistory requestedRunId={22} libraries={[{ id: 6, name: "Movies" } as LibrarySummary]} />);
+    expect(await screen.findByText("Movies / Test/Movie.mkv")).toBeVisible();
+    expect(screen.getByText(/Encode selected files.*X to HEVC.*output\/Movie.mkv/)).toBeVisible();
+    expect(detail).toHaveBeenCalledWith(22);
   });
 
   it("shows saved rules while editor options are still loading", async () => {

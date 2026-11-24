@@ -46,6 +46,8 @@ def notification_source_allowed(db: Session, principal: Principal, source: dict)
         if target.path != "/settings":
             return False
         section = (query.get("section") or ["libraries"])[0]
+        if section == "logs" and "automation-run" in query:
+            return principal.owner
         if section in {"application", "logs"}:
             # Both pages contain personal settings/history available without global rights.
             return True

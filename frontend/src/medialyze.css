@@ -18163,6 +18163,7 @@ html[data-theme="dark"] .notification-card[data-palette="contrast"][data-type="e
 .passkey-rename input { min-width: 0; flex: 1; }
 
 /* Transcoding rule editor and read-only file test. */
+.transcode-rule-panel { display: grid; gap: 12px; }
 .transcode-rule-list.compatibility-profile-list { overflow: visible; }
 .transcode-rule-switch { margin-inline-start: 12px; }
 .transcode-rule-name-row {

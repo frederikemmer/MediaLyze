@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+- Separate automation triggers from the rule list and keep Dry Run details in Logs, with a notification linking to each result.
+
 - Run active transcoding rules manually or on a configurable interval, and preview the full rule set without queuing jobs.
 
 - Explain when automation rules run after scans and how to include unchanged files.

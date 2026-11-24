@@ -2405,6 +2405,8 @@
       "dryRun": "Testlauf",
       "startAll": "Alle starten",
       "startAllConfirm": "Alle aktiven Regeln prüfen und passende Transcoding-Jobs einreihen? Freigegebene Regeln können Originale ersetzen.",
+      "historyTitle": "Automationsverlauf",
+      "historyEmpty": "Noch keine Automationsläufe.",
       "previewSample": "Die ersten {{count}} Ergebnisse mit einer Aktion oder einem Status werden angezeigt.",
       "inventory": {"queued": "In Warteschlange", "running": "Läuft", "completed": "Dateiauswahl abgeschlossen", "failed": "Fehlgeschlagen", "canceled": "Abgebrochen"},
       "testRule": "Regel testen",

@@ -51,6 +51,7 @@ import { RemoveIcon } from "../components/RemoveIcon";
 import { SettingsInlineLabelInput } from "../components/SettingsInlineLabelInput";
 import { SquarePenIcon } from "../components/SquarePenIcon";
 import { TelemetryModeToggle } from "../components/TelemetryModeToggle";
+import { TranscodeAutomationHistory } from "../components/TranscodeAutomationHistory";
 import { TranscodeHistorySettingsPanel } from "../components/TranscodeHistorySettingsPanel";
 import { TranscodingSettingsPanel } from "../components/TranscodingSettingsPanel";
 import { TranscodingPresetsSettingsPanel } from "../components/TranscodingPresetsSettingsPanel";
@@ -8070,6 +8071,12 @@ export function LibrariesPage() {
               {(!auth.identity || hasLibraryPermission(auth.identity, "transcode.view")) ? (
                 <LogsSection key="transcodeHistory" id="settings-panel-transcodeHistory" title={t("transcoding.globalHistory")} defaultOpen={initialLogsSection.current === "transcode-history"}>
                   <TranscodeHistorySettingsPanel libraries={libraries} showHeading={false} />
+                </LogsSection>
+              ) : null}
+              {auth.identity?.owner && releaseVisibility.automationRules ? (
+                <LogsSection key={`automationHistory-${searchParams.get("automation-run") ?? ""}`} id="settings-panel-automationHistory"
+                  title={t("transcoding.automation.historyTitle")} defaultOpen={searchParams.has("automation-run")}>
+                  <TranscodeAutomationHistory libraries={libraries} requestedRunId={Number(searchParams.get("automation-run")) || 0} />
                 </LogsSection>
               ) : null}
               <LogsSection key="notificationHistory" id="settings-panel-notificationHistory" title={t("logs.notifications")} defaultOpen={initialLogsSection.current === "notification-history"}>

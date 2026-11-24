@@ -1520,6 +1520,22 @@ def preview_transcode_automation(
     )
 
 
+def record_transcode_automation_preview(
+    db: Session, scope: TranscodeAutomationScope, preview: TranscodeAutomationPreviewRead,
+) -> TranscodeAutomationPreviewRead:
+    run = TranscodeAutomationRun(
+        status="completed", trigger_source="dry_run",
+        rule_ids=scope.rule_ids, library_ids=scope.library_ids,
+        files_total=preview.total_files, matched=preview.matched,
+        blocked=preview.blocked, skipped=preview.skipped, unmatched=preview.unmatched,
+        finished_at=preview.generated_at,
+        summary={"preview_items": [item.model_dump(mode="json", exclude={"plan"}) for item in preview.items]},
+    )
+    db.add(run)
+    db.commit()
+    return preview.model_copy(update={"run_id": run.id})
+
+
 def create_transcode_automation_run(
     db: Session,
     scope: TranscodeAutomationScope,
@@ -1542,7 +1558,7 @@ def create_transcode_automation_run(
     return serialize_transcode_automation_run(run)
 
 
-def serialize_transcode_automation_run(run: TranscodeAutomationRun) -> TranscodeAutomationRunRead:
+def serialize_transcode_automation_run(run: TranscodeAutomationRun, *, include_preview: bool = True) -> TranscodeAutomationRunRead:
     return TranscodeAutomationRunRead(
         id=run.id,
         status=run.status,
@@ -1562,7 +1578,7 @@ def serialize_transcode_automation_run(run: TranscodeAutomationRun) -> Transcode
         failed=run.failed,
         canceled=run.canceled,
         current_page=run.current_page,
-        summary=dict(run.summary or {}),
+        summary={} if run.trigger_source == "dry_run" and not include_preview else dict(run.summary or {}),
         error=run.error,
         cancellation_requested=bool(run.cancellation_requested),
         created_at=run.created_at,
@@ -1574,7 +1590,7 @@ def serialize_transcode_automation_run(run: TranscodeAutomationRun) -> Transcode
 
 def list_transcode_automation_runs(db: Session, limit: int = 100) -> list[TranscodeAutomationRunRead]:
     return [
-        serialize_transcode_automation_run(run)
+        serialize_transcode_automation_run(run, include_preview=False)
         for run in db.scalars(
             select(TranscodeAutomationRun)
             .order_by(TranscodeAutomationRun.created_at.desc(), TranscodeAutomationRun.id.desc())

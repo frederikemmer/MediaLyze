@@ -1582,6 +1582,7 @@ export type TranscodeAutomationDecision = {
 };
 
 export type TranscodeAutomationPreview = {
+  run_id?: number | null;
   generated_at: string;
   total_files: number;
   matched: number;
@@ -1611,7 +1612,7 @@ export type TranscodeAutomationRun = {
   failed: number;
   canceled: number;
   current_page: number;
-  summary: Record<string, unknown>;
+  summary: Record<string, unknown> & { preview_items?: Omit<TranscodeAutomationDecision, "plan">[] };
   error: string | null;
   cancellation_requested: boolean;
   created_at: string;
