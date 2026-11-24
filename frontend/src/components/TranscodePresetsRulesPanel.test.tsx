@@ -149,6 +149,26 @@ describe("TranscodePresetsRulesPanel", () => {
     vi.restoreAllMocks();
   });
 
+  it("shows saved rules while editor options are still loading", async () => {
+    let resolveLibraries!: (libraries: LibrarySummary[]) => void;
+    vi.mocked(api.libraries).mockReturnValue(new Promise(resolve => { resolveLibraries = resolve; }));
+    vi.mocked(api.transcodeRules).mockResolvedValue([{
+      id: 19, name: "Encode selected files", enabled: false, priority: 0, library_ids: [6],
+      conditions: null, profile_id: builtin.id, profile_name: builtin.name, profile_version: builtin.version,
+      output_mode: "transcode_output", output_subfolder: "", replacement_approved: false, version: 1,
+      created_at: "", updated_at: "",
+    }]);
+    render(<TranscodePresetsRulesPanel capabilityMatrix={() => null} acceleratorsTooltip={null} standaloneTab="rules" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Encode selected files" }));
+    expect(screen.getByText("All eligible videos in the selected libraries.")).toBeInTheDocument();
+    const newRule = screen.getByRole("button", { name: "New rule" });
+    expect(newRule).toBeDisabled();
+
+    resolveLibraries([{ id: 6, name: "Movies" } as LibrarySummary]);
+    await waitFor(() => expect(newRule).toBeEnabled());
+  });
+
   it("opens a new draft from a collapsed rule panel without a preset or library", async () => {
     vi.mocked(api.transcodePresets).mockResolvedValue([]);
     const onToggle = vi.fn();
@@ -157,7 +177,9 @@ describe("TranscodePresetsRulesPanel", () => {
       standaloneCollapsed={collapsed} onStandaloneToggle={onToggle}
     />;
     const { rerender } = render(panel(true));
-    fireEvent.click(await screen.findByRole("button", { name: "New rule" }));
+    const newRule = await screen.findByRole("button", { name: "New rule" });
+    await waitFor(() => expect(newRule).toBeEnabled());
+    fireEvent.click(newRule);
     expect(onToggle).toHaveBeenCalledTimes(1);
     rerender(panel(false));
     expect(screen.getByRole("textbox", { name: "Rule name" })).toBeVisible();
@@ -166,12 +188,12 @@ describe("TranscodePresetsRulesPanel", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
-  it("saves a nested XOR rule and activates the saved row with the standard switch", async () => {
+  it("saves a custom resolution category in a nested XOR rule and activates the saved row with the standard switch", async () => {
     vi.mocked(api.libraries).mockResolvedValue([{ id: 6, name: "Movies" } as LibrarySummary]);
     const saved: TranscodeRule = {
       id: 19, name: "Encode selected files", enabled: false, priority: 0, library_ids: [6],
       conditions: { type: "group", operator: "and", children: [{ type: "group", operator: "xor", children: [
-        { type: "condition", field: "video_codec", operator: "equals", value: "hevc" },
+        { type: "condition", field: "resolution", operator: "equals", value: "archive_hd" },
       ] }] },
       profile_id: builtin.id, profile_name: builtin.name, profile_version: builtin.version,
       output_mode: "transcode_output", output_subfolder: "", replacement_approved: false, version: 1,
@@ -179,18 +201,34 @@ describe("TranscodePresetsRulesPanel", () => {
     };
     const create = vi.spyOn(api, "createTranscodeRule").mockResolvedValue(saved);
     const update = vi.spyOn(api, "updateTranscodeRule").mockResolvedValue({ ...saved, enabled: true });
-    render(<TranscodePresetsRulesPanel capabilityMatrix={() => null} acceleratorsTooltip={null} standaloneTab="rules" />);
-    fireEvent.click(await screen.findByRole("button", { name: "New rule" }));
+    render(<TranscodePresetsRulesPanel capabilityMatrix={() => null} acceleratorsTooltip={null} standaloneTab="rules"
+      resolutionCategories={[
+        { id: "archive_hd", label: "Archive HD", min_width: 1600, min_height: 800 },
+        { id: "sd", label: "SD", min_width: 0, min_height: 0 },
+      ]}
+    />);
+    const newRule = await screen.findByRole("button", { name: "New rule" });
+    await waitFor(() => expect(newRule).toBeEnabled());
+    fireEvent.click(newRule);
     fireEvent.change(screen.getByRole("textbox", { name: "Rule name" }), { target: { value: saved.name } });
     fireEvent.click(screen.getByRole("button", { name: "Add nested group" }));
     const [ , nestedLogic ] = screen.getAllByRole("combobox", { name: "Logic" });
     fireEvent.change(nestedLogic, { target: { value: "xor" } });
-    fireEvent.change(screen.getByRole("combobox", { name: "Condition value" }), { target: { value: "hevc" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Condition field" }), { target: { value: "resolution" } });
+    const resolution = screen.getByRole("combobox", { name: "Condition value" });
+    expect(within(resolution).getByRole("option", { name: "Archive HD" })).toHaveValue("archive_hd");
+    fireEvent.change(resolution, { target: { value: "archive_hd" } });
     expect(screen.getByRole("checkbox", { name: "Output must not exceed source size" })).toBeChecked();
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ conditions: saved.conditions, prevent_output_growth: true })));
     const toggle = await screen.findByRole("switch", { name: "Enable " + saved.name });
     expect(toggle).not.toBeChecked();
+    const ruleRow = screen.getByRole("button", { name: saved.name });
+    fireEvent.click(ruleRow);
+    fireEvent.click(ruleRow);
+    expect(screen.getByText("All conditions (AND)")).toBeInTheDocument();
+    expect(screen.getByText("Exactly one matches (XOR)")).toBeInTheDocument();
+    expect(screen.getByText("Archive HD")).toBeInTheDocument();
     expect(toggle.parentElement?.querySelector(".toggle-switch-thumb")).toBeInTheDocument();
     fireEvent.click(toggle);
     await waitFor(() => expect(toggle).toBeChecked());
@@ -313,7 +351,7 @@ describe("TranscodePresetsRulesPanel", () => {
     expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Rules" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "Explain transcoding rules" })).toBeInTheDocument();
-    expect(screen.queryByText("Rules are evaluated from top to bottom. A blocked winning rule does not fall through.")).not.toBeInTheDocument();
+    expect(screen.queryByText("For each video, the first active rule that matches its library and conditions takes precedence. If that rule is blocked, it still takes precedence for that video.")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reload" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Preview" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start inventory" })).not.toBeInTheDocument();

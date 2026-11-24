@@ -1086,6 +1086,11 @@
     }
   },
   "scanLogs": {
+    "deleteAction": "Delete scan",
+    "deleteTitle": "Delete this scan?",
+    "deleteDescription": "This removes the scan log and its daily history point if the point still comes from this scan. Your media files and their analysis stay as they are.",
+    "deleteError": "Could not delete the scan. Please try again.",
+    "deleteSuccess": "Scan deleted.",
     "jobTypeQuality": "Quality scores",
     "qualityProgress": "Quality scores updated: {{processed}} / {{total}}",
     "title": "Recent scan logs",
@@ -2531,7 +2536,7 @@
       "preview": "Preview",
       "startInventory": "Start inventory",
       "cancelInventory": "Cancel inventory",
-      "priorityHint": "Rules are evaluated from top to bottom. A blocked winning rule does not fall through.",
+      "priorityHint": "For each video, the first active rule that matches its library and conditions takes precedence. If that rule is blocked, it still takes precedence for that video.",
       "enabled": "Enabled",
       "disabled": "Disabled",
       "replaceNeedsApproval": "Replace-original requires approval for this rule version.",

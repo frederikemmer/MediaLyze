@@ -13,6 +13,7 @@ from backend.app.models.entities import (
     TranscodePreset,
     TranscodeRule,
 )
+from backend.app.schemas.app_settings import ResolutionCategory
 from backend.app.schemas.transcoding import (
     TranscodeAutomationScope,
     TranscodeCondition,
@@ -207,6 +208,22 @@ def test_conditions_support_nested_and_or_missing_and_multitrack(tmp_path: Path)
             _condition_group(TranscodeCondition(field="audio_bitrate", operator="missing")),
             app_settings,
         ) is True
+
+
+def test_resolution_conditions_use_configured_categories_for_portrait_video(tmp_path: Path) -> None:
+    with _session_factory()() as db:
+        media_file = _media_file(db, tmp_path)
+        media_file.video_streams[0].width = 1080
+        media_file.video_streams[0].height = 1920
+        app_settings = get_app_settings(db, _settings(tmp_path))
+        app_settings.resolution_categories = [
+            ResolutionCategory(id="archive_hd", label="Archive HD", min_width=1600, min_height=800),
+            ResolutionCategory(id="sd", label="SD", min_width=0, min_height=0),
+        ]
+
+        for value in ("archive_hd", "1080x1920"):
+            condition = TranscodeCondition(field="resolution", operator="equals", value=value)
+            assert automation.condition_matches(media_file, _condition_group(condition), app_settings)
 
 
 def test_reordering_keeps_approved_replace_version(tmp_path: Path) -> None:
@@ -429,6 +446,40 @@ def test_first_blocked_winner_does_not_fall_through(tmp_path: Path) -> None:
         assert decision.status == "blocked"
         assert decision.rule_id == first.id
         assert decision.reason and "approval" in decision.reason.lower()
+
+
+def test_automation_applies_rule_priority_independently_per_library(tmp_path, monkeypatch) -> None:
+    settings = _settings(tmp_path)
+    monkeypatch.setattr(automation, "get_transcode_capabilities", lambda _settings: _capabilities())
+    monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda _settings: _capabilities())
+    with _session_factory()() as db:
+        movie = _media_file(db, tmp_path / "films")
+        movie.library.name = "Films"
+        episode = _media_file(db, tmp_path / "series")
+        episode.library.name = "Series"
+        profile = TranscodePreset(name="Convert", definition=_profile_definition().model_dump(mode="json"))
+        db.add(profile)
+        db.flush()
+        rules = [
+            TranscodeRule(
+                name=media_file.library.name,
+                priority=priority,
+                enabled=True,
+                library_ids=[media_file.library_id],
+                profile_id=profile.id,
+                output_mode="transcode_output",
+            )
+            for priority, media_file in enumerate([movie, episode])
+        ]
+        db.add_all(rules)
+        db.commit()
+
+        preview = automation.preview_transcode_automation(db, settings, TranscodeAutomationScope())
+
+        assert [(item.file_id, item.rule_id, item.status) for item in preview.items] == [
+            (movie.id, rules[0].id, "matched"),
+            (episode.id, rules[1].id, "matched"),
+        ], [item.reason for item in preview.items]
 
 
 def test_durable_record_skips_same_source_and_rule_version(tmp_path: Path) -> None:

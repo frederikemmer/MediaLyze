@@ -2713,6 +2713,8 @@ export const api = {
     const query = searchParams.toString();
     return request<RecentScanJobPage>(`/scan-jobs/recent${query ? `?${query}` : ""}`);
   },
+  deleteScanJob: (jobId: number, finishedAt: string) =>
+    request<void>(`/scan-jobs/${jobId}?${new URLSearchParams({ finished_at: finishedAt })}`, { method: "DELETE" }),
   scanJobDetail: (jobId: string | number) => request<ScanJobDetail>(`/scan-jobs/${jobId}`),
   libraries: () => request<LibrarySummary[]>("/libraries"),
   librarySummary: (id: string | number, signal?: AbortSignal) =>

@@ -4,22 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
-- Place save and cancel icon buttons beside the transcoding rule name.
+## v0.21.0
 
-- Improve transcoding rule and preset summaries, list video copy settings, and highlight the full rule row on hover.
+This release adds scan-driven transcoding rules, reusable presets, and the option to remove bad scans from library history.
 
-- Ship the X to HEVC transcoding preset and standard filename, folder, and series season folder presets. Allow formatting presets to be duplicated.
+### ✨ New
 
-- Place the output size limit beside the output subfolder in transcoding rules and remove its inline hint.
-- Discard larger transcoded outputs before publishing by default for new automation rules, with an option to allow them.
+- **Transcoding automation** - choose libraries, a preset, and an output destination. Build nested AND, OR, and XOR conditions, including configured resolution categories. Expanded rules show the condition tree. Active rules apply to new or changed videos after a successful scan.
+- **Transcoding and formatting presets** - start with the editable **X to HEVC** preset, which copies existing HEVC and Dolby Vision video, or use the supplied filename, folder, and series season folder templates.
+- **Delete past scans** - remove a finished scan from Recent scan logs and remove its linked daily library history point if there are any problems with it ([#202](https://github.com/frederikemmer/MediaLyze/issues/202)).
 
-- Open the automation rule editor from a collapsed panel and explain missing presets or libraries before saving.
+### ✨ Enhancements
 
-- Add the Transcoding automation rule editor with nested AND, OR and XOR conditions, activation switches, and an Owner-only dry run that searches existing files by title or filename and shows condition matches and the proposed output.
+- Notifications now report results from account, library, connector, compatibility, transcoding, export, and clipboard actions. Autosave failures appear immediately, and successful changes are summarized when leaving the relevant settings section.
 
-- Extend safe notifications across account, library, connector, profile, transcoding, export and clipboard actions; report autosave errors immediately and confirm persisted changes once on departure, including account/Desktop preference updates. Hide Quick scan without the required library rights.
+### 🐛 Bug fixes
 
-- Keep history reconstruction in Logs settings and remove its duplicate control and status timestamp from library details.
+- Hide Quick scan when the account lacks the required library permissions.
 
 ## v0.20.0
 

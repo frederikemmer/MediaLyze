@@ -89,6 +89,7 @@
   "GET /scan-jobs/active": "active_scan_jobs",
   "GET /scan-jobs/recent": "recent_scan_jobs",
   "GET /scan-jobs/{job_id}": "scan_job_detail",
+  "DELETE /scan-jobs/{job_id}": "delete_scan_job",
   "GET /telemetry/preview": "telemetry_preview",
   "GET /transcode-jobs": "transcode_jobs_list",
   "GET /transcode-jobs/active": "transcode_jobs_active",

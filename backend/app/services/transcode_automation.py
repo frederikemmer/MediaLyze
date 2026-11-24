@@ -55,7 +55,7 @@ from backend.app.services.media_search import (
     _parse_quality_score_value,
     _parse_size_value,
 )
-from backend.app.services.resolution_categories import default_resolution_categories
+from backend.app.services.resolution_categories import classify_resolution_category
 from backend.app.services.transcoding import (
     TranscodeValidationError,
     _available_encoder,
@@ -933,15 +933,8 @@ def _field_values(media_file: MediaFile, field: str, app_settings) -> tuple[list
         values: list[str] = []
         if primary_video and primary_video.width and primary_video.height:
             values.append(f"{primary_video.width}x{primary_video.height}")
-            categories = app_settings.resolution_categories or default_resolution_categories()
-            category = next(
-                (
-                    candidate
-                    for candidate in categories
-                    if primary_video.width >= candidate.min_width
-                    and primary_video.height >= candidate.min_height
-                ),
-                None,
+            category = classify_resolution_category(
+                primary_video.width, primary_video.height, app_settings.resolution_categories
             )
             if category is not None:
                 values.extend([category.id.lower(), category.label.lower()])

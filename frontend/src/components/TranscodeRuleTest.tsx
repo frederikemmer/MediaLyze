@@ -1,13 +1,14 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, type TranscodeRuleTestAsset, type TranscodeRuleTestRequest, type TranscodeRuleTestResult } from "../lib/api";
+import { api, type ResolutionCategory, type TranscodeRuleTestAsset, type TranscodeRuleTestRequest, type TranscodeRuleTestResult } from "../lib/api";
 import { RuleConditionTrace, RuleInput, validRuleConditions } from "./TranscodeRuleConditions";
 
 const key = "transcoding.automation.";
 
-export function TranscodeRuleTest({ draft, presetName }: {
+export function TranscodeRuleTest({ draft, presetName, resolutionCategories }: {
   draft: Omit<TranscodeRuleTestRequest, "file_id">;
   presetName?: string;
+  resolutionCategories?: ResolutionCategory[];
 }) {
   const { t } = useTranslation();
   const optionsId = useId();
@@ -118,7 +119,7 @@ export function TranscodeRuleTest({ draft, presetName }: {
     </div>
     {asset && <div className="transcode-condition-group transcode-rule-test-result" aria-live="polite">
       {result ? <>
-        <ul className="transcode-rule-layers"><RuleConditionTrace node={draft.conditions} trace={result.trace} /></ul>
+        <ul className="transcode-rule-layers"><RuleConditionTrace node={draft.conditions} trace={result.trace} resolutionCategories={resolutionCategories} /></ul>
         <p><strong className={result.status === "matched" ? "transcode-rule-test-success" : undefined}>{status}</strong>
           {result.status === "matched" && result.output_path && <> <span className="jellyfin-status-badge" title={result.output_path}>
             {draft.output_mode === "transcode_output" && result.output_relative_path ? `Transcode_Output/${result.output_relative_path}` : result.output_relative_path || result.output_path}

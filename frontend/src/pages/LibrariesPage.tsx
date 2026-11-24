@@ -1269,6 +1269,19 @@ export function LibrariesPage() {
   const [isSettingsNavCollapsed, setIsSettingsNavCollapsed] = useState(() => getSettingsNavCollapsed());
   const [isSettingsMobileMenuOpen, setIsSettingsMobileMenuOpen] = useState(false);
   const [recentScanJobs, setRecentScanJobs] = useState<RecentScanJob[]>([]);
+  const [scanPendingDeletion, setScanPendingDeletion] = useState<RecentScanJob | null>(null);
+  const [isDeletingScan, setIsDeletingScan] = useState(false);
+  const [deleteScanError, setDeleteScanError] = useState(false);
+  const deleteScanDialogRef = useRef<HTMLDialogElement>(null);
+  const deleteScanTriggerRef = useRef<HTMLButtonElement>(null);
+  const recentScanCursor = useRef<RecentScanJob | undefined>(undefined);
+  const deletedScanKeys = useRef(new Map<number, string>());
+  useLayoutEffect(() => {
+    const dialog = deleteScanDialogRef.current;
+    if (!scanPendingDeletion || !dialog) return;
+    dialog.showModal();
+    return () => dialog.close();
+  }, [scanPendingDeletion]);
   const [isLoadingRecentScanJobs, setIsLoadingRecentScanJobs] = useState(true);
   const [recentScanJobsError, setRecentScanJobsError] = useState<string | null>(null);
   const [hasMoreRecentScanJobs, setHasMoreRecentScanJobs] = useState(false);
@@ -1804,7 +1817,8 @@ export function LibrariesPage() {
     return api
       .recentScanJobs({ sinceHours: 24, limit: 200 })
       .then((payload) => {
-        setRecentScanJobs(payload.items);
+        recentScanCursor.current = payload.items.at(-1);
+        setRecentScanJobs(payload.items.filter((job) => deletedScanKeys.current.get(job.id) !== job.finished_at));
         setHasMoreRecentScanJobs(payload.items.length > 0);
         setRecentScanJobsError(null);
         return payload;
@@ -1821,11 +1835,11 @@ export function LibrariesPage() {
   };
 
   async function loadMoreRecentScanJobs() {
-    if (isLoadingMoreRecentScanJobs || recentScanJobs.length === 0) {
+    if (isLoadingMoreRecentScanJobs) {
       return;
     }
-    const lastJob = recentScanJobs[recentScanJobs.length - 1];
-    if (!lastJob.finished_at) {
+    const lastJob = recentScanCursor.current;
+    if (!lastJob?.finished_at) {
       return;
     }
     setIsLoadingMoreRecentScanJobs(true);
@@ -1835,13 +1849,51 @@ export function LibrariesPage() {
         beforeFinishedAt: lastJob.finished_at,
         beforeId: lastJob.id,
       });
-      setRecentScanJobs((current) => [...current, ...payload.items]);
+      if (recentScanCursor.current !== lastJob) return;
+      recentScanCursor.current = payload.items.at(-1) ?? lastJob;
+      setRecentScanJobs((current) => [
+        ...current,
+        ...payload.items.filter((job) => deletedScanKeys.current.get(job.id) !== job.finished_at),
+      ]);
       setHasMoreRecentScanJobs(payload.has_more);
       setRecentScanJobsError(null);
     } catch (reason) {
       setRecentScanJobsError((reason as Error).message);
     } finally {
       setIsLoadingMoreRecentScanJobs(false);
+    }
+  }
+
+  function cancelDeleteScan() {
+    if (isDeletingScan) return;
+    deleteScanDialogRef.current?.close();
+    setScanPendingDeletion(null);
+    deleteScanTriggerRef.current?.focus();
+  }
+
+  async function confirmDeleteScan() {
+    const job = scanPendingDeletion;
+    if (!job?.finished_at || isDeletingScan) return;
+    setIsDeletingScan(true);
+    setDeleteScanError(false);
+    try {
+      await api.deleteScanJob(job.id, job.finished_at);
+      if (notificationIdentity !== identityGeneration()) return;
+      deletedScanKeys.current.set(job.id, job.finished_at);
+      setExpandedScanJobIds((current) => ({ ...current, [job.id]: false }));
+      setScanJobDetails(({ [job.id]: obsolete, ...remaining }) => remaining);
+      setRecentScanJobs((current) => current.filter((item) => item.id !== job.id || item.finished_at !== job.finished_at));
+      setScanPendingDeletion(null);
+      notify({
+        type: "success",
+        message: t("scanLogs.deleteSuccess"),
+        topicKey: "scan-logs:delete",
+        source: { area: "library", href: `/libraries/${job.library_id}`, label: job.library_name ?? t("scanLogs.unknownLibrary") },
+      });
+    } catch {
+      setDeleteScanError(true);
+    } finally {
+      setIsDeletingScan(false);
     }
   }
 
@@ -3200,6 +3252,7 @@ export function LibrariesPage() {
   }
 
   async function toggleScanJobExpansion(jobId: number) {
+    const previousDeletion = deletedScanKeys.current.get(jobId);
     const nextOpen = !expandedScanJobIds[jobId];
     setExpandedScanJobIds((current) => ({ ...current, [jobId]: nextOpen }));
     if (!nextOpen || scanJobDetails[jobId] || scanJobDetailLoading[jobId]) {
@@ -3209,9 +3262,13 @@ export function LibrariesPage() {
     setScanJobDetailErrors((current) => ({ ...current, [jobId]: null }));
     try {
       const payload = await api.scanJobDetail(jobId);
-      setScanJobDetails((current) => ({ ...current, [jobId]: payload }));
+      if (previousDeletion === deletedScanKeys.current.get(jobId)) {
+        setScanJobDetails((current) => ({ ...current, [jobId]: payload }));
+      }
     } catch (reason) {
-      setScanJobDetailErrors((current) => ({ ...current, [jobId]: (reason as Error).message }));
+      if (previousDeletion === deletedScanKeys.current.get(jobId)) {
+        setScanJobDetailErrors((current) => ({ ...current, [jobId]: (reason as Error).message }));
+      }
     } finally {
       setScanJobDetailLoading((current) => {
         const next = { ...current };
@@ -7932,7 +7989,7 @@ export function LibrariesPage() {
             loading={isLoadingRecentScanJobs}
             error={recentScanJobsError}
           >
-            {recentScanJobs.length === 0 ? (
+            {recentScanJobs.length === 0 && !hasMoreRecentScanJobs ? (
               <div className="notice">{t("scanLogs.empty")}</div>
             ) : (
               <>
@@ -7942,34 +7999,52 @@ export function LibrariesPage() {
                       const expanded = Boolean(expandedScanJobIds[job.id]);
                       return (
                         <div className="media-card scan-log-card" key={job.id}>
-                          <button
-                            type="button"
-                            className="scan-log-summary"
-                            aria-expanded={expanded}
-                            onClick={() => void toggleScanJobExpansion(job.id)}
-                          >
-                            <div className="scan-log-summary-head">
-                              <div className="scan-log-summary-copy">
-                                <strong>{job.library_name ?? t("scanLogs.unknownLibrary")}</strong>
-                                <span>{scanLogTitle(job)}</span>
+                          <div className="scan-log-card-header">
+                            <button
+                              type="button"
+                              className="scan-log-summary"
+                              aria-expanded={expanded}
+                              onClick={() => void toggleScanJobExpansion(job.id)}
+                            >
+                              <div className="scan-log-summary-head">
+                                <div className="scan-log-summary-copy">
+                                  <strong>{job.library_name ?? t("scanLogs.unknownLibrary")}</strong>
+                                  <span>{scanLogTitle(job)}</span>
+                                </div>
+                                <div className="meta-tags">
+                                  <span className={`badge scan-log-outcome badge-${job.outcome}`}>
+                                    {formatOutcome(t, job.outcome)}
+                                  </span>
+                                  <span className="badge">{formatTriggerSource(t, job.trigger_source)}</span>
+                                  {job.origin?.name ? <span className="badge">{job.origin.name}</span> : null}
+                                  {job.job_type === "full" || job.job_type === "quality_recompute" ? (
+                                    <span className="badge">{formatScanJobType(t, job.job_type)}</span>
+                                  ) : null}
+                                  {expanded ? (
+                                    <ChevronDown aria-hidden="true" className="nav-icon" />
+                                  ) : (
+                                    <ChevronRight aria-hidden="true" className="nav-icon" />
+                                  )}
+                                </div>
                               </div>
-                              <div className="meta-tags">
-                                <span className={`badge scan-log-outcome badge-${job.outcome}`}>
-                                  {formatOutcome(t, job.outcome)}
-                                </span>
-                                <span className="badge">{formatTriggerSource(t, job.trigger_source)}</span>
-                                {job.origin?.name ? <span className="badge">{job.origin.name}</span> : null}
-                                {job.job_type === "full" || job.job_type === "quality_recompute" ? (
-                                  <span className="badge">{formatScanJobType(t, job.job_type)}</span>
-                                ) : null}
-                                {expanded ? (
-                                  <ChevronDown aria-hidden="true" className="nav-icon" />
-                                ) : (
-                                  <ChevronRight aria-hidden="true" className="nav-icon" />
-                                )}
-                              </div>
-                            </div>
-                          </button>
+                            </button>
+                            {job.finished_at && (job.job_type === "full" || job.job_type === "incremental")
+                              && (!auth.identity || auth.has("library.edit", job.library_id)) ? (
+                              <button
+                                type="button"
+                                className="scan-log-delete-button icon-only-button"
+                                aria-label={t("scanLogs.deleteAction")}
+                                title={t("scanLogs.deleteAction")}
+                                onClick={(event) => {
+                                  deleteScanTriggerRef.current = event.currentTarget;
+                                  setDeleteScanError(false);
+                                  setScanPendingDeletion(job);
+                                }}
+                              >
+                                <Trash2 className="nav-icon" aria-hidden="true" />
+                              </button>
+                            ) : null}
+                          </div>
                           {expanded ? renderScanJobDetail(job) : null}
                         </div>
                       );
@@ -8467,6 +8542,34 @@ export function LibrariesPage() {
             {renderLibraryPathDialogForm("library-path-dialog")}
           </section>
         </div>
+      ) : null}
+      {scanPendingDeletion ? (
+        <dialog
+          ref={deleteScanDialogRef}
+          className="settings-create-library-dialog scan-log-delete-dialog"
+          aria-labelledby="scan-log-delete-title"
+          aria-describedby="scan-log-delete-description"
+          onCancel={(event) => {
+            event.preventDefault();
+            cancelDeleteScan();
+          }}
+        >
+          <h2 id="scan-log-delete-title">{t("scanLogs.deleteTitle")}</h2>
+          <div className="scan-log-summary-copy">
+            <strong>{scanPendingDeletion.library_name ?? t("scanLogs.unknownLibrary")}</strong>
+            <span>{scanLogTitle(scanPendingDeletion)}</span>
+          </div>
+          <p id="scan-log-delete-description">{t("scanLogs.deleteDescription")}</p>
+          {deleteScanError ? <p className="alert" role="alert">{t("scanLogs.deleteError")}</p> : null}
+          <div className="settings-delete-library-actions">
+            <button type="button" className="secondary" disabled={isDeletingScan} onClick={cancelDeleteScan}>
+              {t("common.cancel")}
+            </button>
+            <button type="button" className="settings-delete-library-confirm-button" disabled={isDeletingScan} onClick={() => void confirmDeleteScan()}>
+              {t("scanLogs.deleteAction")}
+            </button>
+          </div>
+        </dialog>
       ) : null}
       {libraryPendingDeletion ? (
         <div className="settings-create-library-backdrop" role="presentation" onMouseDown={closeDeleteLibraryDialog}>

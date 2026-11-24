@@ -32,7 +32,7 @@ The canonical management endpoint is `/api/transcoding/presets`. The former `/ap
 
 ## Automation rules
 
-Open **Settings → Transcoding → Automation Rules** to select libraries, conditions, a saved preset, and an output destination. Rules run in list order, and the first active matching rule wins. A rule without conditions can match every eligible primary video in its selected libraries. A nested group counts as one result in its parent group. XOR requires exactly one direct condition or subgroup to match.
+Open **Settings → Transcoding → Automation Rules** to select libraries, conditions, a saved preset, and an output destination. For each video, MediaLyze evaluates the active rules assigned to its library in list order. The first matching rule takes precedence for that video, including when its output is blocked. A rule without conditions can match every eligible primary video in its selected libraries. A nested group counts as one result in its parent group. XOR requires exactly one direct condition or subgroup to match.
 
 The Owner can use **Test rule** to search the catalog by title or filename and evaluate the current draft on one file. The result shows which conditions matched and, when the plan validates, the proposed output path. The test simulates this rule in isolation, including when it is disabled. It never queues a job or saves the draft.
 

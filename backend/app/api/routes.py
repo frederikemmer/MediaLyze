@@ -174,6 +174,7 @@ from backend.app.models.entities import (
     JellyfinUserItemData,
     JobStatus,
     Library,
+    LibraryHistory,
     LibraryRoot,
     LibraryType,
     MediaFile,
@@ -646,6 +647,35 @@ def scan_job_detail(job_id: int, db: Session = Depends(get_db_session)) -> ScanJ
     if payload is None:
         raise HTTPException(status_code=404, detail="Scan job not found")
     return payload
+
+
+@router.delete("/scan-jobs/{job_id}", status_code=204)
+def delete_scan_job(job_id: int, finished_at: datetime, db: Session = Depends(get_db_session)) -> Response:
+    job = db.execute(
+        delete(ScanJob)
+        .where(
+            ScanJob.id == job_id,
+            ScanJob.finished_at == finished_at,
+            ScanJob.status.in_([JobStatus.completed, JobStatus.failed, JobStatus.canceled]),
+            ScanJob.job_type.in_(["incremental", "full"]),
+        )
+        .returning(ScanJob.library_id, ScanJob.finished_at)
+    ).one_or_none()
+    if job is None:
+        raise HTTPException(status_code=404, detail="Past scan not found")
+    library_id, finished_at = job
+    # SQLite can reuse scan IDs after retention removes old logs.
+    db.execute(
+        delete(LibraryHistory).where(
+            LibraryHistory.library_id == library_id,
+            LibraryHistory.snapshot_day == finished_at.date().isoformat(),
+            LibraryHistory.source_scan_job_id == job_id,
+            LibraryHistory.captured_at == finished_at,
+        )
+    )
+    db.commit()
+    stats_cache.invalidate(str(id(db.get_bind())), library_id)
+    return Response(status_code=204)
 
 
 @router.get("/app-settings", response_model=AppSettingsRead)

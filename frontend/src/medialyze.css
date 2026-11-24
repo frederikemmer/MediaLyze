@@ -3689,6 +3689,25 @@ button.media-header-account-menu-item {
   transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
 }
 
+.scan-log-delete-dialog {
+  width: min(460px, calc(100% - 36px));
+  color: var(--ink);
+  background: linear-gradient(var(--surface), var(--surface)), var(--bg);
+}
+
+.scan-log-delete-dialog:not([open]) {
+  display: none;
+}
+
+.scan-log-delete-dialog::backdrop {
+  background: rgba(31, 28, 22, 0.32);
+}
+
+.scan-log-delete-dialog h2,
+.scan-log-delete-dialog p {
+  margin: 0;
+}
+
 .settings-delete-library-confirm-button:hover:not(:disabled),
 .settings-delete-library-confirm-button:focus-visible:not(:disabled) {
   transform: translateY(-1px);
@@ -6606,6 +6625,27 @@ select.settings-choice-input[multiple] {
   border: 1px solid rgba(31, 28, 22, 0.08);
   background: rgba(255, 255, 255, 0.55);
   box-shadow: none;
+}
+
+.scan-log-card-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.scan-log-delete-button.icon-only-button {
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.scan-log-delete-button.icon-only-button:hover {
+  color: var(--danger-ink, #a04836);
+  background: rgba(160, 72, 54, 0.10);
+  box-shadow: none;
+  transform: none;
 }
 
 .scan-log-summary {

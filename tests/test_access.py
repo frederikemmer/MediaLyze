@@ -1085,6 +1085,60 @@ def test_scan_and_quality_views_follow_metadata_scope_before_pagination(env, kin
     assert len(owner.get("/api/scan-jobs/recent?limit=50").json()["items"]) == 4
 
 
+def test_deleting_past_scan_removes_only_its_current_daily_snapshot(env):
+    from datetime import datetime, UTC, timedelta
+    from backend.app.models.entities import JobStatus, LibraryHistory, ScanJob
+
+    app, factory, _ = env
+    target = library(factory, "scanned")
+    owner = setup(app)
+    reader_policy = {**EMPTY_POLICY, "libraries": {str(target): ["library.read"]}}
+    assert post(owner, "/api/access/guest", {"enabled": True, "policy": reader_policy}, "put").status_code == 200
+    reader = TestClient(app)
+    assert post(reader, "/api/auth/guest").status_code == 200
+    editor, _ = user(owner, app, {**EMPTY_POLICY, "libraries": {str(target): ["library.read", "library.edit"]}})
+    finished = datetime(2026, 11, 24, 2, 0, 0, 123456, tzinfo=UTC)
+    with factory() as db:
+        older = ScanJob(library_id=target, job_type="full", status=JobStatus.completed,
+                        finished_at=finished - timedelta(hours=1))
+        current = ScanJob(library_id=target, job_type="incremental", status=JobStatus.completed,
+                          finished_at=finished)
+        running = ScanJob(library_id=target, job_type="full", status=JobStatus.running,
+                          finished_at=finished)
+        db.add_all([older, current, running])
+        db.flush()
+        stale_time = finished - timedelta(days=1)
+        stale = LibraryHistory(library_id=target, snapshot_day=stale_time.date().isoformat(),
+                               captured_at=stale_time, source_scan_job_id=current.id)
+        daily = LibraryHistory(library_id=target, snapshot_day=finished.date().isoformat(),
+                               captured_at=finished, source_scan_job_id=current.id)
+        db.add_all([stale, daily])
+        db.commit()
+
+    def remove(client, job, stamp=None):
+        return client.delete(
+            f"/api/scan-jobs/{job.id}",
+            params={"finished_at": stamp or job.finished_at.isoformat()},
+            headers=headers(client),
+        )
+
+    assert remove(reader, current).status_code == 404
+    assert remove(editor, running).status_code == 404
+    assert remove(editor, current, older.finished_at.isoformat()).status_code == 404
+    assert remove(editor, older).status_code == 204
+    with factory() as db:
+        assert db.get(LibraryHistory, daily.id) is not None
+
+    assert remove(editor, current).status_code == 204
+    assert remove(editor, current).status_code == 404
+    with factory() as db:
+        assert db.get(ScanJob, current.id) is None
+        assert db.get(ScanJob, running.id) is not None
+        assert db.get(LibraryHistory, daily.id) is None
+        assert db.get(LibraryHistory, stale.id) is not None
+        assert db.scalar(select(MediaFile.id).where(MediaFile.library_id == target)) is not None
+
+
 def test_scan_views_with_no_library_access_are_empty_and_never_fall_back_to_guest(env):
     from backend.app.models.entities import ScanJob, JobStatus
 

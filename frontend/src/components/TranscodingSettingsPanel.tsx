@@ -841,6 +841,7 @@ export function TranscodingSettingsPanel({
           capabilityMatrix={() => null}
           acceleratorsTooltip={null}
           standaloneTab="rules"
+          resolutionCategories={settings.resolution_categories}
           standaloneCollapsed={automationRulesCollapsed}
           onStandaloneToggle={() => setAutomationRulesCollapsed((current) => !current)}
           searchFocus={searchFocus}

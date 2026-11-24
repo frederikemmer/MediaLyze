@@ -331,13 +331,15 @@ def authorize(request, db, principal, name, params, body):
         return  # The route cancels only the caller's permitted libraries.
     if name in {"active_scan_jobs", "recent_scan_jobs"}:
         return  # SQL scopes scan/quality jobs before deduplication and pagination.
-    if name == "scan_job_detail":
+    if name in {"scan_job_detail", "delete_scan_job"}:
         from backend.app.models.entities import ScanJob
 
-        job = db.get(ScanJob, int(params["job_id"]))
-        if job is None:
+        target = db.scalar(select(ScanJob.library_id).where(ScanJob.id == int(params["job_id"])))
+        if target is None:
             fail(404, "Not found")
-        require("library.read", job.library_id)
+        require("library.read", target)
+        if name == "delete_scan_job":
+            require("library.edit", target)
         return
     if name in {"file_transcode_detail", "file_transcode_validate", "file_transcode_start"}:
         require("transcode.view", library_id)

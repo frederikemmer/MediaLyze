@@ -1086,6 +1086,11 @@
     }
   },
   "scanLogs": {
+    "deleteAction": "Scan löschen",
+    "deleteTitle": "Diesen Scan löschen?",
+    "deleteDescription": "Der Scan-Log und der Tagespunkt im Verlauf werden gelöscht, sofern der Punkt noch aus diesem Scan stammt. Deine Mediendateien und ihre Analysedaten bleiben erhalten.",
+    "deleteError": "Der Scan konnte nicht gelöscht werden. Bitte versuche es erneut.",
+    "deleteSuccess": "Scan gelöscht.",
     "jobTypeQuality": "Qualitätsbewertung",
     "qualityProgress": "Qualitätsbewertungen aktualisiert: {{processed}} / {{total}}",
     "title": "Letzte Scan-Logs",
@@ -2531,7 +2536,7 @@
       "preview": "Vorschau",
       "startInventory": "Bestandslauf starten",
       "cancelInventory": "Bestandslauf abbrechen",
-      "priorityHint": "Regeln werden von oben nach unten ausgewertet. Eine blockierte Gewinnerregel fällt nicht auf spätere Regeln zurück.",
+      "priorityHint": "Für jedes Video hat die erste aktive Regel Vorrang, deren Bibliotheksauswahl und Bedingungen passen. Auch bei einer Sperre behält diese Regel für das Video Vorrang.",
       "enabled": "Aktiv",
       "disabled": "Deaktiviert",
       "replaceNeedsApproval": "Originalersatz benötigt die Freigabe für diese Regelversion.",
