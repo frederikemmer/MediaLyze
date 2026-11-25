@@ -142,6 +142,7 @@ describe("TranscodePresetsRulesPanel", () => {
     releaseVisibility.automationRules = true;
     vi.spyOn(api, "transcodePresets").mockResolvedValue([builtin, custom]);
     vi.spyOn(api, "transcodeRules").mockResolvedValue([]);
+    vi.spyOn(api, "transcodeFormattingPresets").mockResolvedValue([]);
     vi.spyOn(api, "libraries").mockResolvedValue([]);
     vi.spyOn(api, "duplicateTranscodePreset").mockResolvedValue(copy);
     vi.spyOn(api, "deleteTranscodePreset").mockResolvedValue(undefined);
@@ -284,6 +285,14 @@ describe("TranscodePresetsRulesPanel", () => {
 
   it("saves a custom resolution category in a nested XOR rule and activates the saved row with the standard switch", async () => {
     vi.mocked(api.libraries).mockResolvedValue([{ id: 6, name: "Movies" } as LibrarySummary]);
+    const definition = {
+      template: "{sourceName}", enabled: true, metadata_separator: ", ", cleanup_preset: "none" as const, cleanup_regex: null,
+      include_subtitle_languages: false, language_code_format: "iso_639_1" as const,
+    };
+    vi.mocked(api.transcodeFormattingPresets).mockResolvedValue([
+      { id: 1, name: "Archive filename", kind: "filename", definition, is_default: false },
+      { id: 2, name: "Archive folder", kind: "folder", definition, is_default: false },
+    ]);
     const saved: TranscodeRule = {
       id: 19, name: "Encode selected files", enabled: false, priority: 0, library_ids: [6],
       conditions: { type: "group", operator: "and", children: [{ type: "group", operator: "xor", children: [
@@ -291,7 +300,7 @@ describe("TranscodePresetsRulesPanel", () => {
       ] }] },
       profile_id: builtin.id, profile_name: builtin.name, profile_version: builtin.version,
       output_mode: "transcode_output", output_subfolder: "", replacement_approved: false, version: 1,
-      created_at: "", updated_at: "",
+      filename_preset_id: 1, folder_preset_id: 2, created_at: "", updated_at: "",
     };
     const create = vi.spyOn(api, "createTranscodeRule").mockResolvedValue(saved);
     const update = vi.spyOn(api, "updateTranscodeRule").mockResolvedValue({ ...saved, enabled: true });
@@ -319,8 +328,10 @@ describe("TranscodePresetsRulesPanel", () => {
     expect(within(resolution).getByRole("option", { name: "Archive HD" })).toHaveValue("archive_hd");
     fireEvent.change(resolution, { target: { value: "archive_hd" } });
     expect(screen.getByRole("checkbox", { name: "Output must not exceed source size" })).toBeChecked();
+    fireEvent.change(screen.getByRole("combobox", { name: "Filename preset" }), { target: { value: "1" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Folder preset" }), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ conditions: saved.conditions, prevent_output_growth: true })));
+    await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ conditions: saved.conditions, prevent_output_growth: true, filename_preset_id: 1, folder_preset_id: 2 })));
     const toggle = await screen.findByRole("switch", { name: "Enable " + saved.name });
     expect(toggle).not.toBeChecked();
     const ruleRow = screen.getByRole("button", { name: saved.name });
@@ -346,7 +357,11 @@ describe("TranscodePresetsRulesPanel", () => {
   });
 
   it("keeps stream language rules separate and leaves formatting to its own presets", async () => {
-    vi.spyOn(api, "updateTranscodePreset").mockResolvedValue(custom);
+    const inUse = { ...custom, rule_impact: {
+      token: "confirmed-token", total: 1, rules: [{ id: 6, name: "Archive library", enabled: true }],
+    } };
+    vi.mocked(api.transcodePresets).mockResolvedValue([builtin, inUse]);
+    vi.spyOn(api, "updateTranscodePreset").mockResolvedValue(inUse);
     render(<TranscodePresetsRulesPanel capabilityMatrix={() => null} acceleratorsTooltip={null} standaloneTab="presets" />);
     fireEvent.click(await screen.findByRole("button", { name: "Edit My preset" }));
 
@@ -384,10 +399,17 @@ describe("TranscodePresetsRulesPanel", () => {
     expect(languageFormat).toHaveValue("container_default");
     expect(within(screen.getByRole("group", { name: "Metadata settings" })).getByRole("combobox")).toBe(languageFormat);
     fireEvent.change(languageFormat, { target: { value: "iso_639_2_region" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    const save = screen.getByRole("button", { name: "Save" });
+    expect(screen.getByText("Archive library · Enabled")).toBeVisible();
+    expect(save).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: /I confirm/ }));
+    expect(save).toBeEnabled();
+    fireEvent.click(save);
 
     await waitFor(() => expect(api.updateTranscodePreset).toHaveBeenCalled());
-    const definition = vi.mocked(api.updateTranscodePreset).mock.calls[0][1].definition!;
+    const payload = vi.mocked(api.updateTranscodePreset).mock.calls[0][1];
+    expect(payload.confirm_rule_impact).toBe("confirmed-token");
+    const definition = payload.definition!;
     expect(definition.audio_rules[0].match_languages).toEqual(["en", "de", "fr-CA"]);
     expect(definition.video_rules).toEqual([]);
     expect(definition.video_language_code_format).toBe("iso_639_2_region");

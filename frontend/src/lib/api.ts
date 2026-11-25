@@ -1364,7 +1364,14 @@ export type TranscodeFormattingDefinition = {
   language_code_format: "iso_639_1" | "iso_639_2" | "iso_639_2_t" | "iso_639_3" | "bcp_47";
 };
 
+export type TranscodePresetRuleImpact = {
+  token: string;
+  total: number;
+  rules: Array<{ id: number; name: string; enabled: boolean }>;
+};
+
 export type TranscodeFormattingPreset = {
+  rule_impact?: TranscodePresetRuleImpact | null;
   id: number;
   kind: "filename" | "folder";
   name: string;
@@ -1479,6 +1486,7 @@ export type TranscodePresetDefinition = {
 };
 
 export type TranscodePreset = {
+  rule_impact?: TranscodePresetRuleImpact | null;
   id: number;
   name: string;
   description: string;
@@ -1530,6 +1538,8 @@ export type TranscodeRule = {
   output_mode: "transcode_output" | "same_directory" | "replace_original";
   output_subfolder: string;
   prevent_output_growth?: boolean;
+  filename_preset_id?: number | null;
+  folder_preset_id?: number | null;
   skip_previously_evaluated?: boolean;
   replacement_approved: boolean;
   created_at: string;
@@ -1542,7 +1552,7 @@ export type TranscodeRuleTestTrace = {
   values: Array<string | number | boolean>;
   children: TranscodeRuleTestTrace[];
 };
-export type TranscodeRuleTestRequest = Pick<TranscodeRule, "library_ids" | "conditions" | "profile_id" | "output_mode" | "output_subfolder" | "prevent_output_growth"> & {
+export type TranscodeRuleTestRequest = Pick<TranscodeRule, "library_ids" | "conditions" | "profile_id" | "output_mode" | "output_subfolder" | "prevent_output_growth" | "filename_preset_id" | "folder_preset_id"> & {
   file_id: number;
   rule_id?: number;
 };
@@ -2182,6 +2192,10 @@ export type TranscodingSettings = {
   retry_count: number;
   existing_output: "fail" | "skip";
   remove_partial_output: boolean;
+  replacement_trash_enabled?: boolean;
+  replacement_trash_directory?: string;
+  replacement_trash_max_files?: number;
+  replacement_trash_max_gib?: number;
   automation_trigger?: TranscodeAutomationTrigger;
   automation_interval_minutes?: number;
 };
@@ -2954,7 +2968,7 @@ export const api = {
   transcodeFormattingPresets: () => request<TranscodeFormattingPreset[]>("/transcoding/formatting-presets"),
   createTranscodeFormattingPreset: (payload: Pick<TranscodeFormattingPreset, "kind" | "name" | "definition">) =>
     request<TranscodeFormattingPreset>("/transcoding/formatting-presets", { method: "POST", body: JSON.stringify(payload) }),
-  updateTranscodeFormattingPreset: (id: number, payload: Partial<Pick<TranscodeFormattingPreset, "name" | "definition" | "is_default">>) =>
+  updateTranscodeFormattingPreset: (id: number, payload: Partial<Pick<TranscodeFormattingPreset, "name" | "definition" | "is_default">> & { confirm_rule_impact?: string }) =>
     request<TranscodeFormattingPreset>(`/transcoding/formatting-presets/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteTranscodeFormattingPreset: (id: number) =>
     request<void>(`/transcoding/formatting-presets/${id}`, { method: "DELETE" }),
@@ -2971,6 +2985,7 @@ export const api = {
     name: string;
     description: string;
     definition: TranscodePresetDefinition;
+    confirm_rule_impact: string;
   }>) => request<TranscodePreset>(`/transcoding/presets/${id}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
@@ -2995,6 +3010,7 @@ export const api = {
     name: string;
     description: string;
     definition: TranscodePresetDefinition;
+    confirm_rule_impact: string;
   }>) => request<TranscodePreset>(`/transcoding/profiles/${id}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
@@ -3015,6 +3031,8 @@ export const api = {
     output_mode?: TranscodeRule["output_mode"];
     output_subfolder?: string;
     prevent_output_growth?: boolean;
+    filename_preset_id?: number | null;
+    folder_preset_id?: number | null;
     skip_previously_evaluated?: boolean;
   }) => request<TranscodeRule>("/transcoding/rules", {
     method: "POST",
@@ -3030,6 +3048,8 @@ export const api = {
     output_mode: TranscodeRule["output_mode"];
     output_subfolder: string;
     prevent_output_growth?: boolean;
+    filename_preset_id?: number | null;
+    folder_preset_id?: number | null;
     skip_previously_evaluated?: boolean;
   }>) => request<TranscodeRule>(`/transcoding/rules/${id}`, {
     method: "PATCH",

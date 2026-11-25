@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -11,7 +11,10 @@ from backend.app.schemas.transcoding import (
     TranscodeFormattingPresetCreate,
     TranscodeFormattingPresetRead,
     TranscodeFormattingPresetUpdate,
+    TranscodePresetRuleImpact,
 )
+
+from backend.app.services.transcode_preset_impact import preset_rule_impact, preset_rule_impacts
 
 
 def seed_standard_formatting_presets(db: Session) -> None:
@@ -50,13 +53,14 @@ class FormattingPresetError(ValueError):
     pass
 
 
-def _read(preset: TranscodeFormattingPreset) -> TranscodeFormattingPresetRead:
+def _read(preset: TranscodeFormattingPreset, impact: TranscodePresetRuleImpact | None = None) -> TranscodeFormattingPresetRead:
     return TranscodeFormattingPresetRead.model_validate({
         "id": preset.id,
         "kind": preset.kind,
         "name": preset.name,
         "definition": preset.definition,
         "is_default": preset.is_default,
+        "rule_impact": impact,
     })
 
 
@@ -64,7 +68,8 @@ def list_formatting_presets(db: Session) -> list[TranscodeFormattingPresetRead]:
     rows = db.scalars(select(TranscodeFormattingPreset).order_by(
         TranscodeFormattingPreset.kind, func.lower(TranscodeFormattingPreset.name), TranscodeFormattingPreset.id,
     )).all()
-    return [_read(row) for row in rows]
+    impacts = preset_rule_impacts(db, ("filename_preset_id", "folder_preset_id"))
+    return [_read(row, impacts.get((f"{row.kind}_preset_id", row.id))) for row in rows]
 
 
 def get_formatting_preset(db: Session, preset_id: int) -> TranscodeFormattingPreset:
@@ -107,7 +112,12 @@ def create_formatting_preset(db: Session, payload: TranscodeFormattingPresetCrea
 
 
 def update_formatting_preset(db: Session, preset_id: int, payload: TranscodeFormattingPresetUpdate) -> TranscodeFormattingPresetRead:
+    db.execute(text("BEGIN IMMEDIATE"))
     row = get_formatting_preset(db, preset_id)
+    impact = preset_rule_impact(db, f"{row.kind}_preset_id", row.id)
+    if (payload.name is not None or payload.definition is not None) and impact and payload.confirm_rule_impact != impact.token:
+        db.rollback()
+        raise FormattingPresetError("Rule impact confirmation required")
     if payload.name is not None:
         row.name = _name(db, row.kind, payload.name, row.id)
     if payload.definition is not None:
@@ -125,9 +135,13 @@ def update_formatting_preset(db: Session, preset_id: int, payload: TranscodeForm
         db.rollback()
         raise FormattingPresetError("A formatting preset with this name already exists") from exc
     db.refresh(row)
-    return _read(row)
+    return _read(row, impact)
 
 
 def delete_formatting_preset(db: Session, preset_id: int) -> None:
     db.delete(get_formatting_preset(db, preset_id))
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise FormattingPresetError("This formatting preset is used by an automation rule") from exc

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import ctypes
+import logging
+from contextlib import contextmanager, nullcontext
 import os
 import re
 import shlex
@@ -20,7 +22,7 @@ from uuid import uuid4
 from sqlalchemy import delete, func, or_, select, update, text
 from sqlalchemy.orm import Session
 
-from backend.app.core.config import Settings
+from backend.app.core.config import Settings, get_settings
 from backend.app.db.session import SessionLocal
 from backend.app.models.entities import (
     AudioStream,
@@ -31,6 +33,7 @@ from backend.app.models.entities import (
     Library,
     LibraryRoot,
     MediaFile,
+    ScanStatus,
     SubtitleStream,
     TranscodeFederationMember,
     TranscodeJob,
@@ -60,8 +63,19 @@ from backend.app.services.app_settings import get_app_settings
 from backend.app.services.languages import format_filename_language_code, format_stream_language_code, normalize_language_tag
 from backend.app.services.resolution_categories import classify_resolution_category
 from backend.app.services.spatial_audio import format_spatial_audio_profile
+from backend.app.services.transcode_trash import (
+    archive_original,
+    complete_archive,
+    discard_archive,
+    prune_replacement_trash,
+    trash_lock,
+)
 from backend.app.utils.processes import get_hidden_subprocess_kwargs, lower_background_process_priority
 from backend.app.utils.time import utc_now
+
+
+logger = logging.getLogger(__name__)
+_replacement_publication_lock = Lock()
 
 
 HARDWARE_ENCODER_MARKERS = (
@@ -2744,38 +2758,42 @@ def validate_transcode_plan(
     if not capabilities.ffmpeg_available:
         errors.append(capabilities.error or "FFmpeg is unavailable")
 
+    replacing = output_mode == "replace_original"
     try:
-        output_filename = render_output_filename(
-            media_file,
-            plan,
-            resolution_categories=app_settings.resolution_categories,
-        )
+        if replacing and plan.filename_template_override is not True:
+            output_filename = paths.source.with_suffix(f".{plan.container}").name
+        else:
+            output_filename = render_output_filename(
+                media_file, plan, resolution_categories=app_settings.resolution_categories,
+            )
     except ValueError as exc:
         output_filename = f"{Path(media_file.filename).stem}.transcoded.{plan.container}"
         errors.append(str(exc))
     formatted_folder_name: str | None = None
-    if plan.folder_format_enabled:
+    if plan.folder_format_enabled and (not replacing or plan.folder_template_override is True):
         try:
             formatted_folder_name = render_output_folder_name(
-                media_file,
-                plan,
-                resolution_categories=app_settings.resolution_categories,
+                media_file, plan, resolution_categories=app_settings.resolution_categories,
             )
         except ValueError as exc:
             errors.append(str(exc))
-    if output_mode == "replace_original":
+    if replacing:
         if normalized_output_subfolder:
             errors.append("Replace-original rules cannot use an output subfolder")
-        if plan.folder_format_enabled:
-            errors.append("Replace-original rules cannot use folder formatting")
-        output_filename = paths.source.name
         output_root = paths.root
-        output_path = output_path_override or paths.source
-        if plan.container != paths.source.suffix.lower().lstrip("."):
-            errors.append("Replacing the original requires the output container to match the source extension")
+        output_parent = paths.source.parent
+        if formatted_folder_name and output_parent != paths.root:
+            output_parent = output_parent.parent / formatted_folder_name
+        output_path = output_path_override or (output_parent / output_filename)
         if not plan.replacement_confirmed:
             errors.append("Replacing the original requires an explicit confirmation")
-        warnings.append("The original file will be replaced in place without a byte-for-byte backup")
+        if not os.access(paths.source.parent, os.W_OK):
+            errors.append("The original file directory is not writable")
+        warnings.append(
+            "The original will be moved to the replacement trash"
+            if app_settings.transcoding.replacement_trash_enabled
+            else "The original will be removed after publishing the replacement"
+        )
     elif output_mode == "transcode_output":
         output_root = Path(
             getattr(settings, "transcode_output_root", None)
@@ -2807,7 +2825,7 @@ def validate_transcode_plan(
     writable_parent = _nearest_existing_parent(output_path.parent)
     if not writable_parent.is_dir() or not os.access(writable_parent, os.W_OK):
         errors.append(f"The output directory is not writable: {output_path.parent}")
-    if output_path.exists() and output_mode != "replace_original":
+    if output_path.exists() and (not replacing or output_path != paths.source):
         if app_settings.transcoding.existing_output == "skip":
             errors.append("The output file already exists and was skipped by policy")
         else:
@@ -3248,8 +3266,7 @@ def queue_transcode_job(
         db.add(group)
         db.flush()
     output_path = Path(validation.output_path)
-    if validation.output_mode == "transcode_output":
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = output_path.with_name(
         f".{output_path.stem}.medialyze-{uuid4().hex}{output_path.suffix}.part"
     )
@@ -3364,6 +3381,103 @@ def _publish_without_overwrite(temporary_path: Path, output_path: Path) -> None:
     temporary_path.unlink()
 
 
+@contextmanager
+def publish_transcode_replacement(
+    db: Session, settings: Settings, job: TranscodeJob, source: MediaFile | None, result: Path,
+):
+    with _replacement_publication_lock:
+        source_path = Path(job.source_path_snapshot)
+        output_path = Path(job.output_path_snapshot)
+        _verify_job_paths(db, job, source_path, output_path, result)
+        if source is not None:
+            db.refresh(source)
+        if source is None or _source_paths(source).source != source_path:
+            raise ValueError("The original library entry changed before the replacement could be published")
+        current_stat = source_path.stat()
+        if (current_stat.st_size, current_stat.st_mtime) != (job.source_size_snapshot, job.source_mtime_snapshot):
+            raise ValueError("The source file changed before the replacement could be published")
+        if output_path != source_path:
+            conflict = db.scalar(select(MediaFile.id).where(
+                MediaFile.library_root_id == source.library_root_id,
+                MediaFile.library_id == source.library_id,
+                MediaFile.relative_path == job.output_relative_path,
+                MediaFile.id != source.id,
+            ).limit(1))
+            if conflict is not None:
+                raise ValueError("The replacement path is already indexed as a different library file")
+
+        policy = get_app_settings(db, settings).transcoding
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        rollback_path = source_path.with_name(f".medialyze-replacement-{uuid4().hex}.part")
+        archive = None
+        published = False
+        original_removed = False
+        preserve_recovery = False
+        try:
+            if source_path == output_path:
+                try:
+                    os.link(source_path, rollback_path)
+                except OSError:
+                    shutil.copy2(source_path, rollback_path)
+            if policy.replacement_trash_enabled:
+                with trash_lock:
+                    archive = archive_original(settings.config_path, policy, source_path)
+            latest_stat = source_path.stat()
+            if (latest_stat.st_size, latest_stat.st_mtime, latest_stat.st_ino) != (
+                current_stat.st_size, current_stat.st_mtime, current_stat.st_ino,
+            ):
+                raise ValueError("The source file changed while preparing the replacement")
+            if source_path == output_path:
+                os.replace(result, output_path)
+                published = original_removed = True
+            else:
+                _publish_without_overwrite(result, output_path)
+                published = True
+                os.replace(source_path, rollback_path)
+                original_removed = True
+
+            source.relative_path = job.output_relative_path
+            source.filename = output_path.name
+            source.extension = output_path.suffix.lower().lstrip(".")
+            source.is_transcode_variant = False
+            source.scan_status = ScanStatus.pending
+            source.content_hash = None
+            source.content_hash_algorithm = None
+            source.filename_signature = None
+            source.filename_pattern_signature = None
+            job.result_file_id = source.id
+            yield
+        except BaseException:
+            db.rollback()
+            if original_removed:
+                try:
+                    os.replace(rollback_path, source_path)
+                except OSError:
+                    preserve_recovery = True
+                    raise
+            if published and output_path != source_path:
+                output_path.unlink()
+            if archive is not None:
+                discard_archive(archive, source_path.name)
+            raise
+        else:
+            if archive is not None:
+                try:
+                    with trash_lock:
+                        complete_archive(archive)
+                except OSError:
+                    logger.exception("The original remains stored in the pending replacement trash")
+                prune_replacement_trash(settings.config_path, policy)
+        finally:
+            # A result already committed to the database remains successful even
+            # if cleanup of the temporary recovery link has to be done manually.
+            try:
+                if not preserve_recovery:
+                    rollback_path.unlink(missing_ok=True)
+            except OSError:
+                logger.exception("Unable to remove the temporary replacement backup")
+
+
 def _remove_temporary_output(temporary_path: Path, output_path: Path) -> None:
     expected_prefix = f".{output_path.stem}.medialyze-"
     expected_suffix = f"{output_path.suffix}.part"
@@ -3439,6 +3553,7 @@ def execute_transcode_job(
     job_id: int,
     *,
     is_cancel_requested: Callable[[int], bool],
+    settings: Settings | None = None,
 ) -> int:
     db = SessionLocal()
     process: subprocess.Popen[str] | None = None
@@ -3470,7 +3585,7 @@ def execute_transcode_job(
         current_stat = source_path.stat()
         if current_stat.st_size != job.source_size_snapshot or current_stat.st_mtime != job.source_mtime_snapshot:
             raise ValueError("The source file changed before transcoding started")
-        if output_path.exists() and job.output_mode != "replace_original":
+        if output_path.exists() and (job.output_mode != "replace_original" or output_path != source_path):
             raise FileExistsError("The output file already exists and was not overwritten")
         _remove_temporary_output(temporary_path, output_path)
         duration = 0.0
@@ -3532,39 +3647,37 @@ def execute_transcode_job(
         job.processing_phase = "validating_result"
         job.phase_detail = "Validating the temporary result"
         db.commit()
-        if job.output_mode == "replace_original":
-            job.processing_phase = "publishing"
-            job.phase_detail = "Publishing the replacement result"
-            os.replace(temporary_path, output_path)
-        else:
-            job.processing_phase = "publishing"
-            job.phase_detail = "Publishing the transcoded variant"
-            _publish_without_overwrite(temporary_path, output_path)
-        variant = TranscodeVariant(
-            group_id=job.group_id,
-            job_id=job.id,
-            original_file_id=job.source_file_id,
-            library_root_id=source.library_root_id if source else None,
-            output_relative_path=job.output_relative_path,
-            output_filename=output_path.name,
-            source_path_snapshot=job.source_path_snapshot,
-            output_path_snapshot=job.output_path_snapshot,
-            output_mode=job.output_mode,
-            analysis_status="awaiting_analysis",
-            output_file_id=source.id if job.output_mode == "replace_original" and source is not None else None,
+        job.processing_phase = "publishing"
+        job.phase_detail = "Publishing the transcoding result"
+        replacement = (
+            publish_transcode_replacement(db, settings or get_settings(), job, source, temporary_path)
+            if job.output_mode == "replace_original" else nullcontext()
         )
-        if source is not None and job.output_mode == "replace_original":
-            source.is_transcode_variant = False
-            job.result_file_id = source.id
-        db.add(variant)
-        job.status = JobStatus.completed
-        job.processing_phase = "completed"
-        job.phase_detail = None
-        job.progress_percent = 100.0
-        job.processed_seconds = duration or job.processed_seconds
-        job.eta_seconds = 0.0
-        job.finished_at = utc_now()
-        db.commit()
+        with replacement:
+            if job.output_mode != "replace_original":
+                _publish_without_overwrite(temporary_path, output_path)
+            variant = TranscodeVariant(
+                group_id=job.group_id,
+                job_id=job.id,
+                original_file_id=job.source_file_id,
+                library_root_id=source.library_root_id if source else None,
+                output_relative_path=job.output_relative_path,
+                output_filename=output_path.name,
+                source_path_snapshot=job.source_path_snapshot,
+                output_path_snapshot=job.output_path_snapshot,
+                output_mode=job.output_mode,
+                analysis_status="awaiting_analysis",
+                output_file_id=source.id if job.output_mode == "replace_original" and source is not None else None,
+            )
+            db.add(variant)
+            job.status = JobStatus.completed
+            job.processing_phase = "completed"
+            job.phase_detail = None
+            job.progress_percent = 100.0
+            job.processed_seconds = duration or job.processed_seconds
+            job.eta_seconds = 0.0
+            job.finished_at = utc_now()
+            db.commit()
         return job.library_id
     except TranscodeCancelled as exc:
         if process is not None and process.poll() is None:

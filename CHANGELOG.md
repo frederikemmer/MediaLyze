@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+- Original replacement supports output formatting presets and an optional replacement trash with configurable size and file-count limits.
+
+- Preset editors show linked automation rules and ask for confirmation before saving changes that affect them.
+
+- Transcoding automation rules can apply saved filename and folder formatting presets.
+
 - Preserve file history across checksum-confirmed moves between roots in a library. For similar names, the scanner now also checks runtime and available video metadata.
 
 - Transcoding rules can skip previously evaluated files, including files that did not match the rule. File History displays rule outcomes, and the automation reuses them after scanner-recognized renames and moves.

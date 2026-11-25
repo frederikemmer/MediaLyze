@@ -2114,7 +2114,15 @@
     "deviceUnavailable": "Unavailable",
     "deviceNotDetected": "Not detected",
     "noHardware": "No hardware device passed the runtime capability probe.",
-    "replacementWarning": "Replacing the original overwrites the source in place without a byte-for-byte backup. The server requires an explicit confirmation.",
+    "replacementTrash": {
+      "title": "Replacement trash",
+      "enabled": "Keep replaced originals in the trash",
+      "directory": "Directory name",
+      "maxFiles": "Maximum files",
+      "maxGib": "Maximum storage (GiB)",
+      "retention": "The oldest originals are deleted first when a limit is exceeded. A limit of 0 is unlimited."
+    },
+    "replacementWarning": "The original is removed after the replacement is published. The trash can retain the original when enabled. Explicit confirmation is required.",
     "replacementConfirm": "I understand and confirm replacing the original file",
     "save": "Save transcoding settings",
     "saved": "Transcoding settings saved.",
@@ -2394,7 +2402,18 @@
       }
     },
     "globalHistory": "Global transcoding history",
+    "presetRuleImpact": {
+      "title": "Affected automation rules",
+      "none": "No automation rules use this preset.",
+      "confirm": "I confirm that the change affects the linked rules.",
+      "hidden": "Additional affected rules you lack permission to view: {{count}}",
+      "refresh": "The affected rules have changed. Review the list and confirm again."
+    },
     "automation": {
+      "filenamePreset": "Filename preset",
+      "folderPreset": "Folder preset",
+      "formattingPresetUnavailable": "Selected preset unavailable",
+      "defaultFormatting": "Standard formatting",
       "duplicateRule": "Duplicate rule",
       "logic": "Logic",
       "exactlyOne": "Exactly one matches (XOR)",

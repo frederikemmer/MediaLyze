@@ -813,6 +813,40 @@ export function TranscodingSettingsPanel({
           </div>
         </div>
 
+        <fieldset className="field">
+          <legend>{t("transcoding.replacementTrash.title")}</legend>
+          <label className="transcode-filename-option">
+            <input type="checkbox" checked={draft.replacement_trash_enabled ?? false}
+              disabled={!appSettingsLoaded || saving}
+              onChange={(event) => updateDraft("replacement_trash_enabled", event.target.checked)} />
+            {t("transcoding.replacementTrash.enabled")}
+          </label>
+          {draft.replacement_trash_enabled && (
+            <div className="app-settings-performance-grid">
+              <label className="field">
+                <span>{t("transcoding.replacementTrash.directory")}</span>
+                <input className="settings-choice-input" maxLength={120}
+                  value={draft.replacement_trash_directory ?? "Replaced Originals"}
+                  disabled={!appSettingsLoaded || saving}
+                  onChange={(event) => updateDraft("replacement_trash_directory", event.target.value)} />
+              </label>
+              <label className="field">
+                <span>{t("transcoding.replacementTrash.maxFiles")}</span>
+                <input type="number" className="settings-choice-input" min={0}
+                  value={draft.replacement_trash_max_files ?? 0} disabled={!appSettingsLoaded || saving}
+                  onChange={(event) => updateDraft("replacement_trash_max_files", Math.max(0, Math.floor(Number(event.target.value))))} />
+              </label>
+              <label className="field">
+                <span>{t("transcoding.replacementTrash.maxGib")}</span>
+                <input type="number" className="settings-choice-input" min={0} max={1000000} step="any"
+                  value={draft.replacement_trash_max_gib ?? 0} disabled={!appSettingsLoaded || saving}
+                  onChange={(event) => updateDraft("replacement_trash_max_gib", Math.max(0, Number(event.target.value)))} />
+              </label>
+            </div>
+          )}
+          {draft.replacement_trash_enabled && <p className="field-hint">{t("transcoding.replacementTrash.retention")}</p>}
+        </fieldset>
+
         {draft.default_output_mode === "replace_original" ? (
           <div className="notice warning">
             <div>{t("transcoding.replacementWarning")}</div>

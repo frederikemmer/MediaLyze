@@ -9,6 +9,7 @@ import type { FormattingKind } from "../lib/transcode-formatting-presets";
 import { FILENAME_METADATA_TOKENS, type FilenameMetadataToken, type FilenameMetadataTokenEntry } from "../lib/transcode-formatting-metadata";
 import { filenameTemplateEditorMarkup, filenameTemplateFromEditor, filenameTemplateSelectionFromEditor, restoreFilenameTemplateCaret } from "../lib/filename-template-editor";
 import { formatFilenameLanguageCode } from "../lib/language";
+import { PresetRuleImpactNotice } from "./PresetRuleImpactNotice";
 import { PanelEmptyState } from "./PanelEmptyState";
 import { TranscodeFormattingMetadataMenu } from "./TranscodeFormattingMetadataMenu";
 import { TooltipTrigger } from "./TooltipTrigger";
@@ -133,6 +134,9 @@ export function TranscodeFormattingPresetsPanel({ kind, tabs }: { kind: Formatti
   const [presets, setPresets] = useState<TranscodeFormattingPreset[]>([]);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [draftId, setDraftId] = useState<number | null | undefined>(undefined);
+  const [confirmedImpact, setConfirmedImpact] = useState<string | null>(null);
+  const presetImpact = presets.find((preset) => preset.id === draftId)?.rule_impact;
+  const presetImpactConfirmed = !presetImpact || confirmedImpact === presetImpact.token;
   const [name, setName] = useState("");
   const [definition, setDefinition] = useState<TranscodeFormattingDefinition>(() => emptyDefinition(kind));
   const [search, setSearch] = useState("");
@@ -168,6 +172,7 @@ export function TranscodeFormattingPresetsPanel({ kind, tabs }: { kind: Formatti
   }
 
   function startEdit(preset: TranscodeFormattingPreset) {
+    setConfirmedImpact(null);
     setExpandedId(preset.id);
     setDraftId(preset.id);
     setName(preset.name);
@@ -232,20 +237,32 @@ export function TranscodeFormattingPresetsPanel({ kind, tabs }: { kind: Formatti
   }
 
   async function save() {
-    if (!name.trim() || !definition.template.trim()) return;
+    if (!name.trim() || !definition.template.trim() || !presetImpactConfirmed) return;
     setBusy(true);
     try {
       const savedDefinition = { ...definition, enabled: true, include_subtitle_languages: false };
       const saved = draftId === null
         ? await api.createTranscodeFormattingPreset({ kind, name: name.trim(), definition: savedDefinition })
-        : await api.updateTranscodeFormattingPreset(draftId as number, { name: name.trim(), definition: savedDefinition });
+        : await api.updateTranscodeFormattingPreset(draftId as number, {
+          name: name.trim(), definition: savedDefinition,
+          ...(presetImpact ? { confirm_rule_impact: presetImpact.token } : {}),
+        });
       setPresets((current) => [...current.filter((preset) => preset.id !== saved.id), saved].sort((a, b) => a.name.localeCompare(b.name)));
       setExpandedId(saved.id);
       setDraftId(undefined);
       setError(null);
       setMetadataMenuOpen(false);
       feedback("success", "formatSaved", "Formatting preset saved.");
-    } catch {
+    } catch (reason) {
+      if (reason instanceof Error && reason.message === "Rule impact confirmation required") {
+        setConfirmedImpact(null);
+        try {
+          setPresets((await api.transcodeFormattingPresets()).filter((preset) => preset.kind === kind));
+        } catch {
+          // Keep the draft available if the dependencies cannot be refreshed.
+        }
+        setError(t("transcoding.presetRuleImpact.refresh"));
+      }
       feedback("error", "formatSaveFailed", "Could not save the formatting preset.");
     } finally {
       setBusy(false);
@@ -404,7 +421,11 @@ export function TranscodeFormattingPresetsPanel({ kind, tabs }: { kind: Formatti
           <code aria-live="polite">{exampleOutput}</code>
         </div>
       </div>
-      <div className="compatibility-profile-card-actions transcode-automation-editor-actions"><button type="button" className="transcode-action-button" disabled={busy || !name.trim() || !definition.template.trim()} onClick={() => void save()}><Save size={16} aria-hidden="true" />{t("common.save")}</button><button type="button" className="secondary transcode-action-button" disabled={busy} onClick={cancelEditing}>{t("common.cancel")}</button></div>
+      {typeof draftId === "number" && (
+        <PresetRuleImpactNotice impact={presetImpact} confirmed={presetImpactConfirmed}
+          onConfirm={(confirmed) => setConfirmedImpact(confirmed ? presetImpact?.token ?? null : null)} />
+      )}
+      <div className="compatibility-profile-card-actions transcode-automation-editor-actions"><button type="button" className="transcode-action-button" disabled={busy || !name.trim() || !definition.template.trim() || !presetImpactConfirmed} onClick={() => void save()}><Save size={16} aria-hidden="true" />{t("common.save")}</button><button type="button" className="secondary transcode-action-button" disabled={busy} onClick={cancelEditing}>{t("common.cancel")}</button></div>
     </div>
   );
 

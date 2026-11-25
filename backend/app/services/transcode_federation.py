@@ -24,6 +24,7 @@ import json
 import logging
 import math
 import os
+from contextlib import nullcontext
 import secrets
 import shutil
 import socket
@@ -3063,7 +3064,9 @@ def execute_remote_transcode_job(
     """Origin-side orchestration with resumable upload/download chunks."""
 
     from backend.app.models.entities import MediaFile, TranscodeVariant
-    from backend.app.services.transcoding import _publish_without_overwrite, enforce_automation_output_size
+    from backend.app.services.transcoding import (
+        _publish_without_overwrite, enforce_automation_output_size, publish_transcode_replacement,
+    )
 
     db = SessionLocal()
     try:
@@ -3269,39 +3272,39 @@ def execute_remote_transcode_job(
         enforce_automation_output_size(job, Path(result_transfer.local_path))
         job.phase_detail = "Validating the complete result checksum and source snapshot"
         db.commit()
-        if job.output_mode == "replace_original":
-            job.processing_phase = "publishing"
-            os.replace(Path(result_transfer.local_path), output_path)
-        else:
-            job.processing_phase = "publishing"
-            _publish_without_overwrite(Path(result_transfer.local_path), output_path)
-        if source is not None:
-            variant = TranscodeVariant(
-                group_id=job.group_id,
-                job_id=job.id,
-                original_file_id=job.source_file_id,
-                library_root_id=source.library_root_id,
-                output_relative_path=job.output_relative_path,
-                output_filename=output_path.name,
-                source_path_snapshot=job.source_path_snapshot,
-                output_path_snapshot=job.output_path_snapshot,
-                output_mode=job.output_mode,
-                analysis_status="awaiting_analysis",
-                output_file_id=source.id if job.output_mode == "replace_original" else None,
-            )
-            if job.output_mode == "replace_original":
-                source.is_transcode_variant = False
-                job.result_file_id = source.id
-            db.add(variant)
-        job.status = JobStatus.completed
-        job.processing_phase = "completed"
-        job.phase_detail = None
-        job.progress_percent = 100.0
-        job.result_transfer_bytes = result_total
-        job.result_transfer_total_bytes = result_total
-        job.transfer_eta_seconds = 0.0
-        job.finished_at = utc_now()
-        db.commit()
+        job.processing_phase = "publishing"
+        result = Path(result_transfer.local_path)
+        replacement = (
+            publish_transcode_replacement(db, settings, job, source, result)
+            if job.output_mode == "replace_original" else nullcontext()
+        )
+        with replacement:
+            if job.output_mode != "replace_original":
+                _publish_without_overwrite(result, output_path)
+            if source is not None:
+                variant = TranscodeVariant(
+                    group_id=job.group_id,
+                    job_id=job.id,
+                    original_file_id=job.source_file_id,
+                    library_root_id=source.library_root_id,
+                    output_relative_path=job.output_relative_path,
+                    output_filename=output_path.name,
+                    source_path_snapshot=job.source_path_snapshot,
+                    output_path_snapshot=job.output_path_snapshot,
+                    output_mode=job.output_mode,
+                    analysis_status="awaiting_analysis",
+                    output_file_id=source.id if job.output_mode == "replace_original" else None,
+                )
+                db.add(variant)
+            job.status = JobStatus.completed
+            job.processing_phase = "completed"
+            job.phase_detail = None
+            job.progress_percent = 100.0
+            job.result_transfer_bytes = result_total
+            job.result_transfer_total_bytes = result_total
+            job.transfer_eta_seconds = 0.0
+            job.finished_at = utc_now()
+            db.commit()
         return job.library_id
     except FederationError as exc:
         job = db.get(TranscodeJob, job_id)

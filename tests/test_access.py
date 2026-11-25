@@ -780,7 +780,7 @@ def test_transcode_rule_list_filters_entire_hidden_scopes_before_response(env):
         app,
         {
             **EMPTY_POLICY,
-            "global": ["settings.app.view"],
+            "global": ["settings.app.view", "settings.presets.view", "settings.presets.edit"],
             "libraries": {str(a): ["library.read", "transcode.view"]},
         },
     )
@@ -795,6 +795,12 @@ def test_transcode_rule_list_filters_entire_hidden_scopes_before_response(env):
     assert [r["name"] for r in owner.get("/api/transcoding/rules").json()] == [
         "visible rule", "visible rule copy", "hidden rule",
     ]
+    presets = client.get("/api/transcoding/presets")
+    assert presets.status_code == 200, presets.text
+    preset = next(item for item in presets.json() if item["name"] == "test")
+    impact = preset["rule_impact"]
+    assert impact["total"] == 3
+    assert [rule["name"] for rule in impact["rules"]] == ["visible rule", "visible rule copy"]
 
 
 def test_unsupported_product_mappings_stay_restricted_even_when_all_current_rights_are_assigned(

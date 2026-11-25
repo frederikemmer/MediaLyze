@@ -5,7 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from sqlalchemy import case, func, or_, select, text
+from sqlalchemy import case, func, or_, select, text, update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -20,6 +20,7 @@ from backend.app.models.entities import (
     MediaFile,
     TranscodeAutomationRecord,
     TranscodeAutomationRun,
+    TranscodeFormattingPreset,
     TranscodeJob,
     TranscodePreset,
     TranscodeRule,
@@ -31,10 +32,12 @@ from backend.app.schemas.transcoding import (
     TranscodeAutomationScope,
     TranscodeCondition,
     TranscodeConditionGroup,
+    TranscodeFormattingDefinition,
     TranscodePresetCreate,
     TranscodePresetDefinition,
     TranscodePresetPlanRead,
     TranscodePresetRead,
+    TranscodePresetRuleImpact,
     TranscodePresetStreamRule,
     TranscodePresetUpdate,
     TranscodeReplacementApproval,
@@ -58,6 +61,7 @@ from backend.app.services.media_search import (
     _parse_size_value,
 )
 from backend.app.services.resolution_categories import classify_resolution_category
+from backend.app.services.transcode_preset_impact import preset_rule_impact, preset_rule_impacts
 from backend.app.services.transcoding import (
     TranscodeValidationError,
     _available_encoder,
@@ -80,6 +84,7 @@ class TranscodeAutomationError(ValueError):
 
 AUTOMATION_PAGE_SIZE = 50
 AUTOMATION_PREVIEW_QUERY_BATCH_SIZE = 400
+RULE_FORMATTING_FIELDS = ("filename_preset_id", "folder_preset_id")
 TERMINAL_AUTOMATION_STATUSES = {"completed", "failed", "canceled"}
 
 
@@ -92,7 +97,7 @@ def _preset_definition(preset: TranscodePreset) -> TranscodePresetDefinition:
         ) from exc
 
 
-def _preset_payload(preset: TranscodePreset, rule_count: int = 0) -> TranscodePresetRead:
+def _preset_payload(preset: TranscodePreset, impact: TranscodePresetRuleImpact | None = None) -> TranscodePresetRead:
     return TranscodePresetRead(
         id=preset.id,
         name=preset.name,
@@ -101,15 +106,15 @@ def _preset_payload(preset: TranscodePreset, rule_count: int = 0) -> TranscodePr
         is_builtin=bool(preset.is_builtin),
         builtin_key=preset.builtin_key,
         definition=_preset_definition(preset),
-        used_by_rule_count=rule_count,
+        used_by_rule_count=impact.total if impact else 0,
+        rule_impact=impact,
         created_at=preset.created_at,
         updated_at=preset.updated_at,
     )
 
 
 def serialize_transcode_preset(db: Session, preset: TranscodePreset) -> TranscodePresetRead:
-    count = int(db.scalar(select(func.count(TranscodeRule.id)).where(TranscodeRule.profile_id == preset.id)) or 0)
-    return _preset_payload(preset, count)
+    return _preset_payload(preset, preset_rule_impact(db, "profile_id", preset.id))
 
 
 def _preset_definition_for_builtin(key: str) -> TranscodePresetDefinition:
@@ -234,13 +239,8 @@ def list_transcode_presets(db: Session) -> list[TranscodePresetRead]:
             TranscodePreset.is_builtin.desc(), TranscodePreset.name.collate("NOCASE"), TranscodePreset.id
         )
     ).all()
-    counts = {
-        profile_id: int(count)
-        for profile_id, count in db.execute(
-            select(TranscodeRule.profile_id, func.count(TranscodeRule.id)).group_by(TranscodeRule.profile_id)
-        ).all()
-    }
-    return [_preset_payload(preset, counts.get(preset.id, 0)) for preset in presets]
+    impacts = preset_rule_impacts(db, ("profile_id",))
+    return [_preset_payload(preset, impacts.get(("profile_id", preset.id))) for preset in presets]
 
 
 def get_transcode_preset(db: Session, preset_id: int) -> TranscodePreset:
@@ -315,12 +315,19 @@ def update_transcode_preset(
     preset_id: int,
     payload: TranscodePresetUpdate,
 ) -> TranscodePresetRead:
+    db.execute(text("BEGIN IMMEDIATE"))
     preset = get_transcode_preset(db, preset_id)
     if preset.is_builtin:
         raise TranscodeAutomationError("Built-in transcoding presets are immutable; duplicate one to edit it")
     changes = payload.model_dump(exclude_unset=True, mode="json")
+    changes.pop("confirm_rule_impact", None)
+    impact = preset_rule_impact(db, "profile_id", preset.id)
     if not changes:
-        return _preset_payload(preset)
+        db.commit()
+        return _preset_payload(preset, impact)
+    if impact and payload.confirm_rule_impact != impact.token:
+        db.rollback()
+        raise TranscodeAutomationError("Rule impact confirmation required")
     if "name" in changes:
         name = str(changes["name"]).strip()
         if not name:
@@ -342,18 +349,14 @@ def update_transcode_preset(
     definition_changed = "definition" in changes
     preset.version += 1
     if definition_changed:
-        for rule in db.scalars(
-            select(TranscodeRule).where(
-                TranscodeRule.profile_id == preset.id,
-                TranscodeRule.output_mode == "replace_original",
-            )
-        ).all():
-            rule.replacement_approved_version = None
-            rule.enabled = False
-    db.commit()
+        db.execute(
+            update(TranscodeRule)
+            .where(TranscodeRule.profile_id == preset.id, TranscodeRule.output_mode == "replace_original")
+            .values(replacement_approved_version=None, enabled=False)
+        )
     cancel_queued_automation_work(db, profile_id=preset.id, reason="The referenced preset changed")
     db.refresh(preset)
-    return _preset_payload(preset)
+    return serialize_transcode_preset(db, preset)
 
 
 def delete_transcode_preset(db: Session, preset_id: int) -> None:
@@ -411,6 +414,8 @@ def _rule_payload(db: Session, rule: TranscodeRule) -> TranscodeRuleRead:
         output_mode=rule.output_mode,
         output_subfolder=rule.output_subfolder or "",
         prevent_output_growth=rule.prevent_output_growth,
+        filename_preset_id=rule.filename_preset_id,
+        folder_preset_id=rule.folder_preset_id,
         skip_previously_evaluated=rule.skip_previously_evaluated,
         replacement_approved=rule.replacement_approved_version == rule.version,
         created_at=rule.created_at,
@@ -452,6 +457,45 @@ def _validate_rule_output_layout(output_mode: str, output_subfolder: str) -> Non
         )
 
 
+def _rule_formatting_options(
+    db: Session,
+    filename_preset_id: int | None,
+    folder_preset_id: int | None,
+    presets: dict[int, TranscodeFormattingPreset] | None = None,
+) -> dict[str, Any]:
+    options: dict[str, Any] = {}
+    for kind, preset_id in (("filename", filename_preset_id), ("folder", folder_preset_id)):
+        if preset_id is None:
+            continue
+        preset = presets.get(preset_id) if presets is not None else db.get(TranscodeFormattingPreset, preset_id)
+        if preset is None or preset.kind != kind:
+            raise TranscodeAutomationError(f"Invalid {kind} formatting preset")
+        definition = TranscodeFormattingDefinition.model_validate(preset.definition)
+        options.update({
+            f"{kind}_format_enabled": True,
+            f"{kind}_template": definition.template,
+            f"{kind}_template_override": True,
+            f"{kind}_metadata_separator": definition.metadata_separator,
+            f"{kind}_cleanup_preset": definition.cleanup_preset,
+            f"{kind}_cleanup_regex": definition.cleanup_regex,
+            f"{kind}_language_code_format": definition.language_code_format,
+        })
+        if kind == "filename":
+            options["filename_template_explicit_source"] = definition.source_name_explicit
+            options["include_subtitle_languages"] = False
+    return options
+
+
+def _rule_formatting_presets(db: Session, rules: list[TranscodeRule]) -> dict[int, TranscodeFormattingPreset]:
+    ids = {getattr(rule, field) for rule in rules for field in RULE_FORMATTING_FIELDS} - {None}
+    if not ids:
+        return {}
+    return {
+        preset.id: preset
+        for preset in db.scalars(select(TranscodeFormattingPreset).where(TranscodeFormattingPreset.id.in_(ids)))
+    }
+
+
 def _rule_enabled_for_output(rule: TranscodeRule, requested: bool) -> bool:
     if rule.output_mode == "replace_original" and rule.replacement_approved_version != rule.version:
         return False
@@ -476,6 +520,7 @@ def create_transcode_rule(db: Session, payload: TranscodeRuleCreate) -> Transcod
     normalized_libraries = _library_ids_exist(db, payload.library_ids)
     output_subfolder = _normalized_rule_output_subfolder(payload.output_subfolder)
     _validate_rule_output_layout(payload.output_mode, output_subfolder)
+    _rule_formatting_options(db, payload.filename_preset_id, payload.folder_preset_id)
     # New rules are always disabled.  Replacement additionally requires the
     # separate one-time approval endpoint before it can ever be enabled.
     rule = TranscodeRule(
@@ -489,6 +534,8 @@ def create_transcode_rule(db: Session, payload: TranscodeRuleCreate) -> Transcod
         output_mode=payload.output_mode,
         output_subfolder=output_subfolder,
         prevent_output_growth=payload.prevent_output_growth,
+        filename_preset_id=payload.filename_preset_id,
+        folder_preset_id=payload.folder_preset_id,
         skip_previously_evaluated=payload.skip_previously_evaluated,
         replacement_approved_version=None,
     )
@@ -530,6 +577,8 @@ def duplicate_transcode_rule(db: Session, rule_id: int) -> TranscodeRuleRead:
         output_mode=source.output_mode,
         output_subfolder=source.output_subfolder,
         prevent_output_growth=source.prevent_output_growth,
+        filename_preset_id=source.filename_preset_id,
+        folder_preset_id=source.folder_preset_id,
         skip_previously_evaluated=source.skip_previously_evaluated,
     )
     db.add(duplicate)
@@ -547,7 +596,7 @@ def update_transcode_rule(
     if not changes:
         return _rule_payload(db, rule)
     relevant_change = any(
-        key in changes for key in {"conditions", "library_ids", "profile_id", "output_mode", "output_subfolder", "prevent_output_growth"}
+        key in changes for key in {"conditions", "library_ids", "profile_id", "output_mode", "output_subfolder", "prevent_output_growth", *RULE_FORMATTING_FIELDS}
     )
     disable_requested = changes.get("enabled") is False
     if "name" in changes:
@@ -575,6 +624,14 @@ def update_transcode_rule(
         else rule.output_subfolder or ""
     )
     _validate_rule_output_layout(next_output_mode, next_output_subfolder)
+    _rule_formatting_options(
+        db,
+        changes.get("filename_preset_id", rule.filename_preset_id),
+        changes.get("folder_preset_id", rule.folder_preset_id),
+    )
+    for field in RULE_FORMATTING_FIELDS:
+        if field in changes:
+            setattr(rule, field, changes[field])
     if "output_mode" in changes:
         rule.output_mode = next_output_mode
     if "output_subfolder" in changes:
@@ -1222,6 +1279,7 @@ def test_transcode_rule_draft(db: Session, settings: Settings, payload: Transcod
     unchanged = saved is not None and (
         saved.profile_id == payload.profile_id and saved.output_mode == payload.output_mode
         and (saved.output_subfolder or "") == subfolder and saved.conditions == conditions
+        and all(getattr(saved, field) == getattr(payload, field) for field in RULE_FORMATTING_FIELDS)
         and saved.prevent_output_growth == payload.prevent_output_growth
         and set(saved.library_ids) == set(payload.library_ids)
     )
@@ -1229,6 +1287,7 @@ def test_transcode_rule_draft(db: Session, settings: Settings, payload: Transcod
         id=0, name="", version=1, enabled=True, priority=0,
         library_ids=payload.library_ids, conditions=conditions, profile_id=preset.id,
         output_mode=payload.output_mode, output_subfolder=subfolder, prevent_output_growth=payload.prevent_output_growth,
+        filename_preset_id=payload.filename_preset_id, folder_preset_id=payload.folder_preset_id,
     )
     decision = _decision_for_file(
         db, settings, media_file, [draft], app_settings, get_transcode_capabilities(settings),
@@ -1402,6 +1461,7 @@ def _decision_for_file(
     *,
     retry_failed: bool,
     profiles_by_id: dict[int, TranscodePreset] | None = None,
+    formatting_presets: dict[int, TranscodeFormattingPreset] | None = None,
     records_by_file: dict[int, list[TranscodeAutomationRecord]] | None = None,
     non_matches: list[dict[str, Any]] | None = None,
 ) -> TranscodeAutomationDecisionRead:
@@ -1492,6 +1552,10 @@ def _decision_for_file(
             return TranscodeAutomationDecisionRead(**base, **common, status="skipped", reason=reason)
     try:
         plan = materialize_transcode_preset(profile, media_file, capabilities, app_settings, output_mode=rule.output_mode)
+        formatting = _rule_formatting_options(
+            db, rule.filename_preset_id, rule.folder_preset_id, formatting_presets,
+        )
+        plan = plan.model_copy(update=formatting)
         plan.replacement_confirmed = rule.replacement_approved_version == rule.version
         validation = validate_transcode_plan(
             db,
@@ -1559,6 +1623,7 @@ def preview_transcode_automation(
     items: list[TranscodeAutomationDecisionRead] = []
     other_items: list[TranscodeAutomationDecisionRead] = []
     profiles_by_id = _preview_profiles(db, rules)
+    formatting_presets = _rule_formatting_presets(db, rules)
     counts = dict.fromkeys(("matched", "queued", "blocked", "skipped", "unmatched"), 0)
     after_id = 0
     remaining = total if scope.preview_all else min(scope.limit, total)
@@ -1579,6 +1644,7 @@ def preview_transcode_automation(
                 capabilities,
                 retry_failed=scope.retry_failed,
                 profiles_by_id=profiles_by_id,
+                formatting_presets=formatting_presets,
                 records_by_file=records_by_file,
             )
             counts[decision.status] += 1
@@ -1741,35 +1807,19 @@ def cancel_queued_automation_work(
     profile_id: int | None = None,
     reason: str,
 ) -> int:
-    query = select(TranscodeJob).where(TranscodeJob.status == JobStatus.queued)
+    jobs = update(TranscodeJob).where(TranscodeJob.status == JobStatus.queued)
+    records = update(TranscodeAutomationRecord).where(TranscodeAutomationRecord.status == "queued")
     if rule_id is not None:
-        query = query.where(TranscodeJob.rule_id == rule_id)
+        jobs = jobs.where(TranscodeJob.rule_id == rule_id)
+        records = records.where(TranscodeAutomationRecord.rule_id == rule_id)
     if profile_id is not None:
-        query = query.where(TranscodeJob.profile_id == profile_id)
-    jobs = db.scalars(query).all()
-    job_ids = {job.id for job in jobs}
-    for job in jobs:
-        job.status = JobStatus.canceled
-        job.error = reason
-        job.finished_at = utc_now()
-    records = db.scalars(
-        select(TranscodeAutomationRecord).where(
-            TranscodeAutomationRecord.status == "queued",
-            *(
-                [TranscodeAutomationRecord.rule_id == rule_id]
-                if rule_id is not None
-                else [TranscodeAutomationRecord.profile_id == profile_id]
-                if profile_id is not None
-                else []
-            ),
-        )
-    ).all()
-    for record in records:
-        record.status = "canceled"
-        record.error = reason
-    if jobs or records:
-        db.commit()
-    return len(job_ids) + len(records)
+        jobs = jobs.where(TranscodeJob.profile_id == profile_id)
+        records = records.where(TranscodeAutomationRecord.profile_id == profile_id)
+    canceled_jobs = db.execute(jobs.values(status=JobStatus.canceled, error=reason, finished_at=utc_now()))
+    canceled_records = db.execute(records.values(status="canceled", error=reason))
+    canceled = canceled_jobs.rowcount + canceled_records.rowcount
+    db.commit()
+    return canceled
 
 
 def cancel_queued_automation_run_work(
@@ -1823,6 +1873,8 @@ def _rule_snapshot(rule: TranscodeRule, profile: TranscodePreset) -> dict[str, A
             "output_mode": rule.output_mode,
             "output_subfolder": rule.output_subfolder,
             "prevent_output_growth": rule.prevent_output_growth,
+            "filename_preset_id": rule.filename_preset_id,
+            "folder_preset_id": rule.folder_preset_id,
             "replacement_approved_version": rule.replacement_approved_version,
         },
         "profile": {
@@ -1989,6 +2041,7 @@ def process_transcode_automation_run(
                 break
             page += 1
             profiles_by_id = _preview_profiles(db, rules)
+            formatting_presets = _rule_formatting_presets(db, rules)
             records_by_file = _preview_existing_records(db, candidates)
             non_matches: list[dict[str, Any]] = []
             for media_file in candidates:
@@ -2001,6 +2054,7 @@ def process_transcode_automation_run(
                     capabilities,
                     retry_failed=scope.retry_failed,
                     profiles_by_id=profiles_by_id,
+                    formatting_presets=formatting_presets,
                     records_by_file=records_by_file,
                     non_matches=non_matches,
                 )
@@ -2076,7 +2130,7 @@ def finalize_transcode_automation_record(db: Session, job: TranscodeJob) -> None
         record.status = "completed"
         record.error = None
         try:
-            source_path = Path(job.source_path_snapshot)
+            source_path = Path(job.output_path_snapshot if job.output_mode == "replace_original" else job.source_path_snapshot)
             stat = source_path.stat()
             record.result_source_path = str(source_path)
             record.result_source_size = stat.st_size

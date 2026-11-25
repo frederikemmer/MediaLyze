@@ -360,7 +360,7 @@ def _transcode_automation_error(exc: TranscodeAutomationError) -> HTTPException:
     lowered = message.lower()
     if "not found" in lowered:
         status_code = 404
-    elif any(token in lowered for token in ("already exists", "still used", "immutable", "cannot be deleted")):
+    elif any(token in lowered for token in ("already exists", "still used", "immutable", "cannot be deleted", "confirmation required")):
         status_code = 409
     else:
         status_code = 400
@@ -797,6 +797,12 @@ def app_settings_update(
         or old_automation.automation_interval_minutes != new_automation.automation_interval_minutes
     ):
         runtime.refresh_transcode_automation_schedule()
+    if new_automation.replacement_trash_enabled and (
+        old_automation.replacement_trash_enabled != new_automation.replacement_trash_enabled
+        or old_automation.replacement_trash_max_files != new_automation.replacement_trash_max_files
+        or old_automation.replacement_trash_max_gib != new_automation.replacement_trash_max_gib
+    ):
+        runtime.request_replacement_trash_prune()
     if updated_settings.history_retention != current_settings.history_retention:
         runtime.run_history_retention()
     if (
@@ -3188,7 +3194,7 @@ def transcoding_formatting_preset_update(
     try:
         return update_formatting_preset(db, preset_id, payload)
     except FormattingPresetError as exc:
-        raise HTTPException(status_code=404 if "not found" in str(exc) else 409 if "already exists" in str(exc) else 400, detail=str(exc)) from exc
+        raise HTTPException(status_code=404 if "not found" in str(exc) else 409 if any(reason in str(exc) for reason in ("already exists", "confirmation required")) else 400, detail=str(exc)) from exc
 
 
 @router.delete("/transcoding/formatting-presets/{preset_id}", status_code=204)
@@ -3196,7 +3202,7 @@ def transcoding_formatting_preset_delete(preset_id: int, db: Session = Depends(g
     try:
         delete_formatting_preset(db, preset_id)
     except FormattingPresetError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404 if "not found" in str(exc) else 409, detail=str(exc)) from exc
     return Response(status_code=204)
 
 

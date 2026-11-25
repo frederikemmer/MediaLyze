@@ -2,7 +2,7 @@ from enum import Enum
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field
 
 
 SCAN_WORKER_COUNT_MIN = 1
@@ -66,6 +66,21 @@ class ScanPerformanceUpdate(BaseModel):
     )
 
 
+def _replacement_trash_directory(value: str) -> str:
+    value = value.strip()
+    reserved = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+    if (
+        not value or value.startswith(".") or value.endswith(".")
+        or any(char in '/\\:<>|"?*' or ord(char) < 32 for char in value)
+        or value.split(".", 1)[0].upper() in reserved
+    ):
+        raise ValueError("Enter a single directory name for the replacement trash")
+    return value
+
+
+ReplacementTrashDirectory = Annotated[str, Field(min_length=1, max_length=120), AfterValidator(_replacement_trash_directory)]
+
+
 class TranscodingSettingsRead(BaseModel):
     execution_mode: Literal["hardware_required", "cpu_only"] = "hardware_required"
     cpu_budget_percent: int = Field(default=90, ge=1, le=100)
@@ -76,6 +91,10 @@ class TranscodingSettingsRead(BaseModel):
     retry_count: int = Field(default=0, ge=0, le=5)
     existing_output: Literal["fail", "skip"] = "fail"
     remove_partial_output: bool = True
+    replacement_trash_enabled: bool = False
+    replacement_trash_directory: ReplacementTrashDirectory = "Replaced Originals"
+    replacement_trash_max_files: int = Field(default=0, ge=0)
+    replacement_trash_max_gib: float = Field(default=0, ge=0, le=1_000_000)
     automation_trigger: Literal["scan", "manual", "interval"] = "scan"
     automation_interval_minutes: int = Field(default=60, ge=5, le=10080)
 
@@ -90,6 +109,10 @@ class TranscodingSettingsUpdate(BaseModel):
     retry_count: int | None = Field(default=None, ge=0, le=5)
     existing_output: Literal["fail", "skip"] | None = None
     remove_partial_output: bool | None = None
+    replacement_trash_enabled: bool | None = None
+    replacement_trash_directory: ReplacementTrashDirectory | None = None
+    replacement_trash_max_files: int | None = Field(default=None, ge=0)
+    replacement_trash_max_gib: float | None = Field(default=None, ge=0, le=1_000_000)
     automation_trigger: Literal["scan", "manual", "interval"] | None = None
     automation_interval_minutes: int | None = Field(default=None, ge=5, le=10080)
 

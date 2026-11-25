@@ -610,6 +610,10 @@ def test_update_app_settings_persists_split_ignore_patterns_and_merges_effective
             "existing_output": "fail",
             "remove_partial_output": True,
             "automation_trigger": "scan",
+            "replacement_trash_enabled": False,
+            "replacement_trash_directory": "Replaced Originals",
+            "replacement_trash_max_files": 0,
+            "replacement_trash_max_gib": 0.0,
             "automation_interval_minutes": 60,
         },
         "history_retention": {

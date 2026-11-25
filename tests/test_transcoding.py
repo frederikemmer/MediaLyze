@@ -2197,3 +2197,62 @@ def test_active_job_reservation_still_blocks_second_job(tmp_path, monkeypatch):
             reserve_resource(db, owner_installation_id="local", resource_type="gpu", device_id="videotoolbox0", capacity=1)
         db.refresh(reservation)
         assert reservation.status == "active"
+
+
+@pytest.mark.parametrize("keep_original", [False, True])
+def test_formatted_replacement_keeps_file_identity_and_optionally_archives_original(tmp_path, monkeypatch, keep_original):
+    from backend.app.schemas.app_settings import AppSettingsUpdate
+    from backend.app.services.app_settings import update_app_settings
+
+    factory = _session_factory()
+    settings = _settings(tmp_path)
+    monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda *_args, **_kwargs: _capabilities())
+    with factory() as db:
+        media = _media_file(db, tmp_path)
+        source = Path(media.library_root.path) / media.relative_path
+        origin_folder = source.parent / "Old folder"
+        origin_folder.mkdir()
+        old_path = source.rename(origin_folder / source.name)
+        media.relative_path = f"{origin_folder.name}/{source.name}"
+        db.commit()
+        update_app_settings(db, AppSettingsUpdate(transcoding={
+            "replacement_trash_enabled": keep_original, "replacement_trash_directory": "Originals",
+        }), settings)
+        plan = _compatibility_plan().model_copy(update={
+            "output_mode": "replace_original", "replacement_confirmed": True,
+            "filename_template": "New {sourceName}", "filename_template_override": True,
+            "folder_format_enabled": True, "folder_template_override": True,
+            "folder_template": "{folderName} Converted",
+        })
+        job, _ = transcoding.queue_transcode_job(db, settings, media, plan)
+        assert job.output_relative_path == "Old folder Converted/New Movie.mp4"
+        result = Path(job.temporary_path)
+        result.write_bytes(b"new result")
+        output = Path(job.output_path_snapshot)
+
+        # A new file appearing after queueing must neither be overwritten nor
+        # cause the source to be retired.
+        output.write_bytes(b"unrelated file")
+        with pytest.raises(FileExistsError):
+            with transcoding.publish_transcode_replacement(db, settings, job, media, result):
+                pytest.fail("An existing target must prevent replacement")
+        assert output.read_bytes() == b"unrelated file"
+        assert old_path.read_bytes() == b"source-video"
+        output.unlink()
+
+        with pytest.raises(RuntimeError, match="database failure"):
+            with transcoding.publish_transcode_replacement(db, settings, job, media, result):
+                raise RuntimeError("database failure")
+        assert old_path.read_bytes() == b"source-video"
+        assert not output.exists()
+        result.write_bytes(b"new result")
+
+        media_id = media.id
+        with transcoding.publish_transcode_replacement(db, settings, job, media, result):
+            db.commit()
+        assert not old_path.exists()
+        assert output.read_bytes() == b"new result"
+        assert db.get(MediaFile, media_id).relative_path == job.output_relative_path
+        assert job.result_file_id == media_id
+        archived = list((settings.config_path / "transcode-trash" / "Originals").glob("original-*/Movie.mkv"))
+        assert [path.read_bytes() for path in archived] == ([b"source-video"] if keep_original else [])

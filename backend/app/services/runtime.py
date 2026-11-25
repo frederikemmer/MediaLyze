@@ -1057,6 +1057,7 @@ class ScanRuntimeManager:
                     library_id = execute_transcode_job(
                         job_id,
                         is_cancel_requested=self.is_transcode_cancel_requested,
+                        settings=self.settings,
                     )
                 db = SessionLocal()
                 try:
@@ -2379,6 +2380,21 @@ class ScanRuntimeManager:
                 with self.lock:
                     self.history_retention_deferred = True
 
+    def request_replacement_trash_prune(self) -> None:
+        try:
+            self.maintenance_executor.submit(self._prune_replacement_trash)
+        except RuntimeError:
+            logger.debug("Replacement trash maintenance executor is unavailable")
+
+    def _prune_replacement_trash(self) -> None:
+        from backend.app.services.transcode_trash import prune_replacement_trash
+
+        if not (self.settings.config_path / "transcode-trash").is_dir():
+            return
+        with SessionLocal() as db:
+            policy = get_app_settings(db, self.settings).transcoding
+        prune_replacement_trash(self.settings.config_path, policy)
+
     def run_history_retention(self) -> HistoryRetentionResult:
         with self.lock:
             if not self.history_maintenance_lock.acquire(blocking=False):
@@ -2388,6 +2404,7 @@ class ScanRuntimeManager:
         try:
             logging.getLogger("uvicorn.error").info("History retention: checking age and storage budgets")
             result = apply_history_retention(db, self.settings)
+            self._prune_replacement_trash()
             logging.getLogger("uvicorn.error").info("History retention complete: %s entries removed", result.deleted_entries)
         except Exception:
             logging.getLogger("uvicorn.error").exception("History retention failed")

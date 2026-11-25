@@ -258,6 +258,10 @@ def _deserialize_transcoding_settings(payload: Any) -> TranscodingSettingsRead:
         retry_count=int(candidate.get("retry_count", defaults.retry_count)),
         existing_output=candidate.get("existing_output", defaults.existing_output),
         remove_partial_output=bool(candidate.get("remove_partial_output", defaults.remove_partial_output)),
+        replacement_trash_enabled=candidate.get("replacement_trash_enabled", defaults.replacement_trash_enabled),
+        replacement_trash_directory=candidate.get("replacement_trash_directory", defaults.replacement_trash_directory),
+        replacement_trash_max_files=candidate.get("replacement_trash_max_files", defaults.replacement_trash_max_files),
+        replacement_trash_max_gib=candidate.get("replacement_trash_max_gib", defaults.replacement_trash_max_gib),
         automation_trigger=candidate.get("automation_trigger", defaults.automation_trigger),
         automation_interval_minutes=candidate.get("automation_interval_minutes", defaults.automation_interval_minutes),
     )

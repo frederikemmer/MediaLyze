@@ -2114,7 +2114,15 @@
     "deviceUnavailable": "Nicht verfügbar",
     "deviceNotDetected": "Nicht erkannt",
     "noHardware": "Kein Hardwaregerät hat den Laufzeit-Kapazitätstest bestanden.",
-    "replacementWarning": "Das Ersetzen überschreibt die Quelldatei direkt und erstellt kein Byte-für-Byte-Backup. Der Server verlangt eine ausdrückliche Bestätigung.",
+    "replacementTrash": {
+      "title": "Papierkorb für Originaldateien",
+      "enabled": "Ersetzte Originale im Papierkorb behalten",
+      "directory": "Verzeichnisname",
+      "maxFiles": "Maximale Dateianzahl",
+      "maxGib": "Maximaler Speicherplatz (GiB)",
+      "retention": "Wird ein Limit überschritten, werden die ältesten Originale zuerst gelöscht. 0 bedeutet unbegrenzt."
+    },
+    "replacementWarning": "Das Original wird entfernt, nachdem die Ersatzdatei gespeichert wurde. Bei aktiviertem Papierkorb bleibt das Original dort erhalten. Das Ersetzen muss ausdrücklich bestätigt werden.",
     "replacementConfirm": "Ich verstehe das Risiko und bestätige den Ersatz der Originaldatei",
     "save": "Transcoding-Einstellungen speichern",
     "saved": "Transcoding-Einstellungen gespeichert.",
@@ -2394,7 +2402,18 @@
       }
     },
     "globalHistory": "Globaler Transcoding-Verlauf",
+    "presetRuleImpact": {
+      "title": "Betroffene Automationsregeln",
+      "none": "Dieses Preset wird von keiner Automationsregel verwendet.",
+      "confirm": "Ich bestätige, dass sich die Änderung auf die aufgeführten Regeln auswirkt.",
+      "hidden": "Weitere betroffene Regeln ohne Leseberechtigung: {{count}}",
+      "refresh": "Die betroffenen Regeln haben sich geändert. Prüfe die Liste und bestätige sie erneut."
+    },
     "automation": {
+      "filenamePreset": "Dateinamenvorgabe",
+      "folderPreset": "Ordnervorgabe",
+      "formattingPresetUnavailable": "Ausgewählte Vorgabe nicht verfügbar",
+      "defaultFormatting": "Standardformatierung",
       "duplicateRule": "Regel duplizieren",
       "logic": "Logik",
       "exactlyOne": "Genau eine trifft zu (XOR)",

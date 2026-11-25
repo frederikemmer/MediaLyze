@@ -351,6 +351,21 @@ describe("TranscodingSettingsPanel", () => {
     expect(update).toHaveBeenCalledTimes(1);
   });
 
+  it("autosaves the replacement trash directory and retention limits", async () => {
+    const update = vi.spyOn(api, "updateAppSettings").mockResolvedValue(appSettings);
+    render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Keep replaced originals in the trash" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Directory name" }), { target: { value: "Old originals" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Maximum files" }), { target: { value: "12" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Maximum storage (GiB)" }), { target: { value: "1.5" } });
+    await waitFor(() => expect(update).toHaveBeenCalledWith({ transcoding: expect.objectContaining({
+      replacement_trash_enabled: true,
+      replacement_trash_directory: "Old originals",
+      replacement_trash_max_files: 12,
+      replacement_trash_max_gib: 1.5,
+    }) }));
+  });
+
   it("does not flush an output draft after identity teardown", async () => {
     const update = vi.spyOn(api, "updateAppSettings").mockResolvedValue(appSettings);
     const view = render(<TranscodingSettingsPanel settings={appSettings} appSettingsLoaded onUpdated={vi.fn()} />);

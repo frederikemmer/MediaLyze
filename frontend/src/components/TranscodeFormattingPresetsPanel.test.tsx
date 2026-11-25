@@ -91,6 +91,30 @@ describe("TranscodeFormattingPresetsPanel", () => {
     expect(screen.getByRole("button", { name: "Set MediaLyze Standard copy 2 as default" })).toBeInTheDocument();
   });
 
+  it("requires confirmation for an in-use folder preset", async () => {
+    const source: TranscodeFormattingPreset = {
+      id: 1, kind: "folder", name: "Archive folders", is_default: false,
+      definition: {
+        enabled: true, template: "{folderName}", source_name_explicit: false,
+        metadata_separator: ", ", cleanup_preset: "none", cleanup_regex: null,
+        include_subtitle_languages: false, language_code_format: "iso_639_1",
+      },
+      rule_impact: { token: "folder-token", total: 1, rules: [{ id: 7, name: "Archive movies", enabled: false }] },
+    };
+    vi.spyOn(api, "transcodeFormattingPresets").mockResolvedValue([source]);
+    const update = vi.spyOn(api, "updateTranscodeFormattingPreset").mockResolvedValue(source);
+    render(<TranscodeFormattingPresetsPanel kind="folder" tabs={<span>Foldername Presets</span>} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Archive folders" }));
+    expect(screen.getByText("Archive movies · Disabled")).toBeVisible();
+    const save = screen.getByRole("button", { name: "Save" });
+    expect(save).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: /I confirm/ }));
+    fireEvent.click(save);
+    await waitFor(() => expect(update).toHaveBeenCalledWith(source.id, expect.objectContaining({
+      confirm_rule_impact: "folder-token",
+    })));
+  });
+
   it("starts a fresh folder draft when switching away from a filename draft", async () => {
     vi.spyOn(api, "transcodeFormattingPresets").mockResolvedValue([]);
     const view = render(<TranscodeFormattingPresetsPanel kind="filename" tabs={<span>Filename Presets</span>} />);

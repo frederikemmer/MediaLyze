@@ -163,10 +163,13 @@ def test_profile_and_rule_versions_revoke_replace_approval(tmp_path: Path) -> No
         assert profile_model is not None
         next_definition = _profile_definition()
         next_definition.video_rules[0].crf = 24
+        impact = automation.serialize_transcode_preset(db, profile_model).rule_impact
+        assert [(rule.id, rule.name, rule.enabled) for rule in impact.rules] == [(created.id, created.name, True)]
+        payload = automation.TranscodePresetUpdate(definition=next_definition)
+        with pytest.raises(automation.TranscodeAutomationError, match="confirmation required"):
+            automation.update_transcode_preset(db, profile.id, payload)
         updated_profile = automation.update_transcode_preset(
-            db,
-            profile.id,
-            automation.TranscodePresetUpdate(definition=next_definition),
+            db, profile.id, payload.model_copy(update={"confirm_rule_impact": impact.token}),
         )
         assert updated_profile.version == profile.version + 1
         affected_rule = automation.serialize_transcode_rule(db, db.get(TranscodeRule, created.id))
@@ -627,7 +630,7 @@ def test_preview_batches_profiles_and_existing_decisions(tmp_path: Path, monkeyp
 
 
 def test_draft_rule_preview_uses_execution_logic_without_creating_work(tmp_path, monkeypatch):
-    from backend.app.models.entities import TranscodeJob
+    from backend.app.models.entities import TranscodeFormattingPreset, TranscodeJob
     from backend.app.schemas.transcoding import TranscodeRuleTestRequest
 
     settings = _settings(tmp_path)
@@ -635,6 +638,19 @@ def test_draft_rule_preview_uses_execution_logic_without_creating_work(tmp_path,
     monkeypatch.setattr(transcoding, "get_transcode_capabilities", lambda _: _capabilities())
     with _session_factory()() as db:
         media = _media_file(db, tmp_path)
+        source = tmp_path / "media" / "Movies" / media.relative_path
+        directory = source.parent / "Original folder"
+        directory.mkdir()
+        source.rename(directory / source.name)
+        media.relative_path = f"{directory.name}/{source.name}"
+        filename = TranscodeFormattingPreset(
+            kind="filename", name="Archive filename", definition={"template": "Encode {sourceName}"}
+        )
+        folder = TranscodeFormattingPreset(
+            kind="folder", name="Archive folder", definition={"template": "{folderName} Archive"}
+        )
+        db.add_all([filename, folder])
+        db.flush()
         preset = automation.create_transcode_preset(db, TranscodePresetCreate(name="Draft", definition=_profile_definition()))
         codec = TranscodeCondition(field="video_codec", operator="equals", value="hevc")
         size = TranscodeCondition(field="size", operator=">", value=10**20)
@@ -642,12 +658,14 @@ def test_draft_rule_preview_uses_execution_logic_without_creating_work(tmp_path,
         request = TranscodeRuleTestRequest(
             file_id=media.id, library_ids=[media.library_id], profile_id=preset.id,
             conditions=tree, output_mode="transcode_output", output_subfolder="preview",
+            filename_preset_id=filename.id, folder_preset_id=folder.id,
         )
         decision = automation.test_transcode_rule_draft(db, settings, request)
         assert [child.matched for child in decision.trace.children] == [True, False]
         assert decision.trace.matched == automation.condition_matches(media, tree, get_app_settings(db, settings))
         assert decision.status == "matched", decision.reason
         assert "preview/" in decision.output_relative_path
+        assert decision.output_relative_path.endswith("/Original folder Archive/Encode Movie.mkv")
         conflicting = request.model_copy(update={"conditions": _condition_group(codec, codec, operator="xor")})
         decision = automation.test_transcode_rule_draft(db, settings, conflicting)
         assert decision.status == "unmatched"
@@ -657,6 +675,45 @@ def test_draft_rule_preview_uses_execution_logic_without_creating_work(tmp_path,
         assert db.scalars(select(TranscodeRule)).all() == []
         assert db.scalars(select(TranscodeJob)).all() == []
         assert db.scalars(select(TranscodeAutomationRecord)).all() == []
+
+        with pytest.raises(automation.TranscodeAutomationError, match="Invalid filename formatting preset"):
+            automation.create_transcode_rule(db, TranscodeRuleCreate(
+                name="Wrong kind", profile_id=preset.id, library_ids=[media.library_id],
+                filename_preset_id=folder.id,
+            ))
+        saved = automation.create_transcode_rule(db, TranscodeRuleCreate(
+            name="Archive", profile_id=preset.id, library_ids=[media.library_id],
+            filename_preset_id=filename.id, folder_preset_id=folder.id,
+        ))
+        saved = automation.update_transcode_rule(db, saved.id, TranscodeRuleUpdate(enabled=True))
+        options = TranscodeAutomationScope(rule_ids=[saved.id])
+        assert automation.preview_transcode_automation(db, settings, options).items[0].output_path.endswith(
+            "/Original folder Archive/Encode Movie.mkv"
+        )
+        from backend.app.schemas.transcoding import TranscodeFormattingPresetUpdate
+        from backend.app.services.transcode_formatting_presets import (
+            FormattingPresetError,
+            list_formatting_presets,
+            update_formatting_preset,
+        )
+
+        def folder_impact():
+            return next(item.rule_impact for item in list_formatting_presets(db) if item.id == folder.id)
+
+        original_impact = folder_impact()
+        duplicate = automation.duplicate_transcode_rule(db, saved.id)
+        assert (duplicate.filename_preset_id, duplicate.folder_preset_id) == (filename.id, folder.id)
+        payload = TranscodeFormattingPresetUpdate(name="Updated archive folder", confirm_rule_impact=original_impact.token)
+        with pytest.raises(FormattingPresetError, match="confirmation required"):
+            update_formatting_preset(db, folder.id, payload)
+        latest_impact = folder_impact()
+        assert [rule.id for rule in latest_impact.rules] == [saved.id, duplicate.id]
+        updated = update_formatting_preset(db, folder.id, payload.model_copy(update={
+            "confirm_rule_impact": latest_impact.token,
+        }))
+        assert updated.name == payload.name
+        cleared = automation.update_transcode_rule(db, saved.id, TranscodeRuleUpdate(filename_preset_id=None))
+        assert cleared.filename_preset_id is None and cleared.folder_preset_id == folder.id
 
 
 @pytest.mark.parametrize(("guard", "size", "discarded"), [

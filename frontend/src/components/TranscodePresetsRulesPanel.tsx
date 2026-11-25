@@ -17,6 +17,7 @@ import {
   type ResolutionCategory,
   type TranscodeConditionGroup,
   type TranscodeFederation,
+  type TranscodeFormattingPreset,
   type TranscodeFederationMember,
   type TranscodePreset,
   type TranscodePresetDefinition,
@@ -27,6 +28,7 @@ import { type TranscodingMatrixFocus } from "../lib/transcoding-matrix-state";
 import { LoaderPinwheelIcon } from "./LoaderPinwheelIcon";
 import { AnimatedConnectIcon } from "./AnimatedConnectIcon";
 import { CopyIcon } from "./CopyIcon";
+import { PresetRuleImpactNotice } from "./PresetRuleImpactNotice";
 import { PanelEmptyState } from "./PanelEmptyState";
 import { SquarePenIcon } from "./SquarePenIcon";
 import { TooltipTrigger } from "./TooltipTrigger";
@@ -52,6 +54,8 @@ type RuleDraft = {
   profile_id: number;
   output_mode: TranscodeRule["output_mode"];
   output_subfolder: string;
+  filename_preset_id: number | null;
+  folder_preset_id: number | null;
   prevent_output_growth: boolean;
   skip_previously_evaluated: boolean;
 };
@@ -265,6 +269,8 @@ function ruleDraftFrom(rule: TranscodeRule): RuleDraft {
     profile_id: rule.profile_id,
     output_mode: rule.output_mode,
     output_subfolder: rule.output_subfolder,
+    filename_preset_id: rule.filename_preset_id ?? null,
+    folder_preset_id: rule.folder_preset_id ?? null,
     prevent_output_growth: rule.prevent_output_growth ?? false,
     skip_previously_evaluated: rule.skip_previously_evaluated ?? false,
   };
@@ -659,6 +665,7 @@ export function TranscodePresetsRulesPanel({
   const standaloneBodyId = useId();
   const standalonePanelTitleId = useId();
   const [presets, setPresets] = useState<TranscodePreset[]>([]);
+  const [formattingPresets, setFormattingPresets] = useState<TranscodeFormattingPreset[]>([]);
   const [rules, setRules] = useState<TranscodeRule[]>([]);
   const [libraries, setLibraries] = useState<LibrarySummary[]>([]);
   const [tab, setTab] = useState<AutomationTab>(() => standaloneTab ?? automationTabFromSearchFocus(searchFocus) ?? "presets");
@@ -672,6 +679,10 @@ export function TranscodePresetsRulesPanel({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [presetDraft, setPresetDraft] = useState<PresetDraft | null>(null);
+  const [confirmedImpact, setConfirmedImpact] = useState<string | null>(null);
+  const [presetImpactError, setPresetImpactError] = useState(false);
+  const presetImpact = presets.find((preset) => preset.id === presetDraft?.id)?.rule_impact;
+  const presetImpactConfirmed = !presetImpact || confirmedImpact === presetImpact.token;
   const [presetSearch, setPresetSearch] = useState("");
   const [ruleDraft, setRuleDraft] = useState<RuleDraft | null>(null);
   const [presetEditorOpen, setPresetEditorOpen] = useState(false);
@@ -725,17 +736,25 @@ export function TranscodePresetsRulesPanel({
   }, [load, loaded]);
 
   useEffect(() => {
-    if (standaloneTab !== "rules") return;
+    if (standaloneTab === "presets" || standaloneTab === "accelerators" || standaloneTab === "members") return;
     let current = true;
     setRuleOptionsReady(false);
     setRuleOptionsError(null);
-    const presetRequest = canReadPresets ? api.transcodePresets() : Promise.resolve([]);
+    const presetRequest = standaloneTab === "rules" && canReadPresets ? api.transcodePresets() : Promise.resolve([]);
     void Promise.all([
-      presetRequest.then((nextPresets) => {
-        if (current) setPresets(nextPresets);
+      (canReadPresets ? api.transcodeFormattingPresets() : Promise.resolve([])).then((nextPresets) => {
+        if (current) setFormattingPresets(nextPresets);
+      }).catch((reason: Error) => {
+        if (current) {
+          setFormattingPresets([]);
+          setRuleOptionsError(reason.message);
+        }
       }),
-      api.libraries().then((nextLibraries) => {
-        if (current) setLibraries(nextLibraries);
+      presetRequest.then((nextPresets) => {
+        if (current && standaloneTab === "rules") setPresets(nextPresets);
+      }),
+      (standaloneTab === "rules" ? api.libraries() : Promise.resolve([])).then((nextLibraries) => {
+        if (current && standaloneTab === "rules") setLibraries(nextLibraries);
       }),
     ]).then(() => {
       if (current) setRuleOptionsReady(true);
@@ -840,26 +859,42 @@ export function TranscodePresetsRulesPanel({
       void duplicatePreset(preset);
       return;
     }
+    setConfirmedImpact(null);
+    setPresetImpactError(false);
     setPresetDraft(presetDraftFrom(preset));
     setPresetEditorOpen(true);
     setExpandedPresetId(preset.id);
   };
 
   const savePreset = async () => {
-    if (!presetDraft?.name.trim()) return;
+    if (!presetDraft?.name.trim() || !presetImpactConfirmed) return;
     setBusy(true);
     try {
       const definition = { ...presetDraft.definition, filename_template_override: false };
       const saved = presetDraft.id
-        ? await api.updateTranscodePreset(presetDraft.id, { name: presetDraft.name.trim(), description: presetDraft.description, definition })
+        ? await api.updateTranscodePreset(presetDraft.id, {
+          name: presetDraft.name.trim(), description: presetDraft.description, definition,
+          ...(presetImpact ? { confirm_rule_impact: presetImpact.token } : {}),
+        })
         : await api.createTranscodePreset({ name: presetDraft.name.trim(), description: presetDraft.description, definition });
       setPresets((current) => presetDraft.id ? current.map((preset) => preset.id === saved.id ? saved : preset) : [...current, saved]);
+      setConfirmedImpact(null);
+      setPresetImpactError(false);
       setPresetDraft(presetDraftFrom(saved));
       setTab("presets");
       setExpandedPresetId(saved.id);
       setError(null);
       feedback("success", "savePresetSuccess", "Preset saved.", "presets");
-    } catch {
+    } catch (reason) {
+      if (reason instanceof Error && reason.message === "Rule impact confirmation required") {
+        setConfirmedImpact(null);
+        try {
+          setPresets(await api.transcodePresets());
+        } catch {
+          // Keep the draft available if the dependencies cannot be refreshed.
+        }
+        setPresetImpactError(true);
+      }
       feedback("error", "savePresetFailed", "Could not save the preset.", "presets");
     } finally {
       setBusy(false);
@@ -871,6 +906,7 @@ export function TranscodePresetsRulesPanel({
     try {
       const copy = await api.duplicateTranscodePreset(preset.id);
       setPresets((current) => [...current, copy]);
+      setPresetImpactError(false);
       setPresetDraft(presetDraftFrom(copy));
       setPresetEditorOpen(true);
       setTab("presets");
@@ -919,7 +955,7 @@ export function TranscodePresetsRulesPanel({
     setPresetEditorOpen(false);
     const defaultPreset = presets[0];
     const defaultLibrary = editableLibraries[0];
-    setRuleDraft({ id: null, name: "", priority: (rules.at(-1)?.priority ?? -1) + 1, library_ids: defaultLibrary ? [defaultLibrary.id] : [], conditions: null, profile_id: defaultPreset?.id ?? 0, output_mode: "transcode_output", output_subfolder: "", prevent_output_growth: true, skip_previously_evaluated: false });
+    setRuleDraft({ id: null, name: "", priority: (rules.at(-1)?.priority ?? -1) + 1, library_ids: defaultLibrary ? [defaultLibrary.id] : [], conditions: null, profile_id: defaultPreset?.id ?? 0, output_mode: "transcode_output", output_subfolder: "", filename_preset_id: null, folder_preset_id: null, prevent_output_growth: true, skip_previously_evaluated: false });
     setRuleEditorOpen(true);
   };
 
@@ -931,6 +967,8 @@ export function TranscodePresetsRulesPanel({
         name: ruleDraft.name.trim(), priority: ruleDraft.priority, library_ids: ruleDraft.library_ids,
         conditions: ruleDraft.conditions, profile_id: ruleDraft.profile_id, output_mode: ruleDraft.output_mode,
         output_subfolder: ruleDraft.output_subfolder,
+        filename_preset_id: ruleDraft.filename_preset_id,
+        folder_preset_id: ruleDraft.folder_preset_id,
         prevent_output_growth: ruleDraft.prevent_output_growth,
         skip_previously_evaluated: ruleDraft.skip_previously_evaluated,
       };
@@ -1285,8 +1323,13 @@ export function TranscodePresetsRulesPanel({
           <label className="compatibility-profile-field-wide transcode-control-field"><span className="transcode-field-label">{t("transcoding.automation.presetDescription")}</span><textarea className="settings-choice-input transcode-control" rows={3} value={presetDraft.description} onChange={(event) => setPresetDraft({ ...presetDraft, description: event.target.value })} /></label>
         </div>
         <PresetDefinitionEditor definition={presetDraft.definition} onChange={(definition) => setPresetDraft({ ...presetDraft, definition })} />
+        {presetDraft.id !== null && presetImpactError && <div className="notice error" role="alert">{t("transcoding.presetRuleImpact.refresh")}</div>}
+        {presetDraft.id !== null && (
+          <PresetRuleImpactNotice impact={presetImpact} confirmed={presetImpactConfirmed}
+            onConfirm={(confirmed) => setConfirmedImpact(confirmed ? presetImpact?.token ?? null : null)} />
+        )}
         <div className="compatibility-profile-card-actions transcode-automation-editor-actions">
-          <button type="button" className="transcode-action-button" onClick={() => void savePreset()} disabled={busy || !presetDraft.name.trim()}><Save aria-hidden="true" />{t("common.save")}</button>
+          <button type="button" className="transcode-action-button" onClick={() => void savePreset()} disabled={busy || !presetDraft.name.trim() || !presetImpactConfirmed}><Save aria-hidden="true" />{t("common.save")}</button>
           <button type="button" className="secondary transcode-action-button" onClick={closePresetEditor} disabled={busy}>{t("common.cancel")}</button>
         </div>
       </div>
@@ -1307,6 +1350,10 @@ export function TranscodePresetsRulesPanel({
           <div><dt>{t("transcoding.automation.libraries")}</dt><dd>{selectedLibraries || "—"}</dd></div>
           <div><dt>{t("transcoding.outputMode")}</dt><dd>{outputLabel}</dd></div>
           <div><dt>{t("transcoding.automation.rulePriority")}</dt><dd>{rule.priority}</dd></div>
+          {(["filename", "folder"] as const).map((kind) => {
+            const preset = formattingPresets.find(entry => entry.id === rule[`${kind}_preset_id`]);
+            return preset && <div key={kind}><dt>{t(`transcoding.automation.${kind}Preset`)}</dt><dd>{preset.name}</dd></div>;
+          })}
         </dl>
         {rule.output_subfolder && <p className="field-hint">{t("transcoding.automation.outputSubfolder")} · {rule.output_subfolder}</p>}
         <p className="field-hint">{t("transcoding.automation.conditions")}</p>
@@ -1361,12 +1408,33 @@ export function TranscodePresetsRulesPanel({
             </SettingsInlineLabelSelect>
             <SettingsInlineLabelSelect label={t("transcoding.outputMode")} value={ruleDraft.output_mode} onChange={event => {
               const output_mode = event.target.value as RuleDraft["output_mode"];
-              setRuleDraft({ ...ruleDraft, output_mode, output_subfolder: output_mode === "transcode_output" ? ruleDraft.output_subfolder : "" });
+              setRuleDraft({
+                ...ruleDraft,
+                output_mode,
+                output_subfolder: output_mode === "transcode_output" ? ruleDraft.output_subfolder : "",
+              });
             }}>
               <option value="transcode_output">{t("transcoding.transcodeOutput")}</option>
               <option value="same_directory">{t("transcoding.sameDirectory")}</option>
               <option value="replace_original" disabled={Boolean(identity) && !ruleDraft.library_ids.every(id => has("transcode.replace", id))}>{t("transcoding.replaceOriginal")}</option>
             </SettingsInlineLabelSelect>
+            {canReadPresets && (["filename", "folder"] as const).map((kind) => {
+              const field = `${kind}_preset_id` as const;
+              const options = formattingPresets.filter(preset => preset.kind === kind);
+              const selectedId = ruleDraft[field];
+              return (
+                <SettingsInlineLabelSelect key={kind} label={t(`transcoding.automation.${kind}Preset`)}
+                  value={selectedId ?? ""}
+                  onChange={event => setRuleDraft({ ...ruleDraft, [field]: event.target.value ? Number(event.target.value) : null })}>
+                  <option value="">{t("transcoding.automation.defaultFormatting")}</option>
+                  {selectedId !== null && !options.some(preset => preset.id === selectedId) &&
+                    <option value={selectedId}>{t("transcoding.automation.formattingPresetUnavailable")}</option>}
+                  {options.map(preset => (
+                    <option key={preset.id} value={preset.id}>{preset.name}</option>
+                  ))}
+                </SettingsInlineLabelSelect>
+              );
+            })}
           </div>
           <div className="transcode-rule-output-options">
             {ruleDraft.output_mode === "transcode_output" && <RuleInput label={t("transcoding.automation.outputSubfolder")}
@@ -1388,6 +1456,8 @@ export function TranscodePresetsRulesPanel({
         {identity?.owner && <TranscodeRuleTest automationTrigger={savedTrigger} resolutionCategories={resolutionCategories} draft={{
           rule_id: ruleDraft.id ?? undefined, library_ids: ruleDraft.library_ids, conditions: ruleDraft.conditions,
           profile_id: ruleDraft.profile_id, output_mode: ruleDraft.output_mode, output_subfolder: ruleDraft.output_subfolder,
+          filename_preset_id: ruleDraft.filename_preset_id,
+          folder_preset_id: ruleDraft.folder_preset_id,
           prevent_output_growth: ruleDraft.prevent_output_growth,
         }} presetName={activeRulePreset?.name} />}
       </div>

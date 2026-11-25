@@ -411,11 +411,14 @@ def _stream_media_files(
     relative_root: Path | None = None,
     pattern_recognition_settings=None,
     skip_relative_paths: set[str] | None = None,
+    excluded_directory: Path | None = None,
     should_cancel: Callable[[], bool] | None = None,
     on_error: Callable[[OSError], None] | None = None,
 ):
     suffixes = {extension.lower() for extension in allowed_extensions}
     effective_relative_root = relative_root or root
+    if excluded_directory is not None and root.resolve().is_relative_to(excluded_directory):
+        return
 
     def _walk_error(exc: OSError) -> None:
         if on_error is None:
@@ -438,6 +441,8 @@ def _stream_media_files(
         for dirname in dirnames:
             candidate = current_root_path / dirname
             if _skip_symlink(candidate):
+                continue
+            if excluded_directory is not None and dirname == excluded_directory.name and candidate.resolve() == excluded_directory:
                 continue
             relative_path = candidate.relative_to(effective_relative_root).as_posix()
             matches = _matching_ignore_patterns(relative_path, ignore_patterns, is_dir=True)
@@ -1810,6 +1815,7 @@ def run_scan(
                     _poll_completed_work(wait_for_completion=True)
                 pending[executor.submit(_safe_process_work, work)] = work
 
+            replacement_trash = settings.config_path.resolve() / "transcode-trash"
             for scan_root in scan_roots:
                 try:
                     if not S_ISDIR(scan_root.path.stat().st_mode):
@@ -1824,6 +1830,7 @@ def run_scan(
                     ignore_patterns=ignore_patterns,
                     relative_root=scan_root.relative_root,
                     pattern_recognition_settings=pattern_recognition_settings,
+                    excluded_directory=replacement_trash,
                     skip_relative_paths={
                         relative_path
                         for root_id, relative_path in same_directory_variant_paths

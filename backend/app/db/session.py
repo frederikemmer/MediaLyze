@@ -354,6 +354,8 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "rule_name_snapshot": "ALTER TABLE transcode_automation_records ADD COLUMN rule_name_snapshot VARCHAR(255)",
     },
     "transcode_rules": {
+        "filename_preset_id": "ALTER TABLE transcode_rules ADD COLUMN filename_preset_id INTEGER REFERENCES transcode_formatting_presets(id) ON DELETE RESTRICT",
+        "folder_preset_id": "ALTER TABLE transcode_rules ADD COLUMN folder_preset_id INTEGER REFERENCES transcode_formatting_presets(id) ON DELETE RESTRICT",
         "skip_previously_evaluated": "ALTER TABLE transcode_rules ADD COLUMN skip_previously_evaluated BOOLEAN NOT NULL DEFAULT 0",
         "prevent_output_growth": "ALTER TABLE transcode_rules ADD COLUMN prevent_output_growth BOOLEAN NOT NULL DEFAULT 0",
     },

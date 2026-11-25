@@ -287,6 +287,8 @@ def authorize(request, db, principal, name, params, body):
                 existing.output_mode == "replace_original"
                 or name == "transcoding_rule_replacement_approval",
             )
+        if write and any(body.get(field) is not None for field in ("filename_preset_id", "folder_preset_id")):
+            require("settings.presets.view")
         if write and name != "transcoding_rule_delete":
             target_ids = body.get("library_ids", existing.library_ids if existing else [])
             if not isinstance(target_ids, list) or not target_ids:

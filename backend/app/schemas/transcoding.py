@@ -152,13 +152,27 @@ class TranscodeFormattingPresetCreate(BaseModel):
     definition: TranscodeFormattingDefinition
 
 
+class TranscodePresetRuleReference(BaseModel):
+    id: int
+    name: str
+    enabled: bool
+
+
+class TranscodePresetRuleImpact(BaseModel):
+    token: str
+    total: int
+    rules: list[TranscodePresetRuleReference]
+
+
 class TranscodeFormattingPresetUpdate(BaseModel):
+    confirm_rule_impact: str | None = Field(default=None, max_length=64)
     name: str | None = Field(default=None, min_length=1, max_length=255)
     definition: TranscodeFormattingDefinition | None = None
     is_default: bool | None = None
 
 
 class TranscodeFormattingPresetRead(TranscodeFormattingPresetCreate):
+    rule_impact: TranscodePresetRuleImpact | None = None
     id: int
     is_default: bool
 
@@ -289,6 +303,8 @@ class TranscodePresetCreate(BaseModel):
 class TranscodePresetUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    confirm_rule_impact: str | None = Field(default=None, max_length=64)
+
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=2000)
     definition: TranscodePresetDefinition | None = None
@@ -321,6 +337,7 @@ class TranscodePresetRead(BaseModel):
     builtin_key: str | None = None
     definition: TranscodePresetDefinition
     used_by_rule_count: int = 0
+    rule_impact: TranscodePresetRuleImpact | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -383,7 +400,12 @@ TranscodeConditionNode = Annotated[
 ]
 
 
-class TranscodeRuleCreate(BaseModel):
+class TranscodeRuleFormatting(BaseModel):
+    filename_preset_id: int | None = Field(default=None, ge=1)
+    folder_preset_id: int | None = Field(default=None, ge=1)
+
+
+class TranscodeRuleCreate(TranscodeRuleFormatting):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=255)
@@ -408,7 +430,7 @@ class TranscodeRuleCreate(BaseModel):
         return payload
 
 
-class TranscodeRuleUpdate(BaseModel):
+class TranscodeRuleUpdate(TranscodeRuleFormatting):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
@@ -433,7 +455,7 @@ class TranscodeRuleUpdate(BaseModel):
         return payload
 
 
-class TranscodeRuleRead(BaseModel):
+class TranscodeRuleRead(TranscodeRuleFormatting):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -470,7 +492,7 @@ class TranscodeRuleTestAsset(BaseModel):
     library_id: int
 
 
-class TranscodeRuleTestRequest(BaseModel):
+class TranscodeRuleTestRequest(TranscodeRuleFormatting):
     model_config = ConfigDict(extra="forbid")
 
     file_id: int = Field(ge=1)
