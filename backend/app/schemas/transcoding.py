@@ -395,6 +395,7 @@ class TranscodeRuleCreate(BaseModel):
     output_mode: Literal["transcode_output", "same_directory", "replace_original"] = "transcode_output"
     output_subfolder: str = Field(default="", max_length=512)
     prevent_output_growth: bool = True
+    skip_previously_evaluated: bool = False
 
     @model_validator(mode="before")
     @classmethod
@@ -419,6 +420,7 @@ class TranscodeRuleUpdate(BaseModel):
     output_mode: Literal["transcode_output", "same_directory", "replace_original"] | None = None
     output_subfolder: str | None = Field(default=None, max_length=512)
     prevent_output_growth: bool = False
+    skip_previously_evaluated: bool = False
 
     @model_validator(mode="before")
     @classmethod
@@ -447,6 +449,7 @@ class TranscodeRuleRead(BaseModel):
     output_mode: str
     output_subfolder: str
     prevent_output_growth: bool = False
+    skip_previously_evaluated: bool = False
     replacement_approved: bool = False
     created_at: datetime
     updated_at: datetime

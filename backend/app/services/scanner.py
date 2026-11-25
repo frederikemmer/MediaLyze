@@ -86,6 +86,7 @@ MAX_IGNORE_PATTERN_SAMPLE_SIZE = 10
 MAX_FAILURE_DETAIL_LENGTH = 12000
 RENAME_MATCH_SCORE_THRESHOLD = 0.82
 RENAME_MATCH_SCORE_GAP = 0.08
+RENAME_DURATION_TOLERANCE_SECONDS = 1.0
 RENAME_SINGLE_MISSING_SCORE_THRESHOLD = 0.68
 RENAME_NUMBER_PATTERN = re.compile(r"\d+")
 
@@ -178,6 +179,7 @@ class QueuedMediaWork:
     relative_root: Path
     needs_analysis: bool
     needs_duplicate_processing: bool
+    rename_probe: dict | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,6 +192,10 @@ class ScanFileIndexEntry:
     is_transcode_variant: bool
     content_hash: str | None
     content_hash_algorithm: str | None
+    duration_seconds: float | None
+    primary_video_codec: str | None
+    primary_video_width: int | None
+    primary_video_height: int | None
 
 
 def _scan_file_index(db: Session, library_id: int) -> dict:
@@ -198,7 +204,8 @@ def _scan_file_index(db: Session, library_id: int) -> dict:
     with db.execute(
         select(MediaFile.id, MediaFile.library_root_id, MediaFile.relative_path,
                MediaFile.size_bytes, MediaFile.mtime, MediaFile.is_transcode_variant,
-               MediaFile.content_hash, MediaFile.content_hash_algorithm)
+               MediaFile.content_hash, MediaFile.content_hash_algorithm, MediaFile.duration_seconds,
+               MediaFile.primary_video_codec, MediaFile.primary_video_width, MediaFile.primary_video_height)
         .where(MediaFile.library_id == library_id)
         .execution_options(yield_per=500)
     ) as rows:
@@ -1291,25 +1298,31 @@ def run_scan(
     recognized_series_ids: set[int] = set()
     recognized_season_ids: set[int] = set()
 
-    def _missing_rename_candidates(library_root_id: int | None, relative_root: Path) -> list[ScanFileIndexEntry]:
-        def definitely_missing(relative_path: str) -> bool:
-            try:
-                (relative_root / relative_path).stat()
-            except FileNotFoundError:
-                return True
-            except OSError:
-                # A permissions or I/O error is not evidence of a rename.
-                return False
-            return False
+    roots_by_id = {root.library_root_id: root.relative_root for root in scan_roots}
 
-        return [
-            candidate
-            for candidate_key, candidate in existing_by_path.items()
-            if candidate_key[0] == library_root_id
-            and candidate_key not in seen_relative_paths
-            and not candidate.is_transcode_variant
-            and definitely_missing(candidate.relative_path)
-        ]
+    def _missing_rename_candidates(library_root_id: int | None, size_bytes: int) -> list[ScanFileIndexEntry]:
+        candidates = []
+        for key, candidate in existing_by_path.items():
+            if key in seen_relative_paths or candidate.is_transcode_variant:
+                continue
+            root = roots_by_id.get(candidate.library_root_id)
+            if root is None:
+                continue
+            if candidate.library_root_id != library_root_id and not (
+                candidate.size_bytes == size_bytes
+                and candidate.content_hash
+                and candidate.content_hash_algorithm == FILE_HASH_ALGORITHM
+            ):
+                continue
+            try:
+                if candidate.library_root_id != library_root_id and not root.is_dir():
+                    continue
+                (root / candidate.relative_path).stat()
+            except FileNotFoundError:
+                candidates.append(candidate)
+            except OSError:
+                continue
+        return candidates
 
     def _log_rename_candidate(candidate: ScanFileIndexEntry, relative_path: str, reason: str) -> ScanFileIndexEntry:
         logger.info(
@@ -1325,20 +1338,25 @@ def run_scan(
         relative_path: str,
         relative_root: Path,
         candidates: list[ScanFileIndexEntry],
-    ) -> ScanFileIndexEntry | None:
+        size_bytes: int,
+    ) -> tuple[ScanFileIndexEntry | None, bool]:
         hash_candidates = [
             candidate
             for candidate in candidates
-            if candidate.content_hash_algorithm == FILE_HASH_ALGORITHM
+            if candidate.size_bytes == size_bytes
+            and candidate.content_hash_algorithm == FILE_HASH_ALGORITHM
             and (candidate.content_hash or "").strip()
         ]
         if not hash_candidates:
-            return None
+            return None, False
         try:
-            payload = FileHashDuplicateDetectionStrategy().build_payload(relative_root / relative_path)
+            with analysis_slot(cancel_event), cancellation_scope(cancel_event):
+                payload = FileHashDuplicateDetectionStrategy().build_payload(relative_root / relative_path)
+        except WorkCanceled:
+            raise ScanCanceled() from None
         except OSError:
             logger.exception("Failed to hash rename candidate %s", relative_path)
-            return None
+            return None, False
 
         content_hash = payload.get("content_hash")
         matches = [
@@ -1347,52 +1365,8 @@ def run_scan(
             if candidate.content_hash == content_hash
         ]
         if len(matches) != 1:
-            return None
-        return _log_rename_candidate(matches[0], relative_path, "content hash")
-
-    def _find_similar_rename_candidate(
-        relative_path: str,
-        size_bytes: int,
-        candidates: list[ScanFileIndexEntry],
-    ) -> ScanFileIndexEntry | None:
-        scored_candidates = sorted(
-            (
-                (
-                    _rename_similarity_score(
-                        candidate.relative_path,
-                        relative_path,
-                        candidate.size_bytes,
-                        size_bytes,
-                    ),
-                    candidate,
-                )
-                for candidate in candidates
-            ),
-            key=lambda item: item[0],
-            reverse=True,
-        )
-        if not scored_candidates:
-            return None
-
-        best_score, best_candidate = scored_candidates[0]
-        if len(scored_candidates) == 1 and best_score >= RENAME_SINGLE_MISSING_SCORE_THRESHOLD:
-            return _log_rename_candidate(
-                best_candidate,
-                relative_path,
-                f"name similarity {best_score:.2f}",
-            )
-        if best_score < RENAME_MATCH_SCORE_THRESHOLD:
-            return None
-        if (
-            len(scored_candidates) > 1
-            and best_score - scored_candidates[1][0] < RENAME_MATCH_SCORE_GAP
-        ):
-            return None
-        return _log_rename_candidate(
-            best_candidate,
-            relative_path,
-            f"name similarity {best_score:.2f}",
-        )
+            return None, len(matches) > 1
+        return _log_rename_candidate(matches[0], relative_path, "content hash"), False
 
     def _find_rename_candidate(
         relative_path: str,
@@ -1400,25 +1374,83 @@ def run_scan(
         relative_root: Path,
         size_bytes: int,
         mtime: float,
-    ) -> ScanFileIndexEntry | None:
-        candidates = _missing_rename_candidates(library_root_id, relative_root)
-        exact_candidates = [
-            candidate
-            for candidate in candidates
+    ) -> tuple[ScanFileIndexEntry | None, dict | None]:
+        candidates = _missing_rename_candidates(library_root_id, size_bytes)
+        hash_candidate, ambiguous_hash = _find_hash_rename_candidate(relative_path, relative_root, candidates, size_bytes)
+        if hash_candidate is not None or ambiguous_hash:
+            return hash_candidate, None
+
+        # A stored checksum that could not be confirmed cannot be overridden
+        # by matching timestamps or a similar name for a same-sized file.
+        local_candidates = [
+            candidate for candidate in candidates
+            if candidate.library_root_id == library_root_id
+            and not (
+                candidate.size_bytes == size_bytes
+                and candidate.content_hash
+                and candidate.content_hash_algorithm == FILE_HASH_ALGORITHM
+            )
+        ]
+        exact = [
+            candidate for candidate in local_candidates
             if candidate.size_bytes == size_bytes and candidate.mtime == mtime
         ]
-        if len(exact_candidates) == 1:
-            return _log_rename_candidate(exact_candidates[0], relative_path, "size and mtime")
+        exact_candidate = exact[0] if len(exact) == 1 else None
+        if exact_candidate is not None and not exact_candidate.duration_seconds:
+            return _log_rename_candidate(exact_candidate, relative_path, "size and mtime"), None
 
-        hash_candidate = _find_hash_rename_candidate(relative_path, relative_root, candidates)
-        if hash_candidate is not None:
-            return hash_candidate
+        threshold = RENAME_SINGLE_MISSING_SCORE_THRESHOLD if len(local_candidates) == 1 else RENAME_MATCH_SCORE_THRESHOLD
+        similar = [
+            (score, candidate) for candidate in local_candidates
+            if candidate.duration_seconds and candidate.duration_seconds > 0
+            if (score := _rename_similarity_score(
+                candidate.relative_path, relative_path, candidate.size_bytes, size_bytes
+            )) >= threshold
+        ]
+        if not similar and exact_candidate is None:
+            return None, None
+        try:
+            with analysis_slot(cancel_event), cancellation_scope(cancel_event):
+                probe = run_ffprobe(relative_root / relative_path, settings.ffprobe_path)
+                normalized = normalize_ffprobe_payload(probe)
+        except WorkCanceled:
+            raise ScanCanceled() from None
+        except Exception:
+            # The regular analysis path owns failure reporting.
+            return None, None
 
-        similar_candidate = _find_similar_rename_candidate(relative_path, size_bytes, candidates)
-        if similar_candidate is not None:
-            return similar_candidate
+        duration = normalized.media_format.duration
+        if duration is None or duration <= 0:
+            return None, probe
+        video = next(iter(normalized.video_streams), None)
 
-        return None
+        def metadata_matches(candidate: ScanFileIndexEntry) -> bool:
+            return (
+                candidate.duration_seconds is not None
+                and abs(candidate.duration_seconds - duration) <= RENAME_DURATION_TOLERANCE_SECONDS
+                and all(
+                    old is None or new is None or old == new
+                    for old, new in (
+                        (candidate.primary_video_codec, video.codec if video else None),
+                        (candidate.primary_video_width, video.width if video else None),
+                        (candidate.primary_video_height, video.height if video else None),
+                    )
+                )
+            )
+
+        if exact_candidate is not None and metadata_matches(exact_candidate):
+            return _log_rename_candidate(exact_candidate, relative_path, "size, mtime and probe metadata"), probe
+        compatible = sorted(
+            ((score, candidate) for score, candidate in similar if metadata_matches(candidate)),
+            key=lambda item: item[0],
+            reverse=True,
+        )
+        if not compatible:
+            return None, probe
+        score, candidate = compatible[0]
+        if len(compatible) > 1 and score - compatible[1][0] < RENAME_MATCH_SCORE_GAP:
+            return None, probe
+        return _log_rename_candidate(candidate, relative_path, "similar name and probe metadata"), probe
 
     def _build_scan_summary(
         discovery: DiscoveryResult,
@@ -1602,7 +1634,13 @@ def run_scan(
 
         if work.needs_analysis:
             try:
-                payload, subtitles = _analyze_path(work.path, work.relative_root, settings, ignore_patterns)
+                if work.rename_probe is None:
+                    payload, subtitles = _analyze_path(work.path, work.relative_root, settings, ignore_patterns)
+                else:
+                    payload = work.rename_probe
+                    subtitles = _visible_external_subtitles(
+                        work.path, work.relative_root, settings.subtitle_extensions, ignore_patterns,
+                    )
             except WorkCanceled:
                 raise
             except Exception as exc:
@@ -1814,7 +1852,7 @@ def run_scan(
                     media_file = _load_scan_file(index_entry.id) if index_entry is not None else None
 
                     if media_file is None:
-                        rename_candidate = _find_rename_candidate(
+                        rename_candidate, rename_probe = _find_rename_candidate(
                             relative_path,
                             scan_root.library_root_id,
                             scan_root.relative_root,
@@ -1845,6 +1883,9 @@ def run_scan(
                             media_file.relative_path = relative_path
                             media_file.filename = file_path.name
                             media_file.extension = file_path.suffix.lower().lstrip(".")
+                            if (media_file.size_bytes, media_file.mtime) != (stat.st_size, stat.st_mtime):
+                                media_file.content_hash = None
+                                media_file.content_hash_algorithm = None
                             media_file.size_bytes = stat.st_size
                             media_file.mtime = stat.st_mtime
                             media_file.last_seen_at = utc_now()
@@ -1863,10 +1904,14 @@ def run_scan(
                                 relative_root=scan_root.relative_root,
                                 needs_analysis=True,
                                 needs_duplicate_processing=True,
+                                rename_probe=rename_probe,
                             )
                         )
                     else:
                         changed = media_file.size_bytes != stat.st_size or media_file.mtime != stat.st_mtime
+                        if changed:
+                            media_file.content_hash = None
+                            media_file.content_hash_algorithm = None
                         analysis_incomplete = media_file.id in incomplete_analysis_ids
                         external_subtitles_changed = False
                         if not changed and scan_type != "full" and not analysis_incomplete:

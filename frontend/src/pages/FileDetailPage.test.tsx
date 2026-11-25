@@ -1239,6 +1239,29 @@ describe("FileDetailPage", () => {
     expect(container.querySelectorAll(".file-history-entry[open]")).toHaveLength(1);
   });
 
+  it("shows rule outcomes when the file has no metadata snapshots", async () => {
+    const file = createFileDetail();
+    vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());
+    vi.spyOn(api, "file").mockResolvedValue(file);
+    vi.spyOn(api, "fileHistory").mockResolvedValue({
+      ...createFileHistory(),
+      total: 0,
+      items: [],
+      automation_outcomes: [
+        { id: 1, rule_name: "AV1 only", rule_version: 1, status: "unmatched", recorded_at: "2026-10-01T12:00:00Z" },
+        { id: 2, rule_name: "Encode HEVC", rule_version: 2, status: "completed", recorded_at: "2026-10-02T12:00:00Z" },
+      ],
+    });
+
+    renderPage(file.id);
+    await selectFileDetailPanel("File history");
+    expect(await screen.findByRole("heading", { name: "Automation rules" })).toBeInTheDocument();
+    expect(screen.getByText(/AV1 only/)).toBeInTheDocument();
+    expect(screen.getByText("Checked · No match")).toBeInTheDocument();
+    expect(screen.getByText(/Encode HEVC/)).toBeInTheDocument();
+    expect(screen.getByText("Transcoded")).toBeInTheDocument();
+  });
+
   it("collapses file history snapshots that only add newly detected metadata", async () => {
     const file = createFileDetail();
     vi.spyOn(api, "appSettings").mockResolvedValue(createAppSettings());

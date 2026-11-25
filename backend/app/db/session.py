@@ -349,7 +349,12 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "trigger_details": "ALTER TABLE scan_jobs ADD COLUMN trigger_details JSON NOT NULL DEFAULT '{}'",
         "scan_summary": "ALTER TABLE scan_jobs ADD COLUMN scan_summary JSON NOT NULL DEFAULT '{}'",
     },
+    "transcode_automation_records": {
+        "source_sha256_snapshot": "ALTER TABLE transcode_automation_records ADD COLUMN source_sha256_snapshot VARCHAR(64)",
+        "rule_name_snapshot": "ALTER TABLE transcode_automation_records ADD COLUMN rule_name_snapshot VARCHAR(255)",
+    },
     "transcode_rules": {
+        "skip_previously_evaluated": "ALTER TABLE transcode_rules ADD COLUMN skip_previously_evaluated BOOLEAN NOT NULL DEFAULT 0",
         "prevent_output_growth": "ALTER TABLE transcode_rules ADD COLUMN prevent_output_growth BOOLEAN NOT NULL DEFAULT 0",
     },
     "transcode_jobs": {
@@ -397,6 +402,7 @@ SQLITE_ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
 }
 
 SQLITE_INDEX_STATEMENTS: tuple[str, ...] = (
+    "CREATE INDEX IF NOT EXISTS ix_transcode_automation_records_source ON transcode_automation_records (source_file_id, updated_at)",
     "CREATE UNIQUE INDEX IF NOT EXISTS ix_media_files_library_root_relative_path "
     "ON media_files (library_id, library_root_id, relative_path)",
     "CREATE INDEX IF NOT EXISTS ix_media_files_library_relative_path ON media_files (library_id, relative_path)",

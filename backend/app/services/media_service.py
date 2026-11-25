@@ -31,9 +31,12 @@ from backend.app.models.entities import (
     MediaSeason,
     MediaSeries,
     SubtitleStream,
+    TranscodeAutomationRecord,
+    TranscodeRule,
     VideoStream,
 )
 from backend.app.schemas.media import (
+    FileAutomationOutcomeRead,
     GroupedLooseFileTableRowRead,
     GroupedMediaTablePageRead,
     GroupedSeriesTableRowRead,
@@ -2291,7 +2294,27 @@ def get_media_file_history(db: Session, file_id: int, *, limit: int = 50) -> Med
 
     root_alias = media_file.library_root.display_name if media_file.library_root else None
     display_path = f"{root_alias}/{media_file.relative_path}" if root_alias else media_file.relative_path
+    from backend.app.services.access_context import principal_context
+
+    principal = principal_context.get()
+    automation_outcomes = []
+    if principal is None or principal.has("transcode.view", media_file.library_id):
+        record = TranscodeAutomationRecord
+        automation_outcomes = db.execute(
+            select(
+                record.id,
+                func.coalesce(record.rule_name_snapshot, TranscodeRule.name).label("rule_name"),
+                record.rule_version,
+                record.status,
+                record.updated_at.label("recorded_at"),
+            )
+            .outerjoin(TranscodeRule, record.rule_id == TranscodeRule.id)
+            .where(record.source_file_id == media_file.id, record.library_id == media_file.library_id)
+            .order_by(record.updated_at.desc(), record.id.desc())
+            .limit(limit)
+        ).mappings().all()
     return MediaFileHistoryRead(
+        automation_outcomes=[FileAutomationOutcomeRead.model_validate(row) for row in automation_outcomes],
         file_id=media_file.id,
         library_id=media_file.library_id,
         library_root_id=media_file.library_root_id,

@@ -1360,11 +1360,18 @@ def test_incremental_scan_removes_existing_files_that_become_ignored(tmp_path: P
     assert second_job.scan_summary["changes"]["deleted_files"]["count"] == 1
 
 
-def test_incremental_scan_preserves_file_history_when_file_is_renamed(tmp_path: Path, monkeypatch) -> None:
+@pytest.mark.parametrize("scenario", ["rename", "cross_root", "hash_mismatch"])
+def test_incremental_scan_preserves_file_history_when_file_is_renamed(tmp_path: Path, monkeypatch, scenario: str) -> None:
     media_dir = tmp_path / "library"
     media_dir.mkdir()
     original_path = media_dir / "movie.mkv"
     renamed_path = media_dir / "renamed.mkv"
+    if scenario == "cross_root":
+        second_root = tmp_path / "second"
+        second_root.mkdir()
+        renamed_path = second_root / renamed_path.name
+    elif scenario == "hash_mismatch":
+        renamed_path = media_dir / "movie-remux.mkv"
     original_path.write_text("video")
 
     engine = create_engine("sqlite:///:memory:")
@@ -1399,7 +1406,15 @@ def test_incremental_scan_preserves_file_history_when_file_is_renamed(tmp_path: 
             scan_mode=ScanMode.manual,
             scan_config={},
         )
+        if scenario != "rename":
+            library.duplicate_detection_mode = DuplicateDetectionMode.filehash
         db.add(library)
+        db.flush()
+        if scenario == "cross_root":
+            db.add_all([
+                LibraryRoot(library_id=library.id, path=str(root), display_name=root.name, path_key=str(root))
+                for root in (media_dir, second_root)
+            ])
         db.commit()
 
         run_scan(db, settings, library.id, "incremental")
@@ -1407,12 +1422,22 @@ def test_incremental_scan_preserves_file_history_when_file_is_renamed(tmp_path: 
         assert first_file is not None
         first_file_id = first_file.id
 
+        original_stat = original_path.stat()
         original_path.rename(renamed_path)
+        if scenario == "cross_root":
+            os.utime(renamed_path, (original_stat.st_atime, original_stat.st_mtime + 10))
+        elif scenario == "hash_mismatch":
+            renamed_path.write_text("other")
+            os.utime(renamed_path, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
         second_job = run_scan(db, settings, library.id, "incremental")
 
         indexed_files = db.scalars(select(MediaFile).order_by(MediaFile.relative_path)).all()
         history_rows = db.scalars(select(MediaFileHistory).order_by(MediaFileHistory.captured_at.asc())).all()
 
+    if scenario == "hash_mismatch":
+        assert indexed_files[0].id != first_file_id
+        assert second_job.scan_summary["changes"]["new_files"]["count"] == 1
+        return
     assert [(media_file.id, media_file.relative_path) for media_file in indexed_files] == [
         (first_file_id, "renamed.mkv")
     ]
@@ -1423,9 +1448,11 @@ def test_incremental_scan_preserves_file_history_when_file_is_renamed(tmp_path: 
     assert {row.media_file_id for row in history_rows} == {first_file_id}
 
 
+@pytest.mark.parametrize("duration", ["60.0", "180.0"])
 def test_incremental_scan_preserves_file_identity_when_renamed_file_metadata_changes(
     tmp_path: Path,
     monkeypatch,
+    duration: str,
 ) -> None:
     media_dir = tmp_path / "library"
     media_dir.mkdir()
@@ -1475,11 +1502,16 @@ def test_incremental_scan_preserves_file_identity_when_renamed_file_metadata_cha
 
         original_path.rename(renamed_path)
         renamed_path.write_text("video with updated container metadata")
+        payload["format"]["duration"] = duration
         second_job = run_scan(db, settings, library.id, "incremental")
 
         indexed_files = db.scalars(select(MediaFile).order_by(MediaFile.relative_path)).all()
         history_rows = db.scalars(select(MediaFileHistory).order_by(MediaFileHistory.captured_at.asc())).all()
 
+    if duration == "180.0":
+        assert indexed_files[0].id != first_file_id
+        assert second_job.scan_summary["changes"]["new_files"]["count"] == 1
+        return
     assert [(media_file.id, media_file.relative_path) for media_file in indexed_files] == [
         (first_file_id, "Movie Name 2024 Remux.mkv")
     ]

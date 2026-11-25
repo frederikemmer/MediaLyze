@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## vUnreleased
 
+- Preserve file history across checksum-confirmed moves between roots in a library. For similar names, the scanner now also checks runtime and available video metadata.
+
+- Transcoding rules can skip previously evaluated files, including files that did not match the rule. File History displays rule outcomes, and the automation reuses them after scanner-recognized renames and moves.
+
 ## v0.21.0
 
 This release adds scan-driven transcoding rules, reusable presets, and the option to remove bad scans from library history.

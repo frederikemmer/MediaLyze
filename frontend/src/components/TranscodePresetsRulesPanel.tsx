@@ -53,6 +53,7 @@ type RuleDraft = {
   output_mode: TranscodeRule["output_mode"];
   output_subfolder: string;
   prevent_output_growth: boolean;
+  skip_previously_evaluated: boolean;
 };
 
 type AutomationTab = "presets" | "rules" | "accelerators" | "members";
@@ -265,6 +266,7 @@ function ruleDraftFrom(rule: TranscodeRule): RuleDraft {
     output_mode: rule.output_mode,
     output_subfolder: rule.output_subfolder,
     prevent_output_growth: rule.prevent_output_growth ?? false,
+    skip_previously_evaluated: rule.skip_previously_evaluated ?? false,
   };
 }
 
@@ -917,7 +919,7 @@ export function TranscodePresetsRulesPanel({
     setPresetEditorOpen(false);
     const defaultPreset = presets[0];
     const defaultLibrary = editableLibraries[0];
-    setRuleDraft({ id: null, name: "", priority: (rules.at(-1)?.priority ?? -1) + 1, library_ids: defaultLibrary ? [defaultLibrary.id] : [], conditions: null, profile_id: defaultPreset?.id ?? 0, output_mode: "transcode_output", output_subfolder: "", prevent_output_growth: true });
+    setRuleDraft({ id: null, name: "", priority: (rules.at(-1)?.priority ?? -1) + 1, library_ids: defaultLibrary ? [defaultLibrary.id] : [], conditions: null, profile_id: defaultPreset?.id ?? 0, output_mode: "transcode_output", output_subfolder: "", prevent_output_growth: true, skip_previously_evaluated: false });
     setRuleEditorOpen(true);
   };
 
@@ -930,6 +932,7 @@ export function TranscodePresetsRulesPanel({
         conditions: ruleDraft.conditions, profile_id: ruleDraft.profile_id, output_mode: ruleDraft.output_mode,
         output_subfolder: ruleDraft.output_subfolder,
         prevent_output_growth: ruleDraft.prevent_output_growth,
+        skip_previously_evaluated: ruleDraft.skip_previously_evaluated,
       };
       const existing = rules.find(rule => rule.id === ruleDraft.id);
       const changed = Object.fromEntries(
@@ -1351,6 +1354,11 @@ export function TranscodePresetsRulesPanel({
               <input type="checkbox" checked={ruleDraft.prevent_output_growth}
                 onChange={event => setRuleDraft({ ...ruleDraft, prevent_output_growth: event.target.checked })} />
               {t("transcoding.automation.preventOutputGrowth")}
+            </label>
+            <label className="transcode-filename-option">
+              <input type="checkbox" checked={ruleDraft.skip_previously_evaluated}
+                onChange={event => setRuleDraft({ ...ruleDraft, skip_previously_evaluated: event.target.checked })} />
+              {t("transcoding.automation.skipPreviouslyEvaluated")}
             </label>
           </div>
           {!ruleDraft.profile_id && <p className="field-hint">{t(canReadPresets ? "transcoding.automation.ruleNeedsPreset" : "transcoding.automation.ruleNeedsPresetAccess")}</p>}

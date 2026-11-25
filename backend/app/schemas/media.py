@@ -286,6 +286,14 @@ class MediaFileHistoryEntryRead(BaseModel):
     snapshot: dict[str, Any]
 
 
+class FileAutomationOutcomeRead(BaseModel):
+    id: int
+    rule_name: str | None
+    rule_version: int
+    status: str
+    recorded_at: UtcDateTime
+
+
 class MediaFileHistoryRead(BaseModel):
     file_id: int
     library_id: int
@@ -295,6 +303,7 @@ class MediaFileHistoryRead(BaseModel):
     relative_path: str
     total: int
     items: list[MediaFileHistoryEntryRead]
+    automation_outcomes: list[FileAutomationOutcomeRead] = Field(default_factory=list)
 
 
 class MediaSeriesSummaryRead(BaseModel):

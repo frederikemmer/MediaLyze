@@ -1713,7 +1713,8 @@ function FileHistoryPanel({
   inDepthDolbyVisionProfiles?: boolean;
 }): ReactNode {
   const items = history?.items ?? [];
-  if (items.length === 0) {
+  const outcomes = history?.automation_outcomes ?? [];
+  if (items.length === 0 && outcomes.length === 0) {
     return <div className="notice">{t("fileDetail.history.empty")}</div>;
   }
 
@@ -1736,7 +1737,7 @@ function FileHistoryPanel({
           })}
         </div>
       ) : null}
-      {renderableStates.length === 0 ? (
+      {items.length > 0 && renderableStates.length === 0 ? (
         <DuplicatePanelEmptyState message={t("fileDetail.history.noChanges")} />
       ) : null}
       {renderableStates.map(({ metrics, state }, index) => {
@@ -1766,6 +1767,19 @@ function FileHistoryPanel({
           </details>
         );
       })}
+      {outcomes.length > 0 && (
+        <section aria-label={t("fileDetail.history.automation.title")}>
+          <h3>{t("fileDetail.history.automation.title")}</h3>
+          <dl className="file-history-metrics">
+            {outcomes.map((outcome) => (
+              <div className="file-history-metric" key={outcome.id}>
+                <dt>{outcome.rule_name ?? t("fileDetail.history.automation.unknownRule")} · {formatDate(outcome.recorded_at)}</dt>
+                <dd><strong>{t(`fileDetail.history.automation.${outcome.status}`)}</strong></dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
     </div>
   );
 }

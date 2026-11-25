@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.app.db.base import Base
 from backend.app.models.entities import (
+    MediaFile,
     TranscodeAutomationRecord,
     TranscodePreset,
     TranscodeRule,
@@ -28,6 +29,7 @@ from backend.app.schemas.transcoding import (
 from backend.app.services import transcode_automation as automation
 from backend.app.services import transcoding
 from backend.app.services.app_settings import get_app_settings
+from backend.app.services.media_service import get_media_file_history
 from backend.app.utils.time import utc_now
 from tests.test_transcoding import _capabilities, _media_file, _settings
 
@@ -673,3 +675,81 @@ def test_automation_output_size_guard(tmp_path, guard, size, discarded):
     else:
         transcoding.enforce_automation_output_size(job, result)
         assert result.stat().st_size == size
+
+
+def test_automation_remembers_non_matches_only_after_execution(tmp_path, monkeypatch):
+    from backend.app.db import session
+
+    factory = _session_factory()
+    monkeypatch.setattr(session, "SessionLocal", factory)
+    monkeypatch.setattr(automation, "get_transcode_capabilities", lambda _: _capabilities())
+    settings = _settings(tmp_path)
+
+    def run(scope):
+        with factory() as db:
+            queued = automation.create_transcode_automation_run(db, scope)
+        automation.process_transcode_automation_run(
+            settings, queued.id,
+            submit_job=lambda _: pytest.fail("A non-matching file queued a job"),
+            is_cancel_requested=lambda _: False,
+        )
+        with factory() as db:
+            return automation.get_transcode_automation_run(db, queued.id)
+
+    with factory() as db:
+        media = _media_file(db, tmp_path)
+        media.content_hash = "a" * 64
+        media.content_hash_algorithm = "sha256"
+        automation.ensure_builtin_transcode_presets(db)
+        db.commit()
+        profile = db.scalar(select(TranscodePreset).where(TranscodePreset.builtin_key == "compatibility"))
+        rule = automation.create_transcode_rule(db, TranscodeRuleCreate(
+            name="Skip non-matches",
+            library_ids=[media.library_id],
+            profile_id=profile.id,
+            conditions=_condition_group(TranscodeCondition(field="video_codec", operator="equals", value="av1")),
+            skip_previously_evaluated=True,
+        ))
+        automation.update_transcode_rule(db, rule.id, TranscodeRuleUpdate(enabled=True))
+        scope = TranscodeAutomationScope(rule_ids=[rule.id])
+        assert automation.preview_transcode_automation(db, settings, scope).unmatched == 1
+        assert db.scalar(select(TranscodeAutomationRecord)) is None
+        media_id = media.id
+
+    first = run(scope)
+    assert (first.status, first.unmatched, first.skipped) == ("completed", 1, 0)
+    second = run(scope)
+    assert (second.status, second.unmatched, second.skipped) == ("completed", 0, 1)
+
+    with factory() as db:
+        history = get_media_file_history(db, media_id)
+        assert history.items == []
+        assert [(entry.rule_name, entry.status) for entry in history.automation_outcomes] == [
+            ("Skip non-matches", "unmatched")
+        ]
+        updated = automation.update_transcode_rule(db, rule.id, TranscodeRuleUpdate(skip_previously_evaluated=False))
+        assert updated.version == rule.version
+        assert automation.preview_transcode_automation(db, settings, scope).unmatched == 1
+        automation.update_transcode_rule(db, rule.id, TranscodeRuleUpdate(skip_previously_evaluated=True))
+        assert automation.preview_transcode_automation(db, settings, scope).skipped == 1
+        updated = automation.update_transcode_rule(db, rule.id, TranscodeRuleUpdate(
+            name="Updated rule",
+            conditions=_condition_group(TranscodeCondition(field="video_codec", operator="equals", value="vp9")),
+        ))
+        assert updated.version > rule.version
+        assert automation.preview_transcode_automation(db, settings, scope).skipped == 1
+        assert get_media_file_history(db, media_id).automation_outcomes[0].rule_name == rule.name
+        media = db.get(MediaFile, media_id)
+        media.mtime += 1
+        db.commit()
+        assert automation.preview_transcode_automation(db, settings, scope).unmatched == 1
+
+        # The scanner retained the file ID and verified the content at its new location.
+        media.relative_path = "Other folder/Renamed.mkv"
+        media.filename = "Renamed.mkv"
+        db.commit()
+        assert automation.preview_transcode_automation(db, settings, scope).skipped == 1
+
+        media.content_hash = "b" * 64
+        db.commit()
+        assert automation.preview_transcode_automation(db, settings, scope).unmatched == 1

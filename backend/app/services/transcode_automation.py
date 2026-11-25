@@ -47,6 +47,7 @@ from backend.app.schemas.transcoding import (
     TranscodeRuleUpdate,
 )
 from backend.app.services.app_settings import get_app_settings
+from backend.app.services.duplicates import FILE_HASH_ALGORITHM
 from backend.app.services.languages import expand_language_search_terms, normalize_language_tag
 from backend.app.services.media_search import (
     SearchValidationError,
@@ -409,6 +410,7 @@ def _rule_payload(db: Session, rule: TranscodeRule) -> TranscodeRuleRead:
         output_mode=rule.output_mode,
         output_subfolder=rule.output_subfolder or "",
         prevent_output_growth=rule.prevent_output_growth,
+        skip_previously_evaluated=rule.skip_previously_evaluated,
         replacement_approved=rule.replacement_approved_version == rule.version,
         created_at=rule.created_at,
         updated_at=rule.updated_at,
@@ -486,6 +488,7 @@ def create_transcode_rule(db: Session, payload: TranscodeRuleCreate) -> Transcod
         output_mode=payload.output_mode,
         output_subfolder=output_subfolder,
         prevent_output_growth=payload.prevent_output_growth,
+        skip_previously_evaluated=payload.skip_previously_evaluated,
         replacement_approved_version=None,
     )
     db.add(rule)
@@ -542,6 +545,8 @@ def update_transcode_rule(
         rule.output_subfolder = next_output_subfolder
     if "prevent_output_growth" in changes:
         rule.prevent_output_growth = payload.prevent_output_growth
+    if "skip_previously_evaluated" in changes:
+        rule.skip_previously_evaluated = payload.skip_previously_evaluated
     if "priority" in changes:
         rule.priority = int(payload.priority or 0)
     if "enabled" in changes:
@@ -1192,7 +1197,7 @@ def test_transcode_rule_draft(db: Session, settings: Settings, payload: Transcod
     decision = _decision_for_file(
         db, settings, media_file, [draft], app_settings, get_transcode_capabilities(settings),
         retry_failed=False, profiles_by_id={preset.id: preset},
-        records_by_identity=None if unchanged else {},
+        records_by_file=None if unchanged else {},
     )
     return TranscodeRuleTestRead(
         in_scope=True, trace=trace, status=decision.status, reason=decision.reason,
@@ -1252,15 +1257,6 @@ def _active_rules(db: Session, rule_ids: list[int] | None = None) -> list[Transc
     return db.scalars(statement.order_by(TranscodeRule.priority.asc(), TranscodeRule.id.asc())).all()
 
 
-def _winning_rule(media_file: MediaFile, rules: list[TranscodeRule], app_settings) -> TranscodeRule | None:
-    for rule in rules:
-        if media_file.library_id not in {int(value) for value in (rule.library_ids or [])}:
-            continue
-        if condition_matches(media_file, _rule_conditions(rule), app_settings):
-            return rule
-    return None
-
-
 def _identity_key(media_file: MediaFile) -> str:
     return f"{media_file.library_id}:{media_file.library_root_id or 0}:{media_file.relative_path}"
 
@@ -1269,27 +1265,51 @@ def _current_source_state(media_file: MediaFile) -> tuple[int, float]:
     return int(media_file.size_bytes), float(media_file.mtime)
 
 
+def _source_sha256(media_file: MediaFile) -> str | None:
+    if media_file.content_hash_algorithm == FILE_HASH_ALGORITHM:
+        return media_file.content_hash
+    return None
+
+
 def _existing_record(
     db: Session,
     media_file: MediaFile,
     rule: TranscodeRule,
     profile: TranscodePreset,
+    records_by_file: dict[int, list[TranscodeAutomationRecord]] | None = None,
+    *,
+    reuse_rule_outcomes: bool = False,
 ) -> TranscodeAutomationRecord | None:
-    records = db.scalars(
-        select(TranscodeAutomationRecord).where(
-            TranscodeAutomationRecord.identity_key == _identity_key(media_file),
-            TranscodeAutomationRecord.rule_id == rule.id,
-            TranscodeAutomationRecord.rule_version == rule.version,
-            TranscodeAutomationRecord.profile_id == profile.id,
-            TranscodeAutomationRecord.profile_version == profile.version,
-        ).order_by(TranscodeAutomationRecord.created_at.desc())
-    ).all()
+    records = (
+        db.scalars(
+            select(TranscodeAutomationRecord)
+            .where(TranscodeAutomationRecord.source_file_id == media_file.id)
+            .order_by(TranscodeAutomationRecord.created_at.desc())
+        )
+        if records_by_file is None
+        else records_by_file.get(media_file.id, [])
+    )
+    identity = _identity_key(media_file)
+    source_sha256 = _source_sha256(media_file)
     current_size, current_mtime = _current_source_state(media_file)
     for record in records:
+        if record.rule_id != rule.id:
+            continue
+        same_configuration = (
+            record.rule_version == rule.version
+            and record.profile_id == profile.id
+            and record.profile_version == profile.version
+        )
+        if not same_configuration and not (reuse_rule_outcomes and record.status in {"unmatched", "completed"}):
+            continue
         result_state = (record.result_source_size, record.result_source_mtime)
         if record.status == "completed" and result_state[0] is not None and result_state[1] is not None:
             if result_state[0] == current_size and float(result_state[1]) == current_mtime:
                 return record
+        if record.identity_key != identity and source_sha256 and record.source_sha256_snapshot:
+            if record.source_sha256_snapshot == source_sha256:
+                return record
+            continue
         if record.source_size_snapshot == current_size and float(record.source_mtime_snapshot) == current_mtime:
             return record
     return None
@@ -1311,19 +1331,19 @@ def _preview_profiles(db: Session, rules: list[TranscodeRule]) -> dict[int, Tran
 def _preview_existing_records(
     db: Session,
     candidates: list[MediaFile],
-) -> dict[str, list[TranscodeAutomationRecord]]:
+) -> dict[int, list[TranscodeAutomationRecord]]:
     """Load durable decisions for one bounded candidate batch."""
-    records_by_identity: dict[str, list[TranscodeAutomationRecord]] = {}
-    identity_keys = list(dict.fromkeys(_identity_key(media_file) for media_file in candidates))
-    if identity_keys:
+    records_by_file: dict[int, list[TranscodeAutomationRecord]] = {}
+    file_ids = [media_file.id for media_file in candidates]
+    if file_ids:
         records = db.scalars(
             select(TranscodeAutomationRecord)
-            .where(TranscodeAutomationRecord.identity_key.in_(identity_keys))
+            .where(TranscodeAutomationRecord.source_file_id.in_(file_ids))
             .order_by(TranscodeAutomationRecord.created_at.desc())
-        ).all()
+        )
         for record in records:
-            records_by_identity.setdefault(record.identity_key, []).append(record)
-    return records_by_identity
+            records_by_file.setdefault(record.source_file_id, []).append(record)
+    return records_by_file
 
 
 def _record_skip_reason(record: TranscodeAutomationRecord, retry_failed: bool) -> str | None:
@@ -1346,7 +1366,8 @@ def _decision_for_file(
     *,
     retry_failed: bool,
     profiles_by_id: dict[int, TranscodePreset] | None = None,
-    records_by_identity: dict[str, list[TranscodeAutomationRecord]] | None = None,
+    records_by_file: dict[int, list[TranscodeAutomationRecord]] | None = None,
+    non_matches: list[dict[str, Any]] | None = None,
 ) -> TranscodeAutomationDecisionRead:
     base = dict(
         file_id=media_file.id,
@@ -1354,14 +1375,55 @@ def _decision_for_file(
         relative_path=media_file.relative_path,
         filename=media_file.filename,
     )
-    rule = _winning_rule(media_file, rules, app_settings)
-    if rule is None:
+    last_cached_non_match = None
+    for rule in rules:
+        if media_file.library_id not in {int(value) for value in (rule.library_ids or [])}:
+            continue
+        profile = (
+            profiles_by_id.get(rule.profile_id)
+            if profiles_by_id is not None
+            else db.get(TranscodePreset, rule.profile_id)
+        )
+        existing = None
+        if profile is not None and (rule.skip_previously_evaluated or records_by_file is not None):
+            existing = _existing_record(
+                db, media_file, rule, profile, records_by_file,
+                reuse_rule_outcomes=rule.skip_previously_evaluated,
+            )
+        if rule.skip_previously_evaluated and existing is not None and existing.status == "unmatched":
+            last_cached_non_match = rule
+            continue
+        if rule.skip_previously_evaluated and existing is not None and _record_skip_reason(existing, retry_failed):
+            break
+        if condition_matches(media_file, _rule_conditions(rule), app_settings):
+            break
+        if profile is not None and existing is None and non_matches is not None:
+            source_root = media_file.library_root or media_file.library
+            non_matches.append(dict(
+                identity_key=_identity_key(media_file),
+                library_id=media_file.library_id,
+                source_file_id=media_file.id,
+                library_root_id=media_file.library_root_id,
+                relative_path=media_file.relative_path,
+                source_path_snapshot=str(Path(source_root.path) / media_file.relative_path),
+                source_size_snapshot=media_file.size_bytes,
+                source_mtime_snapshot=media_file.mtime,
+                source_sha256_snapshot=_source_sha256(media_file),
+                rule_id=rule.id,
+                rule_name_snapshot=rule.name,
+                rule_version=rule.version,
+                profile_id=profile.id,
+                profile_version=profile.version,
+                status="unmatched",
+            ))
+    else:
+        if last_cached_non_match is not None:
+            return TranscodeAutomationDecisionRead(
+                **base, status="skipped", rule_id=last_cached_non_match.id,
+                rule_name=last_cached_non_match.name, rule_version=last_cached_non_match.version,
+                reason="This source state previously did not match the rule",
+            )
         return TranscodeAutomationDecisionRead(**base, status="unmatched")
-    profile = (
-        profiles_by_id.get(rule.profile_id)
-        if profiles_by_id is not None
-        else db.get(TranscodePreset, rule.profile_id)
-    )
     if profile is None:
         return TranscodeAutomationDecisionRead(
             **base,
@@ -1386,30 +1448,8 @@ def _decision_for_file(
             status="blocked",
             reason="The winning replace-original rule needs approval for its current version",
         )
-    if records_by_identity is None:
+    if records_by_file is None and not rule.skip_previously_evaluated:
         existing = _existing_record(db, media_file, rule, profile)
-    else:
-        current_size, current_mtime = _current_source_state(media_file)
-        existing = None
-        for record in records_by_identity.get(_identity_key(media_file), []):
-            if (
-                record.rule_id != rule.id
-                or record.rule_version != rule.version
-                or record.profile_id != profile.id
-                or record.profile_version != profile.version
-            ):
-                continue
-            result_state = (record.result_source_size, record.result_source_mtime)
-            if record.status == "completed" and result_state[0] is not None and result_state[1] is not None:
-                if result_state[0] == current_size and float(result_state[1]) == current_mtime:
-                    existing = record
-                    break
-            if (
-                record.source_size_snapshot == current_size
-                and float(record.source_mtime_snapshot) == current_mtime
-            ):
-                existing = record
-                break
     if existing is not None:
         reason = _record_skip_reason(existing, retry_failed)
         if reason:
@@ -1492,7 +1532,7 @@ def preview_transcode_automation(
         )
         if not candidate_batch:
             break
-        records_by_identity = _preview_existing_records(db, candidate_batch)
+        records_by_file = _preview_existing_records(db, candidate_batch)
         for media_file in candidate_batch:
             decision = _decision_for_file(
                 db,
@@ -1503,7 +1543,7 @@ def preview_transcode_automation(
                 capabilities,
                 retry_failed=scope.retry_failed,
                 profiles_by_id=profiles_by_id,
-                records_by_identity=records_by_identity,
+                records_by_file=records_by_file,
             )
             counts[decision.status] += 1
             if not scope.preview_all or (decision.status == "matched" and len(items) < scope.limit):
@@ -1795,8 +1835,12 @@ def _queue_decision(
         return "blocked"
     if source_stat.st_size != media_file.size_bytes or source_stat.st_mtime != media_file.mtime:
         return "skipped"
-    existing = _existing_record(db, media_file, rule, profile)
+    existing = _existing_record(
+        db, media_file, rule, profile, reuse_rule_outcomes=rule.skip_previously_evaluated,
+    )
     if existing is not None:
+        if rule.skip_previously_evaluated and existing.status == "unmatched":
+            return "skipped"
         reason = _record_skip_reason(existing, retry_failed)
         if reason:
             return "skipped"
@@ -1815,7 +1859,9 @@ def _queue_decision(
             source_path_snapshot=str(_source_paths(media_file).source),
             source_size_snapshot=media_file.size_bytes,
             source_mtime_snapshot=media_file.mtime,
+            source_sha256_snapshot=_source_sha256(media_file),
             rule_id=rule.id,
+            rule_name_snapshot=rule.name,
             rule_version=rule.version,
             profile_id=profile.id,
             profile_version=profile.version,
@@ -1906,6 +1952,9 @@ def process_transcode_automation_run(
             if not candidates:
                 break
             page += 1
+            profiles_by_id = _preview_profiles(db, rules)
+            records_by_file = _preview_existing_records(db, candidates)
+            non_matches: list[dict[str, Any]] = []
             for media_file in candidates:
                 decision = _decision_for_file(
                     db,
@@ -1915,6 +1964,9 @@ def process_transcode_automation_run(
                     app_settings,
                     capabilities,
                     retry_failed=scope.retry_failed,
+                    profiles_by_id=profiles_by_id,
+                    records_by_file=records_by_file,
+                    non_matches=non_matches,
                 )
                 status = decision.status
                 if status == "matched":
@@ -1950,6 +2002,8 @@ def process_transcode_automation_run(
                     run.skipped += 1
                 elif status == "unmatched":
                     run.unmatched += 1
+            if non_matches:
+                db.execute(insert(TranscodeAutomationRecord).on_conflict_do_nothing(), non_matches)
             after_id = candidates[-1].id
             processed += len(candidates)
             run.current_page = page

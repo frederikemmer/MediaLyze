@@ -1531,6 +1531,7 @@ class TranscodeRule(TimestampMixin, Base):
     output_mode: Mapped[str] = mapped_column(String(32), default="transcode_output", nullable=False)
     output_subfolder: Mapped[str] = mapped_column(String(512), default="", nullable=False)
     prevent_output_growth: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    skip_previously_evaluated: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     replacement_approved_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
@@ -1580,6 +1581,7 @@ class TranscodeAutomationRecord(TimestampMixin, Base):
             name="uq_transcode_automation_record_source_rule_version",
         ),
         Index("ix_transcode_automation_records_identity", "identity_key"),
+        Index("ix_transcode_automation_records_source", "source_file_id", "updated_at"),
         Index("ix_transcode_automation_records_status", "status"),
     )
 
@@ -1596,9 +1598,11 @@ class TranscodeAutomationRecord(TimestampMixin, Base):
     source_path_snapshot: Mapped[str] = mapped_column(String(4096), nullable=False)
     source_size_snapshot: Mapped[int] = mapped_column(Integer, nullable=False)
     source_mtime_snapshot: Mapped[float] = mapped_column(Float, nullable=False)
+    source_sha256_snapshot: Mapped[str | None] = mapped_column(String(64), nullable=True)
     rule_id: Mapped[int | None] = mapped_column(
         ForeignKey("transcode_rules.id", ondelete="SET NULL"), nullable=True
     )
+    rule_name_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
     rule_version: Mapped[int] = mapped_column(Integer, nullable=False)
     profile_id: Mapped[int | None] = mapped_column(
         ForeignKey("transcode_profiles.id", ondelete="SET NULL"), nullable=True

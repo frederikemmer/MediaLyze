@@ -1530,6 +1530,7 @@ export type TranscodeRule = {
   output_mode: "transcode_output" | "same_directory" | "replace_original";
   output_subfolder: string;
   prevent_output_growth?: boolean;
+  skip_previously_evaluated?: boolean;
   replacement_approved: boolean;
   created_at: string;
   updated_at: string;
@@ -1990,6 +1991,13 @@ export type MediaFileHistory = {
   relative_path: string;
   total: number;
   items: MediaFileHistoryEntry[];
+  automation_outcomes?: Array<{
+    id: number;
+    rule_name: string | null;
+    rule_version: number;
+    status: "unmatched" | "queued" | "running" | "completed" | "failed" | "canceled";
+    recorded_at: string;
+  }>;
 };
 
 export type MediaSeriesSummary = {
@@ -3007,6 +3015,7 @@ export const api = {
     output_mode?: TranscodeRule["output_mode"];
     output_subfolder?: string;
     prevent_output_growth?: boolean;
+    skip_previously_evaluated?: boolean;
   }) => request<TranscodeRule>("/transcoding/rules", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -3021,6 +3030,7 @@ export const api = {
     output_mode: TranscodeRule["output_mode"];
     output_subfolder: string;
     prevent_output_growth?: boolean;
+    skip_previously_evaluated?: boolean;
   }>) => request<TranscodeRule>(`/transcoding/rules/${id}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
