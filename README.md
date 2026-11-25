@@ -2,6 +2,7 @@
 
 <p align="center">
   <a href="./LICENSE"><img alt="AGPL-3.0 License" src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg"></a>
+  <a href="https://discord.gg/xWqbtJFeAk"><img alt="Join the MediaLyze Discord" src="https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white"></a>
   <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white">
   <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white">
   <img alt="React 19" src="https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white">
@@ -62,6 +63,10 @@ Bring your own auth (for now).
     <td><img alt="Running transcode" src="docs/images/2026-10-02/Transcoding_Page.png"></td>
   </tr>
 </table>
+
+## Community
+
+Join the [MediaLyze Discord](https://discord.gg/xWqbtJFeAk) for setup help, feedback, and release announcements. Report reproducible bugs on [GitHub Issues](https://github.com/frederikemmer/MediaLyze/issues).
 
 ## Support MediaLyze
 
