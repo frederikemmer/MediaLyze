@@ -186,6 +186,7 @@
   "POST /transcoding/profiles/{preset_id}/duplicate": "transcoding_preset_duplicate",
   "POST /transcoding/rules": "transcoding_rule_create",
   "POST /transcoding/rules/reorder": "transcoding_rules_reorder",
+  "POST /transcoding/rules/{rule_id}/duplicate": "transcoding_rule_duplicate",
   "POST /transcoding/rules/{rule_id}/replacement-approval": "transcoding_rule_replacement_approval",
   "PUT /connectors/{connection_id}/bindings": "connector_bindings_replace",
   "PUT /connectors/{connection_id}/library-links": "connector_library_links_replace",

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import re
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case, func, or_, select, text
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -499,6 +500,41 @@ def create_transcode_rule(db: Session, payload: TranscodeRuleCreate) -> Transcod
         raise TranscodeAutomationError("A transcoding rule with this name already exists") from exc
     db.refresh(rule)
     return _rule_payload(db, rule)
+
+
+def duplicate_transcode_rule(db: Session, rule_id: int) -> TranscodeRuleRead:
+    # Serialize concurrent duplicates so order and generated names stay consistent.
+    db.execute(text("BEGIN IMMEDIATE"))
+    source = get_transcode_rule(db, rule_id)
+    rules = db.scalars(select(TranscodeRule).order_by(TranscodeRule.priority, TranscodeRule.id)).all()
+    used_names = {rule.name.casefold() for rule in rules}
+    number = 1
+    while True:
+        suffix = " copy" if number == 1 else f" copy {number}"
+        name = f"{source.name[:255 - len(suffix)].rstrip()}{suffix}"
+        if name.casefold() not in used_names:
+            break
+        number += 1
+
+    # The copy sorts after the source by ID. Make room before any later rules,
+    # while preserving the order and versions of all existing rules.
+    for rule in rules[rules.index(source) + 1:]:
+        rule.priority += 1
+    duplicate = TranscodeRule(
+        name=name,
+        enabled=False,
+        priority=source.priority,
+        library_ids=list(source.library_ids),
+        conditions=deepcopy(source.conditions),
+        profile_id=source.profile_id,
+        output_mode=source.output_mode,
+        output_subfolder=source.output_subfolder,
+        prevent_output_growth=source.prevent_output_growth,
+        skip_previously_evaluated=source.skip_previously_evaluated,
+    )
+    db.add(duplicate)
+    db.commit()
+    return _rule_payload(db, duplicate)
 
 
 def update_transcode_rule(

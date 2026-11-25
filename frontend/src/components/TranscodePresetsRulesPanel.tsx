@@ -972,6 +972,27 @@ export function TranscodePresetsRulesPanel({
     setExpandedRuleId(rule.id);
   };
 
+  const duplicateRule = async (rule: TranscodeRule) => {
+    setBusy(true);
+    try {
+      const copy = await api.duplicateTranscodeRule(rule.id);
+      setRules((current) => {
+        const index = current.findIndex((entry) => entry.id === rule.id);
+        return [
+          ...current.slice(0, index + 1),
+          copy,
+          ...current.slice(index + 1).map((entry) => ({ ...entry, priority: entry.priority + 1 })),
+        ];
+      });
+      editRule(copy);
+      feedback("success", "duplicateRuleSuccess", "Rule duplicated.", "rules");
+    } catch {
+      feedback("error", "duplicateRuleFailed", "Could not duplicate the rule.", "rules");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const deleteRule = async (rule: TranscodeRule) => {
     setBusy(true);
     try {
@@ -1433,6 +1454,16 @@ export function TranscodePresetsRulesPanel({
           onClick={() => editRule(rule)}
         >
           <SquarePenIcon aria-hidden="true" className="nav-icon" size={18} />
+        </button>
+        <button
+          type="button"
+          className="secondary icon-only-button compatibility-profile-quick-action"
+          aria-label={`${t("transcoding.automation.duplicateRule")} ${rule.name}`}
+          title={t("transcoding.automation.duplicateRule")}
+          disabled={busy || !canOpenRuleEditor}
+          onClick={() => void duplicateRule(rule)}
+        >
+          <CopyIcon aria-hidden="true" className="nav-icon" size={18} />
         </button>
         {rule.output_mode === "replace_original" && !rule.replacement_approved ? (
           <button

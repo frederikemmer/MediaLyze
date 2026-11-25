@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 
 - Transcoding rules can skip previously evaluated files, including files that did not match the rule. File History displays rule outcomes, and the automation reuses them after scanner-recognized renames and moves.
 
+- Automation rules can be duplicated as disabled copies directly below the original.
+
 ## v0.21.0
 
 This release adds scan-driven transcoding rules, reusable presets, and the option to remove bad scans from library history.

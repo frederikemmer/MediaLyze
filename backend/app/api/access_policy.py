@@ -251,6 +251,7 @@ def authorize(request, db, principal, name, params, body):
     rule_writes = {
         "transcoding_rule_create",
         "transcoding_rule_update",
+        "transcoding_rule_duplicate",
         "transcoding_rule_delete",
         "transcoding_rule_replacement_approval",
     }

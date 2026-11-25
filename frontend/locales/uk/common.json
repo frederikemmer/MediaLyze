@@ -1468,6 +1468,7 @@
       "since": "З {{start}}",
       "range": "{{start}} — {{end}}",
       "automation": {
+      "duplicateRule": "Дублювати правило",
         "title": "Правила автоматизації",
         "unknownRule": "Невідоме правило",
         "unmatched": "Перевірено · Немає збігу",
@@ -2356,6 +2357,8 @@
         "presetsPartiallySaved": "Деякі налаштування шаблонів перекодування не вдалося зберегти.",
         "savePresetSuccess": "Шаблон збережено.",
         "savePresetFailed": "Не вдалося зберегти шаблон.",
+        "duplicateRuleSuccess": "Правило продубльовано.",
+        "duplicateRuleFailed": "Не вдалося продублювати правило.",
         "duplicatePresetSuccess": "Шаблон продубльовано.",
         "duplicatePresetFailed": "Не вдалося продублювати шаблон.",
         "removePresetSuccess": "Шаблон видалено.",

@@ -290,6 +290,7 @@ from backend.app.services.transcode_automation import (
     TranscodeAutomationError,
     approve_transcode_rule_replacement,
     create_transcode_preset,
+    duplicate_transcode_rule,
     create_transcode_rule,
     delete_transcode_preset,
     delete_transcode_rule,
@@ -3287,6 +3288,17 @@ def transcoding_rule_create(
 ) -> TranscodeRuleRead:
     try:
         return create_transcode_rule(db, payload)
+    except TranscodeAutomationError as exc:
+        raise _transcode_automation_error(exc) from exc
+
+
+@router.post("/transcoding/rules/{rule_id}/duplicate", response_model=TranscodeRuleRead, status_code=201)
+def transcoding_rule_duplicate(
+    rule_id: int,
+    db: Session = Depends(get_db_session),
+) -> TranscodeRuleRead:
+    try:
+        return duplicate_transcode_rule(db, rule_id)
     except TranscodeAutomationError as exc:
         raise _transcode_automation_error(exc) from exc
 

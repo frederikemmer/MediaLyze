@@ -3035,6 +3035,9 @@ export const api = {
     method: "PATCH",
     body: JSON.stringify(payload),
   }),
+  duplicateTranscodeRule: (id: number) => request<TranscodeRule>(`/transcoding/rules/${id}/duplicate`, {
+    method: "POST",
+  }),
   deleteTranscodeRule: (id: number) => request<void>(`/transcoding/rules/${id}`, { method: "DELETE" }),
   reorderTranscodeRules: (ruleIds: number[]) => request<TranscodeRule[]>("/transcoding/rules/reorder", {
     method: "POST",

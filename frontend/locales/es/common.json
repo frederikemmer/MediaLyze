@@ -1468,6 +1468,7 @@
       "since": "Desde {{start}}",
       "range": "{{start}} - {{end}}",
       "automation": {
+      "duplicateRule": "Duplicar regla",
         "title": "Reglas de automatización",
         "unknownRule": "Regla desconocida",
         "unmatched": "Evaluado · Sin coincidencia",
@@ -2356,6 +2357,8 @@
         "presetsPartiallySaved": "No se pudieron guardar algunos ajustes de preconfiguración.",
         "savePresetSuccess": "Ajuste guardado.",
         "savePresetFailed": "No se pudo guardar el ajuste.",
+        "duplicateRuleSuccess": "Regla duplicada.",
+        "duplicateRuleFailed": "No se pudo duplicar la regla.",
         "duplicatePresetSuccess": "Ajuste duplicado.",
         "duplicatePresetFailed": "No se pudo duplicar el ajuste.",
         "removePresetSuccess": "Ajuste eliminado.",

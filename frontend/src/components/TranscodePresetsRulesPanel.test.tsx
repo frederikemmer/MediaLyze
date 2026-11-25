@@ -237,6 +237,31 @@ describe("TranscodePresetsRulesPanel", () => {
     await waitFor(() => expect(newRule).toBeEnabled());
   });
 
+  it("opens a disabled duplicate directly below the original", async () => {
+    const source = {
+      id: 19, name: "Encode selected files", enabled: true, priority: 0, library_ids: [6],
+      conditions: null, profile_id: builtin.id, profile_name: builtin.name, profile_version: builtin.version,
+      output_mode: "transcode_output" as const, output_subfolder: "", replacement_approved: false, version: 1,
+      created_at: "", updated_at: "",
+    };
+    const copy = { ...source, id: 21, name: "Encode selected files copy", enabled: false };
+    vi.mocked(api.libraries).mockResolvedValue([{ id: 6, name: "Movies" } as LibrarySummary]);
+    vi.mocked(api.transcodeRules).mockResolvedValue([source, { ...source, id: 20, name: "Next rule" }]);
+    const duplicate = vi.spyOn(api, "duplicateTranscodeRule").mockResolvedValue(copy);
+    render(<TranscodePresetsRulesPanel capabilityMatrix={() => null} acceleratorsTooltip={null} standaloneTab="rules" />);
+
+    const button = await screen.findByRole("button", { name: "Duplicate rule Encode selected files" });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    expect(await screen.findByDisplayValue(copy.name)).toBeVisible();
+    expect(duplicate).toHaveBeenCalledWith(source.id);
+    const switches = screen.getAllByRole("switch");
+    expect(switches).toHaveLength(3);
+    expect(switches[0]).toBeChecked();
+    expect(switches[1]).not.toBeChecked();
+    expect(switches[2]).toBeChecked();
+  });
+
   it("places New rule inside the panel and opens a draft without a preset or library", async () => {
     vi.mocked(api.transcodePresets).mockResolvedValue([]);
     const onToggle = vi.fn();

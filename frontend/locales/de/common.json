@@ -2395,6 +2395,7 @@
     },
     "globalHistory": "Globaler Transcoding-Verlauf",
     "automation": {
+      "duplicateRule": "Regel duplizieren",
       "logic": "Logik",
       "exactlyOne": "Genau eine trifft zu (XOR)",
       "selectValue": "Wert auswählen",
@@ -2893,6 +2894,8 @@
         "presetsPartiallySaved": "Einige Einstellungen der Transcoding-Vorgaben konnten nicht gespeichert werden.",
         "savePresetSuccess": "Vorgabe gespeichert.",
         "savePresetFailed": "Die Vorgabe konnte nicht gespeichert werden.",
+        "duplicateRuleSuccess": "Regel dupliziert.",
+        "duplicateRuleFailed": "Die Regel konnte nicht dupliziert werden.",
         "duplicatePresetSuccess": "Vorgabe dupliziert.",
         "duplicatePresetFailed": "Die Vorgabe konnte nicht dupliziert werden.",
         "removePresetSuccess": "Vorgabe gelöscht.",

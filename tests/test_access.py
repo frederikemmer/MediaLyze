@@ -788,6 +788,13 @@ def test_transcode_rule_list_filters_entire_hidden_scopes_before_response(env):
     assert response.status_code == 200, response.text
     assert [r["name"] for r in response.json()] == ["visible rule"]
     assert client.get("/api/transcoding/rules/2").status_code == 404
+    assert post(client, "/api/transcoding/rules/1/duplicate", {}).status_code == 403
+    copied = post(owner, "/api/transcoding/rules/1/duplicate", {})
+    assert copied.status_code == 201, copied.text
+    assert copied.json()["enabled"] is False
+    assert [r["name"] for r in owner.get("/api/transcoding/rules").json()] == [
+        "visible rule", "visible rule copy", "hidden rule",
+    ]
 
 
 def test_unsupported_product_mappings_stay_restricted_even_when_all_current_rights_are_assigned(

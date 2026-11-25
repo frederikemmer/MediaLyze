@@ -753,3 +753,38 @@ def test_automation_remembers_non_matches_only_after_execution(tmp_path, monkeyp
         media.content_hash = "b" * 64
         db.commit()
         assert automation.preview_transcode_automation(db, settings, scope).unmatched == 1
+
+
+def test_duplicate_rule_inserts_disabled_copy_after_source_with_tied_priorities(tmp_path: Path) -> None:
+    with _session_factory()() as db:
+        media = _media_file(db, tmp_path)
+        automation.ensure_builtin_transcode_presets(db)
+        db.commit()
+        profile = db.scalar(select(TranscodePreset).where(TranscodePreset.builtin_key == "compatibility"))
+        source = automation.create_transcode_rule(db, TranscodeRuleCreate(
+            name="Replace originals",
+            library_ids=[media.library_id],
+            profile_id=profile.id,
+            output_mode="replace_original",
+            conditions=_condition_group(TranscodeCondition(field="video_codec", operator="equals", value="hevc")),
+            skip_previously_evaluated=True,
+        ))
+        source = automation.approve_transcode_rule_replacement(db, source.id, TranscodeReplacementApproval(confirm=True))
+        source = automation.update_transcode_rule(db, source.id, TranscodeRuleUpdate(enabled=True))
+        next_rule = automation.create_transcode_rule(db, TranscodeRuleCreate(
+            name="Next rule", library_ids=source.library_ids, profile_id=source.profile_id,
+        ))
+
+        first = automation.duplicate_transcode_rule(db, source.id)
+        second = automation.duplicate_transcode_rule(db, source.id)
+
+        assert [rule.id for rule in automation.list_transcode_rules(db)] == [
+            source.id, second.id, first.id, next_rule.id,
+        ]
+        assert (first.name, second.name) == ("Replace originals copy", "Replace originals copy 2")
+        assert first.enabled is False
+        assert first.replacement_approved is False
+        for field in ("library_ids", "profile_id", "conditions", "output_mode", "output_subfolder",
+                      "prevent_output_growth", "skip_previously_evaluated"):
+            assert getattr(first, field) == getattr(source, field)
+        assert automation.serialize_transcode_rule(db, db.get(TranscodeRule, source.id)) == source
